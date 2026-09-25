@@ -1,0 +1,7 @@
+interface:
+  display_name: "Spec-Driven Development"
+  short_description: "Especifica, planifica y verifica cambios de software"
+  default_prompt: "Usa $spec-driven-development para convertir esta necesidad en una especificación y un plan verificables antes de implementar."
+
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Project Handoff"
+  short_description: "Prepara traspasos verificables entre sesiones y agentes"
+  default_prompt: "Usa $project-handoff para resumir el estado comprobado y dejar un siguiente paso claro."
+
+policy:
+  allow_implicit_invocation: true

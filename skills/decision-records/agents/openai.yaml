@@ -1,0 +1,7 @@
+interface:
+  display_name: "Decision Records"
+  short_description: "Registra decisiones con contexto, opciones y consecuencias"
+  default_prompt: "Usa $decision-records para documentar esta decisión con alternativas, motivos y consecuencias verificables."
+
+policy:
+  allow_implicit_invocation: true
