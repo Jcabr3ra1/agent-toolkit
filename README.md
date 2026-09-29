@@ -1,12 +1,16 @@
 # Agent Toolkit
 
-Biblioteca personal y reutilizable de Skills y perfiles de agentes para trabajar con distintos proyectos sin mezclar su contexto específico.
+Núcleo personal y reutilizable para conectar agentes con distintos proyectos sin mezclar su contexto específico. Reúne Skills, perfiles especializados y el contrato base del sistema de memorias de proyecto.
 
 ## Estructura
 
 - `skills/`: procedimientos reutilizables compatibles con el formato `SKILL.md`.
 - `agents/codex/`: agentes personales de Codex en formato TOML.
 - `agents/claude/`: subagentes personales de Claude Code en Markdown con frontmatter YAML.
+- `docs/`: arquitectura, decisiones y guías del sistema reutilizable.
+- `schemas/`: contratos verificables para manifiestos y configuraciones.
+
+La arquitectura inicial del sistema de memoria está en [`docs/project-memory-system.md`](docs/project-memory-system.md). Su manifiesto se valida con [`schemas/project-memory.schema.json`](schemas/project-memory.schema.json).
 
 ## Skills disponibles
 
@@ -30,10 +34,23 @@ Este repositorio es la fuente canónica. Sus componentes se instalan mediante en
 
 - Skills para Codex: `~/.agents/skills/`.
 - Skills para Claude Code: `~/.claude/skills/`.
+- Skills para Gemini CLI: `~/.gemini/antigravity-cli/skills/`.
 - Agentes para Codex: `~/.codex/agents/`.
 - Agentes para Claude Code: `~/.claude/agents/`.
 
-Los enlaces evitan copias divergentes: una actualización en esta biblioteca queda disponible para ambas plataformas después de reiniciar la sesión cuando sea necesario.
+Los enlaces evitan copias divergentes: una actualización en esta biblioteca queda disponible para las plataformas conectadas después de reiniciar la sesión cuando sea necesario.
+
+## Memorias de proyecto
+
+Cada proyecto conserva por separado:
+
+- su repositorio como fuente principal de verdad;
+- una bóveda privada para contexto estable;
+- un MCP de solo lectura;
+- una Skill específica que aplica búsqueda progresiva;
+- reglas de escritura y sincronización controladas.
+
+`Agent-Toolkit` contiene únicamente componentes reutilizables. No almacena el conocimiento privado de los proyectos.
 
 ## Límites
 

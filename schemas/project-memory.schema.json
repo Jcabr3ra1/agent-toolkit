@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-toolkit.local/schemas/project-memory.schema.json",
+  "title": "Project Memory Manifest",
+  "description": "Contrato portable para conectar un repositorio, una memoria privada y agentes compatibles.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "project",
+    "source",
+    "memory",
+    "agents",
+    "security"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "project": {
+      "$ref": "#/$defs/project"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "memory": {
+      "$ref": "#/$defs/memory"
+    },
+    "agents": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/agent"
+      }
+    },
+    "security": {
+      "$ref": "#/$defs/security"
+    },
+    "automation": {
+      "$ref": "#/$defs/automation"
+    }
+  },
+  "$defs": {
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "minLength": 2,
+          "maxLength": 64
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryPath",
+        "defaultBranch"
+      ],
+      "properties": {
+        "repositoryPath": {
+          "$ref": "#/$defs/localPath"
+        },
+        "remoteUrl": {
+          "type": "string",
+          "minLength": 1,
+          "description": "URL pública o privada sin credenciales incrustadas."
+        },
+        "defaultBranch": {
+          "$ref": "#/$defs/branchName"
+        },
+        "integrationBranch": {
+          "$ref": "#/$defs/branchName"
+        },
+        "documentationPaths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vaultPath",
+        "mcpServerName",
+        "repositoryBranch",
+        "syncMode"
+      ],
+      "properties": {
+        "vaultPath": {
+          "$ref": "#/$defs/localPath"
+        },
+        "repositoryRemote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "URL del remoto sin tokens ni credenciales incrustadas."
+        },
+        "repositoryBranch": {
+          "$ref": "#/$defs/branchName"
+        },
+        "mcpServerName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "syncMode": {
+          "enum": [
+            "git-manual",
+            "git-automated",
+            "none"
+          ]
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "enabled"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "minLength": 2,
+          "maxLength": 64
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "skillName": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+          "minLength": 2,
+          "maxLength": 80
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mcpAccess",
+        "sensitiveDataPolicy",
+        "writeRequiresExplicitAuthorization",
+        "allowCredentialsInMemory"
+      ],
+      "properties": {
+        "mcpAccess": {
+          "const": "read-only"
+        },
+        "sensitiveDataPolicy": {
+          "const": "forbidden"
+        },
+        "writeRequiresExplicitAuthorization": {
+          "const": true
+        },
+        "allowCredentialsInMemory": {
+          "const": false
+        }
+      }
+    },
+    "automation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "requiresMergedChange"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "reviewBranch": {
+          "$ref": "#/$defs/branchName"
+        },
+        "requiresMergedChange": {
+          "const": true
+        },
+        "schedule": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Descripción portable; la plataforma decide el formato ejecutable."
+        }
+      }
+    },
+    "localPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "Ruta local absoluta o resoluble por el adaptador de la plataforma."
+    },
+    "branchName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^(?!.*(?:\\.\\.|//|@\\{|\\\\))[A-Za-z0-9][A-Za-z0-9._/-]*[A-Za-z0-9]$|^[A-Za-z0-9]$"
+    }
+  }
+}
