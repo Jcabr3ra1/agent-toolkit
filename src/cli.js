@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { connectMemory, ConnectionError } from "./connect.js";
 import { diagnoseMemory } from "./doctor.js";
 import { initializeMemory, InitializationError } from "./init.js";
 
@@ -7,6 +8,7 @@ const HELP = `project-memory
 
 Uso:
   project-memory init <destino> [opciones]
+  project-memory connect [ruta] --agent <agente> [opciones]
   project-memory doctor [ruta] [opciones]
 
 Opciones de init:
@@ -26,11 +28,16 @@ Opciones de doctor:
   --manifest <ruta>  Selecciona un manifiesto concreto.
   --strict           Devuelve error cuando existan advertencias.
 
+Opciones de connect:
+  --agent <agente>   Agente a conectar: codex, claude o gemini.
+  --manifest <ruta>  Selecciona un manifiesto concreto.
+  --apply            Aplica el plan; sin esta opción solo previsualiza.
+
 Opciones comunes:
   --json             Imprime la salida como JSON.
   -h, --help         Muestra esta ayuda.
 
-init no sobrescribe archivos diferentes. doctor es de solo lectura.`;
+init y connect no sobrescriben configuraciones diferentes. doctor es de solo lectura.`;
 
 export async function runCli(argv, io = defaultIo()) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
@@ -47,9 +54,81 @@ export async function runCli(argv, io = defaultIo()) {
     return runInitCommand(rest, io);
   }
 
+  if (command === "connect") {
+    return runConnectCommand(rest, io);
+  }
+
   io.err(`Comando desconocido: ${command}`);
   io.err(HELP);
   return 2;
+}
+
+async function runConnectCommand(rest, io) {
+  const options = {
+    apply: false,
+    targetPath: process.cwd()
+  };
+  let json = false;
+  let targetProvided = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const argument = rest[index];
+
+    if (argument === "--apply") {
+      options.apply = true;
+      continue;
+    }
+    if (argument === "--json") {
+      json = true;
+      continue;
+    }
+    if (argument === "--agent" || argument === "--manifest") {
+      const value = rest[index + 1];
+      if (!value || value.startsWith("--")) {
+        io.err(`La opción ${argument} requiere un valor.`);
+        return 2;
+      }
+      if (argument === "--agent") {
+        options.agentId = value;
+      } else {
+        options.manifestPath = path.resolve(value);
+      }
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith("--")) {
+      io.err(`Opción desconocida: ${argument}`);
+      return 2;
+    }
+    if (targetProvided) {
+      io.err(`Ruta adicional no esperada: ${argument}`);
+      return 2;
+    }
+    options.targetPath = path.resolve(argument);
+    targetProvided = true;
+  }
+
+  let report;
+  try {
+    report = await connectMemory(options);
+  } catch (error) {
+    if (error instanceof ConnectionError) {
+      for (const detail of error.details) {
+        io.err(`- ${detail}`);
+      }
+      return 1;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    io.err(`No se pudo preparar la conexión: ${message}`);
+    return 1;
+  }
+
+  if (json) {
+    io.out(JSON.stringify(report, null, 2));
+  } else {
+    io.out(formatConnectReport(report));
+  }
+  return report.status === "conflict" ? 1 : 0;
 }
 
 async function runDoctorCommand(rest, io) {
@@ -225,6 +304,36 @@ function formatInitReport(report) {
     lines.push("Vista previa: repite el comando con --apply para crear los archivos.");
   }
 
+  return lines.join("\n");
+}
+
+function formatConnectReport(report) {
+  const lines = [
+    `Project Memory Connect: ${report.status.toUpperCase()}`,
+    `Modo: ${report.mode}`,
+    `Agente: ${report.agent}`,
+    `Bóveda: ${report.vaultPath}`,
+    `MCP: ${report.mcpName}`,
+    `Skill: ${report.skillName}`,
+    "",
+    `${report.summary.create} por crear, ${report.summary.update} por actualizar, ${report.summary.unchanged} sin cambios, ${report.summary.conflicts} conflictos`
+  ];
+
+  const symbols = {
+    create: "+",
+    update: "~",
+    unchanged: "=",
+    conflict: "!"
+  };
+  for (const component of report.components) {
+    lines.push(
+      `${symbols[component.action]} ${component.id}: ${component.message}${component.path ? ` (${component.path})` : ""}`
+    );
+  }
+  if (report.status === "preview") {
+    lines.push("");
+    lines.push("Vista previa: repite el comando con --apply para conectar el agente.");
+  }
   return lines.join("\n");
 }
 

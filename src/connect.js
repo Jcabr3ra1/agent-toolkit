@@ -1,0 +1,713 @@
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import Ajv2020 from "ajv/dist/2020.js";
+
+const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_SCHEMA_PATH = path.resolve(
+  SOURCE_DIRECTORY,
+  "../schemas/project-memory.schema.json"
+);
+const FILESYSTEM_PACKAGE = "@modelcontextprotocol/server-filesystem";
+const FILESYSTEM_VERSION = "2026.8.31";
+const FILESYSTEM_SPEC = `${FILESYSTEM_PACKAGE}@${FILESYSTEM_VERSION}`;
+
+export const READ_TOOLS = Object.freeze([
+  "read_text_file",
+  "read_media_file",
+  "read_multiple_files",
+  "list_directory",
+  "list_directory_with_sizes",
+  "directory_tree",
+  "search_files",
+  "get_file_info",
+  "list_allowed_directories"
+]);
+
+export const WRITE_TOOLS = Object.freeze([
+  "create_directory",
+  "write_file",
+  "edit_file",
+  "move_file"
+]);
+
+const ADAPTERS = Object.freeze({
+  codex: {
+    skillDirectory: ".agents/skills"
+  },
+  claude: {
+    skillDirectory: ".claude/skills"
+  },
+  gemini: {
+    skillDirectory: ".gemini/antigravity-cli/skills"
+  }
+});
+
+export async function connectMemory(options, context = {}) {
+  const config = loadConfig(options, context);
+  const runner = context.runCommand ?? runCommand;
+  const skill = inspectSkill(config);
+  const connection = inspectConnection(config, runner);
+  const components = [skill, ...connection.components];
+  const report = createReport(config, components, options.apply === true);
+
+  if (components.some((component) => component.action === "conflict")) {
+    report.status = "conflict";
+    return report;
+  }
+
+  if (!options.apply) {
+    report.status = "preview";
+    return report;
+  }
+
+  let skillCreated = false;
+  try {
+    skillCreated = applySkill(skill);
+    connection.apply();
+  } catch (error) {
+    if (skillCreated && isSymbolicLinkTo(skill.path, skill.source)) {
+      fs.unlinkSync(skill.path);
+    }
+    throw new ConnectionError([
+      error instanceof Error ? error.message : String(error)
+    ]);
+  }
+
+  report.status = components.every(
+    (component) => component.action === "unchanged"
+  )
+    ? "unchanged"
+    : "connected";
+  return report;
+}
+
+function loadConfig(options, context) {
+  const errors = [];
+  const target = path.resolve(options.targetPath ?? process.cwd());
+  const manifestPath = resolveManifestPath(target, options.manifestPath);
+  const agentId = options.agentId?.trim();
+
+  if (!manifestPath) {
+    errors.push("No se encontró project-memory.json.");
+  }
+  if (!ADAPTERS[agentId]) {
+    errors.push("--agent debe ser codex, claude o gemini.");
+  }
+  if (errors.length > 0) {
+    throw new ConnectionError(errors);
+  }
+
+  const manifest = readJson(manifestPath, "manifiesto");
+  const schemaPath = path.resolve(context.schemaPath ?? DEFAULT_SCHEMA_PATH);
+  const schema = readJson(schemaPath, "esquema");
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  const validate = ajv.compile(schema);
+
+  if (!validate(manifest)) {
+    throw new ConnectionError(
+      (validate.errors ?? []).map((error) => {
+        const location = error.instancePath || "/";
+        return `${location}: ${error.message}`;
+      })
+    );
+  }
+
+  const agent = manifest.agents.find((candidate) => candidate.id === agentId);
+  if (!agent) {
+    errors.push(`El manifiesto no declara el agente ${agentId}.`);
+  } else if (!agent.enabled) {
+    errors.push(`El agente ${agentId} está deshabilitado en el manifiesto.`);
+  }
+
+  const manifestDirectory = path.dirname(manifestPath);
+  const vaultPath = resolveConfiguredPath(
+    manifestDirectory,
+    manifest.memory.vaultPath
+  );
+  const skillName = agent?.skillName ?? manifest.project.id;
+  const skillSource = path.join(
+    vaultPath,
+    "07-AGENTES",
+    "skills",
+    skillName
+  );
+
+  if (!isDirectory(vaultPath)) {
+    errors.push(`La bóveda no existe: ${vaultPath}`);
+  }
+  if (!isDirectory(skillSource) || !isFile(path.join(skillSource, "SKILL.md"))) {
+    errors.push(`No se encontró una Skill válida: ${skillSource}`);
+  }
+  if (manifest.security.mcpAccess !== "read-only") {
+    errors.push("La conexión exige security.mcpAccess = read-only.");
+  }
+
+  if (errors.length > 0) {
+    throw new ConnectionError(errors);
+  }
+
+  const homeDirectory = path.resolve(context.homeDirectory ?? os.homedir());
+  const adapter = ADAPTERS[agentId];
+
+  return {
+    agentId,
+    adapter,
+    manifest,
+    manifestPath,
+    vaultPath: fs.realpathSync(vaultPath),
+    skillName,
+    skillSource: fs.realpathSync(skillSource),
+    skillTarget: path.join(homeDirectory, adapter.skillDirectory, skillName),
+    homeDirectory,
+    mcpName: manifest.memory.mcpServerName
+  };
+}
+
+function inspectSkill(config) {
+  const target = config.skillTarget;
+
+  if (!pathEntryExists(target)) {
+    return {
+      id: "skill",
+      action: "create",
+      path: target,
+      source: config.skillSource,
+      message: "Crear enlace simbólico hacia la Skill canónica."
+    };
+  }
+
+  const stats = fs.lstatSync(target);
+  if (!stats.isSymbolicLink()) {
+    return {
+      id: "skill",
+      action: "conflict",
+      path: target,
+      source: config.skillSource,
+      message: "El destino existe y no es un enlace simbólico."
+    };
+  }
+
+  let currentSource;
+  try {
+    currentSource = fs.realpathSync(target);
+  } catch {
+    return {
+      id: "skill",
+      action: "conflict",
+      path: target,
+      source: config.skillSource,
+      message: "El destino es un enlace simbólico roto."
+    };
+  }
+  if (currentSource !== config.skillSource) {
+    return {
+      id: "skill",
+      action: "conflict",
+      path: target,
+      source: config.skillSource,
+      message: `El enlace apunta a otra ubicación: ${currentSource}`
+    };
+  }
+
+  return {
+    id: "skill",
+    action: "unchanged",
+    path: target,
+    source: config.skillSource,
+    message: "La Skill ya apunta a la fuente canónica."
+  };
+}
+
+function inspectConnection(config, runner) {
+  if (config.agentId === "codex") {
+    return inspectCodex(config, runner);
+  }
+  if (config.agentId === "claude") {
+    return inspectClaude(config, runner);
+  }
+  return inspectGemini(config);
+}
+
+function inspectCodex(config, runner) {
+  const result = runner("codex", ["mcp", "get", config.mcpName]);
+  if (result.errorCode === "ENOENT") {
+    return unavailableCommand("codex");
+  }
+
+  const exists = result.status === 0;
+  const matches = exists && outputMatchesFilesystemServer(result.stdout, config);
+  const mcp = exists
+    ? matches
+      ? component("mcp", "unchanged", "Codex ya usa esta bóveda.")
+      : component("mcp", "conflict", "Codex tiene un MCP homónimo diferente.")
+    : component("mcp", "create", "Registrar el MCP personal en Codex.");
+
+  const currentTools = parseCodexEnabledTools(result.stdout);
+  const policy = !exists
+    ? component("policy", "create", "Crear la lista blanca de lectura de Codex.")
+    : hasEvery(currentTools, READ_TOOLS) && !hasAny(currentTools, WRITE_TOOLS)
+      ? component("policy", "unchanged", "Codex ya limita el MCP a lectura.")
+      : component("policy", "update", "Limitar el MCP de Codex a herramientas de lectura.");
+
+  const configPath = path.join(config.homeDirectory, ".codex/config.toml");
+  if (
+    policy.action !== "unchanged" &&
+    pathEntryExists(configPath) &&
+    fs.lstatSync(configPath).isSymbolicLink()
+  ) {
+    policy.action = "conflict";
+    policy.message = "La configuración de Codex es un enlace simbólico y no se reemplazará.";
+  }
+  mcp.path = configPath;
+  policy.path = configPath;
+
+  return {
+    components: [mcp, policy],
+    apply() {
+      let serverCreated = false;
+      try {
+        if (mcp.action === "create") {
+          requireSuccess(
+            runner("codex", [
+              "mcp",
+              "add",
+              config.mcpName,
+              "--",
+              "npx",
+              "-y",
+              FILESYSTEM_SPEC,
+              config.vaultPath
+            ]),
+            "No se pudo registrar el MCP en Codex."
+          );
+          serverCreated = true;
+        }
+        if (policy.action !== "unchanged") {
+          updateCodexPolicy(configPath, config.mcpName);
+        }
+      } catch (error) {
+        if (serverCreated) {
+          runner("codex", ["mcp", "remove", config.mcpName]);
+        }
+        throw error;
+      }
+    }
+  };
+}
+
+function inspectClaude(config, runner) {
+  const result = runner("claude", ["mcp", "get", config.mcpName]);
+  if (result.errorCode === "ENOENT") {
+    return unavailableCommand("claude");
+  }
+
+  const exists = result.status === 0;
+  const matches = exists && outputMatchesFilesystemServer(result.stdout, config);
+  const mcp = exists
+    ? matches
+      ? component("mcp", "unchanged", "Claude ya usa esta bóveda.")
+      : component("mcp", "conflict", "Claude tiene un MCP homónimo diferente.")
+    : component("mcp", "create", "Registrar el MCP personal en Claude Code.");
+  const settingsPath = path.join(config.homeDirectory, ".claude/settings.json");
+  const policyState = inspectClaudePolicy(settingsPath, config.mcpName);
+  const policy = component(
+    "policy",
+    policyState ? "unchanged" : fs.existsSync(settingsPath) ? "update" : "create",
+    policyState
+      ? "Claude ya permite lectura y deniega escritura para este MCP."
+      : "Configurar permisos de lectura y bloqueos de escritura en Claude."
+  );
+  mcp.path = "Claude user MCP configuration";
+  policy.path = settingsPath;
+  if (
+    policy.action !== "unchanged" &&
+    pathEntryExists(settingsPath) &&
+    fs.lstatSync(settingsPath).isSymbolicLink()
+  ) {
+    policy.action = "conflict";
+    policy.message = "La configuración de Claude es un enlace simbólico y no se reemplazará.";
+  }
+
+  return {
+    components: [mcp, policy],
+    apply() {
+      let serverCreated = false;
+      try {
+        if (mcp.action === "create") {
+          requireSuccess(
+            runner("claude", [
+              "mcp",
+              "add",
+              "--scope",
+              "user",
+              config.mcpName,
+              "--",
+              "npx",
+              "-y",
+              FILESYSTEM_SPEC,
+              config.vaultPath
+            ]),
+            "No se pudo registrar el MCP en Claude Code."
+          );
+          serverCreated = true;
+        }
+        if (policy.action !== "unchanged") {
+          updateClaudePolicy(settingsPath, config.mcpName);
+        }
+      } catch (error) {
+        if (serverCreated) {
+          runner("claude", ["mcp", "remove", config.mcpName, "--scope", "user"]);
+        }
+        throw error;
+      }
+    }
+  };
+}
+
+function inspectGemini(config) {
+  const configPath = resolveGeminiConfigPath(config.homeDirectory);
+  const document = fs.existsSync(configPath)
+    ? readJson(configPath, "configuración de Gemini")
+    : {};
+  const server = document.mcpServers?.[config.mcpName];
+  const matches = server && objectMatchesFilesystemServer(server, config);
+  const mcp = !server
+    ? component("mcp", "create", "Registrar el MCP personal en Gemini.")
+    : matches
+      ? component("mcp", "unchanged", "Gemini ya usa esta bóveda.")
+      : component("mcp", "conflict", "Gemini tiene un MCP homónimo diferente.");
+  const safePolicy =
+    server &&
+    hasEvery(server.includeTools, READ_TOOLS) &&
+    !hasAny(server.includeTools, WRITE_TOOLS);
+  const policy = component(
+    "policy",
+    !server ? "create" : safePolicy ? "unchanged" : "update",
+    safePolicy
+      ? "Gemini ya impide las herramientas de escritura del MCP."
+      : "Crear la lista blanca de lectura de Gemini."
+  );
+  mcp.path = configPath;
+  policy.path = configPath;
+  if (
+    (mcp.action !== "unchanged" || policy.action !== "unchanged") &&
+    pathEntryExists(configPath) &&
+    fs.lstatSync(configPath).isSymbolicLink()
+  ) {
+    policy.action = "conflict";
+    policy.message = "La configuración de Gemini es un enlace simbólico y no se reemplazará.";
+  }
+
+  return {
+    components: [mcp, policy],
+    apply() {
+      if (mcp.action === "unchanged" && policy.action === "unchanged") {
+        return;
+      }
+      const next = structuredClone(document);
+      next.mcpServers ??= {};
+      next.mcpServers[config.mcpName] = {
+        ...(next.mcpServers[config.mcpName] ?? {}),
+        command: "npx",
+        args: ["-y", FILESYSTEM_SPEC, config.vaultPath],
+        includeTools: [...READ_TOOLS]
+      };
+      writeJsonAtomic(configPath, next);
+    }
+  };
+}
+
+function unavailableCommand(command) {
+  return {
+    components: [
+      component("mcp", "conflict", `No se encontró el comando ${command}.`),
+      component("policy", "conflict", "No se puede validar la política de acceso.")
+    ],
+    apply() {}
+  };
+}
+
+function applySkill(skill) {
+  if (skill.action !== "create") {
+    return false;
+  }
+  fs.mkdirSync(path.dirname(skill.path), { recursive: true });
+  fs.symlinkSync(skill.source, skill.path, "dir");
+  return true;
+}
+
+function inspectClaudePolicy(settingsPath, mcpName) {
+  if (!fs.existsSync(settingsPath)) {
+    return false;
+  }
+  const settings = readJson(settingsPath, "configuración de Claude");
+  const allow = settings.permissions?.allow;
+  const deny = settings.permissions?.deny;
+  return (
+    hasEvery(
+      allow,
+      READ_TOOLS.map((tool) => claudeToolName(mcpName, tool))
+    ) &&
+    hasEvery(
+      deny,
+      WRITE_TOOLS.map((tool) => claudeToolName(mcpName, tool))
+    )
+  );
+}
+
+function updateClaudePolicy(settingsPath, mcpName) {
+  const settings = fs.existsSync(settingsPath)
+    ? readJson(settingsPath, "configuración de Claude")
+    : {};
+  settings.permissions ??= {};
+  settings.permissions.allow = mergeUnique(
+    settings.permissions.allow,
+    READ_TOOLS.map((tool) => claudeToolName(mcpName, tool))
+  );
+  settings.permissions.deny = mergeUnique(
+    settings.permissions.deny,
+    WRITE_TOOLS.map((tool) => claudeToolName(mcpName, tool))
+  );
+  writeJsonAtomic(settingsPath, settings);
+}
+
+function updateCodexPolicy(configPath, mcpName) {
+  if (!isFile(configPath)) {
+    throw new Error(`Codex no creó su configuración: ${configPath}`);
+  }
+  const content = fs.readFileSync(configPath, "utf8");
+  const escapedName = escapeRegExp(mcpName);
+  const headerPattern = new RegExp(`^\\[mcp_servers\\.${escapedName}\\]\\s*$`, "m");
+  const match = headerPattern.exec(content);
+  if (!match) {
+    throw new Error(`No se encontró el bloque MCP de Codex para ${mcpName}.`);
+  }
+
+  const blockStart = match.index;
+  const contentAfterHeader = match.index + match[0].length;
+  const nextHeaderOffset = content.slice(contentAfterHeader).search(/^\[/m);
+  const blockEnd =
+    nextHeaderOffset === -1 ? content.length : contentAfterHeader + nextHeaderOffset;
+  const block = content.slice(blockStart, blockEnd);
+  const arrayValue = `[${READ_TOOLS.map((tool) => JSON.stringify(tool)).join(", ")}]`;
+  const policyPattern = /^enabled_tools\s*=.*$/m;
+  const nextBlock = policyPattern.test(block)
+    ? block.replace(policyPattern, `enabled_tools = ${arrayValue}`)
+    : block.replace(match[0], `${match[0]}\nenabled_tools = ${arrayValue}`);
+  const nextContent = `${content.slice(0, blockStart)}${nextBlock}${content.slice(blockEnd)}`;
+  writeTextAtomic(configPath, nextContent);
+}
+
+function resolveGeminiConfigPath(homeDirectory) {
+  const antigravityPath = path.join(homeDirectory, ".gemini/config/mcp_config.json");
+  if (
+    fs.existsSync(antigravityPath) ||
+    fs.existsSync(path.join(homeDirectory, ".gemini/antigravity-cli"))
+  ) {
+    return antigravityPath;
+  }
+  return path.join(homeDirectory, ".gemini/settings.json");
+}
+
+function outputMatchesFilesystemServer(output, config) {
+  const commandMatch = output.match(/^\s*Command:\s*(.+)$/im) ??
+    output.match(/^\s*command:\s*(.+)$/im);
+  const argsMatch = output.match(/^\s*Args:\s*(.+)$/im) ??
+    output.match(/^\s*args:\s*(.+)$/im);
+  if (!commandMatch || !argsMatch || commandMatch[1].trim() !== "npx") {
+    return false;
+  }
+  return argsMatchFilesystem(argsMatch[1].trim(), config.vaultPath);
+}
+
+function objectMatchesFilesystemServer(server, config) {
+  return (
+    server.command === "npx" &&
+    Array.isArray(server.args) &&
+    argsMatchFilesystem(server.args, config.vaultPath)
+  );
+}
+
+function argsMatchFilesystem(args, vaultPath) {
+  const values = Array.isArray(args) ? args : splitCommandArguments(args);
+  if (values.length !== 3 || values[0] !== "-y" || values[2] !== vaultPath) {
+    return false;
+  }
+  return (
+    values[1] === FILESYSTEM_PACKAGE ||
+    values[1].startsWith(`${FILESYSTEM_PACKAGE}@`)
+  );
+}
+
+function isSymbolicLinkTo(candidate, expectedSource) {
+  try {
+    return (
+      fs.lstatSync(candidate).isSymbolicLink() &&
+      fs.realpathSync(candidate) === expectedSource
+    );
+  } catch {
+    return false;
+  }
+}
+
+function splitCommandArguments(value) {
+  const marker = value.indexOf(FILESYSTEM_PACKAGE);
+  if (marker === -1) {
+    return value.trim().split(/\s+/);
+  }
+  const packageEnd = value.indexOf(" ", marker);
+  if (packageEnd === -1) {
+    return value.trim().split(/\s+/);
+  }
+  const before = value.slice(0, packageEnd).trim().split(/\s+/);
+  const vault = value.slice(packageEnd + 1).trim();
+  return [...before, vault];
+}
+
+function parseCodexEnabledTools(output) {
+  const match = output.match(/^\s*enabled_tools:\s*(.*)$/im);
+  return match
+    ? match[1]
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean)
+    : [];
+}
+
+function createReport(config, components, apply) {
+  return {
+    command: "connect",
+    status: "preview",
+    mode: apply ? "apply" : "preview",
+    agent: config.agentId,
+    manifestPath: config.manifestPath,
+    vaultPath: config.vaultPath,
+    mcpName: config.mcpName,
+    skillName: config.skillName,
+    summary: {
+      create: components.filter((item) => item.action === "create").length,
+      update: components.filter((item) => item.action === "update").length,
+      unchanged: components.filter((item) => item.action === "unchanged").length,
+      conflicts: components.filter((item) => item.action === "conflict").length
+    },
+    components
+  };
+}
+
+function component(id, action, message) {
+  return { id, action, message };
+}
+
+function claudeToolName(mcpName, tool) {
+  return `mcp__${mcpName}__${tool}`;
+}
+
+function hasEvery(values, expected) {
+  return Array.isArray(values) && expected.every((value) => values.includes(value));
+}
+
+function hasAny(values, expected) {
+  return Array.isArray(values) && expected.some((value) => values.includes(value));
+}
+
+function mergeUnique(current, additions) {
+  return [...new Set([...(Array.isArray(current) ? current : []), ...additions])];
+}
+
+function runCommand(command, args) {
+  const result = spawnSync(command, args, { encoding: "utf8" });
+  return {
+    status: result.status,
+    stdout: result.stdout ?? "",
+    stderr: result.stderr ?? "",
+    errorCode: result.error?.code
+  };
+}
+
+function requireSuccess(result, message) {
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || "").trim();
+    throw new Error(detail ? `${message} ${detail}` : message);
+  }
+}
+
+function resolveManifestPath(target, explicitManifestPath) {
+  if (explicitManifestPath) {
+    const explicit = path.resolve(explicitManifestPath);
+    return isFile(explicit) ? explicit : null;
+  }
+  if (isFile(target)) {
+    return target;
+  }
+  const candidate = path.join(target, "project-memory.json");
+  return isFile(candidate) ? candidate : null;
+}
+
+function resolveConfiguredPath(baseDirectory, configuredPath) {
+  return path.isAbsolute(configuredPath)
+    ? path.normalize(configuredPath)
+    : path.resolve(baseDirectory, configuredPath);
+}
+
+function readJson(filePath, label) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new ConnectionError([
+      `No se pudo leer ${label} como JSON válido: ${filePath}`,
+      error instanceof Error ? error.message : String(error)
+    ]);
+  }
+}
+
+function writeJsonAtomic(filePath, value) {
+  writeTextAtomic(filePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function writeTextAtomic(filePath, content) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const temporaryPath = `${filePath}.project-memory-${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, content, { encoding: "utf8", mode: 0o600 });
+  fs.renameSync(temporaryPath, filePath);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isDirectory(candidate) {
+  try {
+    return fs.statSync(candidate).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function isFile(candidate) {
+  try {
+    return fs.statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function pathEntryExists(candidate) {
+  try {
+    fs.lstatSync(candidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export class ConnectionError extends Error {
+  constructor(details) {
+    super(details.join("\n"));
+    this.name = "ConnectionError";
+    this.details = details;
+  }
+}

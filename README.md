@@ -85,6 +85,22 @@ project-memory init /ruta/al/proyecto-memory \
 
 La creación solo ocurre al repetir el comando con `--apply`. No sobrescribe archivos distintos ni configura Git, MCP o agentes por su cuenta. Consulta [`docs/project-memory-init.md`](docs/project-memory-init.md) para ver el contrato completo.
 
+## Conectar un agente
+
+`project-memory connect` inspecciona y prepara la Skill, el MCP y la política de
+solo lectura de una plataforma concreta:
+
+```bash
+project-memory connect /ruta/a/proyecto-memory --agent codex
+project-memory connect /ruta/a/proyecto-memory --agent claude
+project-memory connect /ruta/a/proyecto-memory --agent gemini
+```
+
+La vista previa no modifica el equipo. Después de revisarla, `--apply` crea
+únicamente los elementos ausentes y se detiene ante enlaces o servidores
+homónimos diferentes. La guía completa está en
+[`docs/project-memory-connect.md`](docs/project-memory-connect.md).
+
 ## Límites
 
 - No guardar secretos, credenciales, tokens ni datos personales.

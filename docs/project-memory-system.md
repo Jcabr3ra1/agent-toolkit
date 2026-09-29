@@ -139,10 +139,13 @@ Las rutas declaradas no pueden ser absolutas, usar `..`, barras invertidas ni se
 
 ### 2. Conectar
 
-1. Instalar enlaces simbólicos o mecanismos equivalentes por plataforma.
-2. Activar únicamente herramientas MCP de lectura.
-3. Probar listado, búsqueda y lectura de una nota conocida.
-4. Registrar la integración solo después de comprobarla.
+1. Ejecutar `project-memory connect <memoria> --agent <agente>` para revisar el
+   plan sin modificar el equipo.
+2. Aplicar el plan explícitamente con `--apply` cuando no existan conflictos.
+3. Instalar el enlace simbólico hacia la Skill canónica de la memoria.
+4. Activar únicamente herramientas MCP de lectura mediante la política propia
+   de Codex, Claude Code o Gemini CLI.
+5. Reiniciar la sesión y probar listado, búsqueda y lectura de una nota conocida.
 
 ### 3. Consultar
 
@@ -201,11 +204,12 @@ El esquema no presupone que todas las plataformas se ejecutan en la misma máqui
 
 ## Requisitos de la futura CLI
 
-La primera CLI se implementará sin modificar este contrato y ofrecerá:
+La CLI evoluciona sin modificar este contrato y ofrece:
 
 - `project-memory init`: mostrar plan y crear una memoria de forma idempotente;
 - `project-memory doctor`: validar manifiesto, estructura, enlaces, Git y posibles secretos;
-- `project-memory connect`: preparar la integración de un agente concreto;
+- `project-memory connect`: preparar la integración segura de Codex, Claude
+  Code o Gemini CLI, con vista previa e idempotencia;
 - `project-memory status`: resumir salud, sincronización y conexiones.
 
 Las operaciones destructivas estarán fuera de v0.1. La vista previa será el comportamiento predeterminado y los cambios requerirán una opción explícita de aplicación.
@@ -217,6 +221,22 @@ Las operaciones destructivas estarán fuera de v0.1. La vista previa será el co
 Con `--apply` crea el manifiesto, la bóveda canónica y la Skill específica únicamente cuando la validación completa no detecta conflictos. Repetir la misma operación conserva los archivos sin reescribirlos. Un archivo existente con contenido diferente detiene toda la operación.
 
 La primera versión no inicializa Git, no crea remotos, no configura MCP y no instala Skills. Estas responsabilidades pertenecen a comandos o adaptadores posteriores.
+
+### Contrato de `connect`
+
+`project-memory connect` recibe una memoria válida y un agente habilitado en el
+manifiesto. Inspecciona el enlace de la Skill, el servidor MCP homónimo y la
+política de herramientas sin escribir nada en modo de vista previa.
+
+Con `--apply` crea únicamente los componentes ausentes. Un enlace que apunte a
+otra Skill o un MCP homónimo con otro comando, argumentos o bóveda detiene toda
+la operación. La política resultante expone nueve operaciones de lectura y
+excluye las operaciones de creación, edición, escritura y movimiento del
+servidor filesystem.
+
+Repetir la operación sobre una conexión correcta conserva la configuración sin
+duplicarla. El comando no copia credenciales, no modifica el repositorio fuente
+y no escribe contenido en la bóveda.
 
 ## Criterios de aceptación del contrato base
 
@@ -235,7 +255,7 @@ La primera versión no inicializa Git, no crea remotos, no configura MCP y no in
 2. **Plantilla canónica:** estructura genérica de bóveda y Skill de memoria.
 3. **Validador:** comando `doctor` con comprobaciones locales y salida accionable.
 4. **Generador:** comando `init` con vista previa e idempotencia.
-5. **Adaptadores:** Codex, Claude Code y Gemini CLI.
+5. **Adaptadores:** Codex, Claude Code y Gemini CLI. Implementado en la CLI.
 6. **Automatización:** impacto documental por eventos estables y respaldo programado.
 7. **Índice avanzado:** búsqueda semántica local únicamente cuando el volumen lo justifique.
 
