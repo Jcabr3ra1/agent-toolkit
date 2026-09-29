@@ -43,6 +43,8 @@ vault/
 
 Las carpetas representan responsabilidades estables. Un proyecto puede añadir áreas propias sin cambiar el significado de las existentes.
 
+El manifiesto utiliza `memory.layout.profile: canonical-v1` para exigir esta estructura. Una memoria anterior con una organización estable diferente puede usar el perfil `declared` y enumerar sus carpetas y notas fundamentales, sin renombrarlas ni duplicarlas.
+
 ## Uso manual provisional
 
 1. Copiar esta carpeta fuera de `Agent-Toolkit`.

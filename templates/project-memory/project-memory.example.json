@@ -21,7 +21,10 @@
     "repositoryRemote": "https://example.com/owner/project-memory.git",
     "repositoryBranch": "main",
     "mcpServerName": "project-id-memory",
-    "syncMode": "git-manual"
+    "syncMode": "git-manual",
+    "layout": {
+      "profile": "canonical-v1"
+    }
   },
   "agents": [
     {

@@ -35,6 +35,24 @@ node bin/project-memory.js doctor /ruta/a/la/memoria \
 
 El diagnóstico Git es local. No ejecuta `fetch`, `pull`, `push`, commits ni escrituras.
 
+## Perfiles de estructura
+
+Si `memory.layout` no está presente o usa `canonical-v1`, el doctor exige las carpetas y notas de la plantilla oficial.
+
+Una memoria anterior puede declarar su estructura estable:
+
+```json
+{
+  "layout": {
+    "profile": "declared",
+    "requiredDirectories": ["00-INICIO", "01-PRODUCTO"],
+    "requiredNotes": ["00-INICIO/Inicio del proyecto.md"]
+  }
+}
+```
+
+Las listas declaradas solo sustituyen la comprobación estructural. Todas las validaciones de seguridad, enlaces, variables, repositorios y Git continúan activas.
+
 ## Modos de salida
 
 Salida legible:
@@ -67,5 +85,5 @@ node bin/project-memory.js doctor /ruta/a/la/memoria --strict
 
 - La detección de secretos utiliza patrones de alta confianza y no reemplaza una herramienta especializada.
 - La comparación con upstream utiliza referencias locales conocidas y no demuestra que el remoto no haya cambiado.
-- El comando valida la estructura canónica v1; proyectos con otra estructura necesitan un contrato posterior.
+- El perfil `declared` confirma presencia, pero no evalúa si la taxonomía elegida es conceptualmente adecuada.
 - Los enlaces dinámicos o generados por plugins pueden requerir revisión manual.

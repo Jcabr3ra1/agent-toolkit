@@ -37,6 +37,81 @@ test("acepta una memoria mínima saludable", async (context) => {
   assert.equal(report.status, "ok");
   assert.equal(report.summary.errors, 0);
   assert.equal(report.summary.warnings, 0);
+  assert.equal(report.layoutProfile, "canonical-v1");
+});
+
+test("acepta una estructura estable declarada", async (context) => {
+  const fixture = createFixture(context, {
+    memory: {
+      vaultPath: "./vault",
+      repositoryBranch: "main",
+      mcpServerName: "test-project-memory",
+      syncMode: "none",
+      layout: {
+        profile: "declared",
+        requiredDirectories: ["00-INICIO", "02-BACKEND"],
+        requiredNotes: ["00-INICIO/Inicio del proyecto.md"]
+      }
+    }
+  });
+  fs.rmSync(path.join(fixture.vault, "02-ARQUITECTURA"), {
+    recursive: true,
+    force: true
+  });
+  fs.mkdirSync(path.join(fixture.vault, "02-BACKEND"));
+
+  const report = await diagnoseMemory(fixture.root);
+
+  assert.equal(report.status, "ok");
+  assert.equal(report.layoutProfile, "declared");
+});
+
+test("rechaza un perfil declarado sin listas estructurales", async (context) => {
+  const fixture = createFixture(context, {
+    memory: {
+      vaultPath: "./vault",
+      repositoryBranch: "main",
+      mcpServerName: "test-project-memory",
+      syncMode: "none",
+      layout: {
+        profile: "declared"
+      }
+    }
+  });
+
+  const report = await diagnoseMemory(fixture.root);
+
+  assert.equal(report.status, "error");
+  assert.ok(
+    report.checks.some(
+      (check) => check.id === "manifest-schema" && check.level === "error"
+    )
+  );
+});
+
+test("rechaza rutas declaradas que salen de la bóveda", async (context) => {
+  const fixture = createFixture(context, {
+    memory: {
+      vaultPath: "./vault",
+      repositoryBranch: "main",
+      mcpServerName: "test-project-memory",
+      syncMode: "none",
+      layout: {
+        profile: "declared",
+        requiredDirectories: ["../otra-memoria"],
+        requiredNotes: ["00-INICIO/Inicio del proyecto.md"]
+      }
+    }
+  });
+
+  const report = await diagnoseMemory(fixture.root);
+
+  assert.equal(report.status, "error");
+  assert.ok(
+    report.checks.some(
+      (check) => check.id === "manifest-schema" && check.level === "error"
+    )
+  );
 });
 
 test("rechaza un manifiesto con permisos inseguros", async (context) => {
@@ -96,6 +171,32 @@ test("detecta variables pendientes y enlaces rotos", async (context) => {
   assert.ok(
     report.checks.some(
       (check) => check.id === "markdown-links" && check.level === "error"
+    )
+  );
+});
+
+test("ignora enlaces ilustrativos dentro de código Markdown", async (context) => {
+  const fixture = createFixture(context);
+  fs.appendFileSync(
+    path.join(fixture.vault, "00-INICIO/Inicio del proyecto.md"),
+    [
+      "",
+      "Ejemplo: `[[Nota inexistente]]`.",
+      "",
+      "```markdown",
+      "[[Otra nota inexistente]]",
+      "[Ejemplo](archivo-ausente.md)",
+      "```",
+      ""
+    ].join("\n")
+  );
+
+  const report = await diagnoseMemory(fixture.root);
+
+  assert.equal(report.status, "ok");
+  assert.ok(
+    report.checks.some(
+      (check) => check.id === "markdown-links" && check.level === "pass"
     )
   );
 });

@@ -99,7 +99,10 @@ Ejemplo:
     "vaultPath": "/ruta/a/mi-proyecto-memory",
     "mcpServerName": "mi-proyecto-memory",
     "repositoryBranch": "main",
-    "syncMode": "git-manual"
+    "syncMode": "git-manual",
+    "layout": {
+      "profile": "canonical-v1"
+    }
   },
   "agents": [
     { "id": "codex", "enabled": true },
@@ -116,6 +119,13 @@ Ejemplo:
 ```
 
 Las rutas son valores locales. El manifiesto no debe incluir tokens dentro de URLs, variables de entorno sensibles ni valores de archivos `.env`.
+
+### Perfiles de estructura
+
+- `canonical-v1`: usa la estructura de la plantilla oficial. Es el perfil predeterminado cuando `layout` no está presente, para conservar compatibilidad con manifiestos v1 existentes.
+- `declared`: permite incorporar una memoria estable anterior sin renombrar ni duplicar sus carpetas. Exige `requiredDirectories` y `requiredNotes` explícitos, no vacíos y relativos a la raíz de la bóveda.
+
+Las rutas declaradas no pueden ser absolutas, usar `..`, barras invertidas ni separadores finales. El perfil solo cambia qué elementos estructurales comprueba `doctor`; no reduce las validaciones de esquema, enlaces, secretos, Git o seguridad.
 
 ## Ciclo de vida
 
@@ -208,6 +218,7 @@ Las operaciones destructivas estarán fuera de v0.1. La vista previa será el co
 - Ningún campo obligatorio contiene información secreta.
 - La arquitectura mantiene separadas herramientas, repositorio y memoria.
 - AVISENS puede adoptar el manifiesto posteriormente sin mover su bóveda ni su repositorio.
+- Una memoria existente puede declarar su estructura sin debilitar las demás comprobaciones del doctor.
 - El diseño permite añadir generador, validadores y adaptadores sin romper el contrato v1.
 
 ## Plan de evolución

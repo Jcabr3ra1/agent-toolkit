@@ -104,6 +104,7 @@ function formatReport(report) {
     `Manifiesto: ${report.manifestPath ?? "no encontrado"}`,
     `Repositorio fuente: ${report.sourcePath ?? "no determinado"}`,
     `Bóveda: ${report.vaultPath ?? "no determinada"}`,
+    `Estructura: ${report.layoutProfile ?? "no determinada"}`,
     ""
   ];
 

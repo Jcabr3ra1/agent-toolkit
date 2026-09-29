@@ -128,6 +128,9 @@ export async function diagnoseMemory(targetPath, options = {}) {
   report.sourcePath = sourcePath;
   checkSourceRepository(sourcePath, report);
 
+  const structure = resolveStructure(manifest.memory.layout);
+  report.layoutProfile = structure.profile;
+
   const vaultPath = resolveConfiguredPath(
     path.dirname(manifestPath),
     manifest.memory.vaultPath
@@ -147,7 +150,7 @@ export async function diagnoseMemory(targetPath, options = {}) {
 
   addCheck(report, "vault-presence", "pass", "Bóveda accesible.");
 
-  checkStructure(vaultPath, report);
+  checkStructure(vaultPath, structure, report);
 
   const textFiles = collectTextFiles(vaultPath);
   checkTemplateVariables(textFiles, vaultPath, report);
@@ -164,6 +167,7 @@ function createReport() {
     manifestPath: null,
     sourcePath: null,
     vaultPath: null,
+    layoutProfile: null,
     checks: [],
     summary: {
       errors: 0,
@@ -359,8 +363,24 @@ function checkSourceRepository(sourcePath, report) {
   );
 }
 
-function checkStructure(vaultPath, report) {
-  const missingDirectories = REQUIRED_DIRECTORIES.filter(
+function resolveStructure(layout) {
+  if (layout?.profile === "declared") {
+    return {
+      profile: "declared",
+      requiredDirectories: layout.requiredDirectories,
+      requiredNotes: layout.requiredNotes
+    };
+  }
+
+  return {
+    profile: "canonical-v1",
+    requiredDirectories: REQUIRED_DIRECTORIES,
+    requiredNotes: REQUIRED_NOTES
+  };
+}
+
+function checkStructure(vaultPath, structure, report) {
+  const missingDirectories = structure.requiredDirectories.filter(
     (relativePath) => !isDirectory(path.join(vaultPath, relativePath))
   );
 
@@ -369,7 +389,7 @@ function checkStructure(vaultPath, report) {
       report,
       "vault-directories",
       "error",
-      "Faltan carpetas canónicas en la bóveda.",
+      `Faltan carpetas requeridas por el perfil ${structure.profile}.`,
       missingDirectories
     );
   } else {
@@ -377,11 +397,11 @@ function checkStructure(vaultPath, report) {
       report,
       "vault-directories",
       "pass",
-      "La estructura canónica de carpetas está completa."
+      `Las carpetas requeridas por ${structure.profile} están presentes.`
     );
   }
 
-  const missingNotes = REQUIRED_NOTES.filter(
+  const missingNotes = structure.requiredNotes.filter(
     (relativePath) => !isFile(path.join(vaultPath, relativePath))
   );
 
@@ -477,7 +497,7 @@ function checkLinks(files, vaultPath, report) {
   const ambiguous = [];
 
   for (const filePath of markdownFiles) {
-    const content = fs.readFileSync(filePath, "utf8");
+    const content = maskMarkdownCode(fs.readFileSync(filePath, "utf8"));
     checkWikiLinks(content, filePath, vaultPath, indexes, broken, ambiguous);
     checkMarkdownLinks(content, filePath, vaultPath, broken);
   }
@@ -515,6 +535,13 @@ function checkLinks(files, vaultPath, report) {
       "No se encontraron enlaces Wiki ambiguos."
     );
   }
+}
+
+function maskMarkdownCode(content) {
+  return content
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/~~~[\s\S]*?~~~/g, "")
+    .replace(/(`+)[^`\n]*?\1/g, "");
 }
 
 function buildMarkdownIndexes(files, vaultPath) {
