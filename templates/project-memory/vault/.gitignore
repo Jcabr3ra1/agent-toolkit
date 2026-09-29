@@ -1,0 +1,20 @@
+# Configuración local de Obsidian
+.obsidian/
+.trash/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Copias y exportaciones
+*.zip
+
+# Configuración local del sistema de memoria
+project-memory.local.json
+
+# Secretos y credenciales
+.env
+.env.*
+*.pem
+*.key
+secrets/

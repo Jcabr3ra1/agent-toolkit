@@ -1,0 +1,55 @@
+{
+  "$schema": "../../schemas/project-memory.schema.json",
+  "schemaVersion": "1.0.0",
+  "project": {
+    "id": "project-id",
+    "name": "Project Name",
+    "description": "Memoria organizada y privada del proyecto."
+  },
+  "source": {
+    "repositoryPath": "/absolute/path/to/project",
+    "remoteUrl": "https://example.com/owner/project.git",
+    "defaultBranch": "main",
+    "integrationBranch": "develop",
+    "documentationPaths": [
+      "README.md",
+      "docs"
+    ]
+  },
+  "memory": {
+    "vaultPath": "/absolute/path/to/project-memory",
+    "repositoryRemote": "https://example.com/owner/project-memory.git",
+    "repositoryBranch": "main",
+    "mcpServerName": "project-id-memory",
+    "syncMode": "git-manual"
+  },
+  "agents": [
+    {
+      "id": "codex",
+      "enabled": true,
+      "skillName": "project-id"
+    },
+    {
+      "id": "claude",
+      "enabled": true,
+      "skillName": "project-id"
+    },
+    {
+      "id": "gemini",
+      "enabled": true,
+      "skillName": "project-id"
+    }
+  ],
+  "security": {
+    "mcpAccess": "read-only",
+    "sensitiveDataPolicy": "forbidden",
+    "writeRequiresExplicitAuthorization": true,
+    "allowCredentialsInMemory": false
+  },
+  "automation": {
+    "enabled": false,
+    "reviewBranch": "develop",
+    "requiresMergedChange": true,
+    "schedule": "Not configured"
+  }
+}
