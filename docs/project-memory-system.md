@@ -210,6 +210,14 @@ La primera CLI se implementará sin modificar este contrato y ofrecerá:
 
 Las operaciones destructivas estarán fuera de v0.1. La vista previa será el comportamiento predeterminado y los cambios requerirán una opción explícita de aplicación.
 
+### Contrato de `init`
+
+`project-memory init` recibe un destino nuevo o compatible, la identidad del proyecto y la ruta de un repositorio Git existente. En vista previa calcula todos los archivos, conflictos y elementos sin cambios sin escribir en disco.
+
+Con `--apply` crea el manifiesto, la bóveda canónica y la Skill específica únicamente cuando la validación completa no detecta conflictos. Repetir la misma operación conserva los archivos sin reescribirlos. Un archivo existente con contenido diferente detiene toda la operación.
+
+La primera versión no inicializa Git, no crea remotos, no configura MCP y no instala Skills. Estas responsabilidades pertenecen a comandos o adaptadores posteriores.
+
 ## Criterios de aceptación del contrato base
 
 - El esquema acepta el ejemplo documentado.

@@ -72,6 +72,19 @@ Opciones principales:
 
 La guía completa está en [`docs/project-memory-doctor.md`](docs/project-memory-doctor.md).
 
+## Crear una memoria
+
+`project-memory init` genera una vista previa segura de una memoria canónica:
+
+```bash
+project-memory init /ruta/al/proyecto-memory \
+  --project-id mi-proyecto \
+  --project-name "Mi Proyecto" \
+  --source /ruta/al/repositorio
+```
+
+La creación solo ocurre al repetir el comando con `--apply`. No sobrescribe archivos distintos ni configura Git, MCP o agentes por su cuenta. Consulta [`docs/project-memory-init.md`](docs/project-memory-init.md) para ver el contrato completo.
+
 ## Límites
 
 - No guardar secretos, credenciales, tokens ni datos personales.
