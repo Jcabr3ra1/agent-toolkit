@@ -9,6 +9,9 @@ Núcleo personal y reutilizable para conectar agentes con distintos proyectos si
 - `agents/claude/`: subagentes personales de Claude Code en Markdown con frontmatter YAML.
 - `docs/`: arquitectura, decisiones y guías del sistema reutilizable.
 - `schemas/`: contratos verificables para manifiestos y configuraciones.
+- `bin/`: punto de entrada de la CLI `project-memory`.
+- `src/`: diagnósticos y operaciones seguras de la CLI.
+- `test/`: pruebas automáticas con el ejecutor nativo de Node.js.
 
 La arquitectura inicial del sistema de memoria está en [`docs/project-memory-system.md`](docs/project-memory-system.md). Su manifiesto se valida con [`schemas/project-memory.schema.json`](schemas/project-memory.schema.json).
 
@@ -51,6 +54,23 @@ Cada proyecto conserva por separado:
 - reglas de escritura y sincronización controladas.
 
 `Agent-Toolkit` contiene únicamente componentes reutilizables. No almacena el conocimiento privado de los proyectos.
+
+## Diagnóstico de una memoria
+
+La primera herramienta ejecutable es `project-memory doctor`. Inspecciona una memoria sin modificarla.
+
+```bash
+npm install
+node bin/project-memory.js doctor /ruta/a/la/memoria
+```
+
+Opciones principales:
+
+- `--manifest <ruta>`: utiliza un manifiesto concreto.
+- `--json`: devuelve un informe estructurado.
+- `--strict`: trata las advertencias como error.
+
+La guía completa está en [`docs/project-memory-doctor.md`](docs/project-memory-doctor.md).
 
 ## Límites
 
