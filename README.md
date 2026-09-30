@@ -115,6 +115,21 @@ entre un sistema saludable, una conexión pendiente y un conflicto. Consulta
 [`docs/project-memory-status.md`](docs/project-memory-status.md) para ver el
 contrato completo.
 
+## Planificar una sincronización
+
+`project-memory sync plan` detecta los Pull Requests de GitHub que fueron
+fusionados en la rama configurada y todavía no aparecen como revisados en el
+registro Markdown de la memoria:
+
+```bash
+project-memory sync plan /ruta/a/proyecto-memory
+```
+
+La orden es de solo lectura: no modifica notas, no registra PR y no crea commits.
+Admite `--limit`, `--json` y `--strict`. Consulta
+[`docs/project-memory-sync.md`](docs/project-memory-sync.md) para ver el contrato
+completo.
+
 ## Límites
 
 - No guardar secretos, credenciales, tokens ni datos personales.

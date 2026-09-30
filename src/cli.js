@@ -4,6 +4,7 @@ import { connectMemory, ConnectionError } from "./connect.js";
 import { diagnoseMemory } from "./doctor.js";
 import { initializeMemory, InitializationError } from "./init.js";
 import { inspectMemoryStatus } from "./status.js";
+import { planMemorySync, SyncPlanningError } from "./sync.js";
 
 const HELP = `project-memory
 
@@ -12,6 +13,7 @@ Uso:
   project-memory connect [ruta] --agent <agente> [opciones]
   project-memory doctor [ruta] [opciones]
   project-memory status [ruta] [opciones]
+  project-memory sync plan [ruta] [opciones]
 
 Opciones de init:
   --project-id <id>           Identificador del proyecto.
@@ -40,13 +42,18 @@ Opciones de status:
   --manifest <ruta>  Selecciona un manifiesto concreto.
   --strict           Devuelve error cuando existan advertencias.
 
+Opciones de sync plan:
+  --manifest <ruta>  Selecciona un manifiesto concreto.
+  --limit <número>   Máximo de PR fusionados; por defecto 100.
+  --strict           Devuelve error cuando existan PR pendientes.
+
 Opciones comunes:
   --json             Imprime la salida como JSON.
   -h, --help         Muestra esta ayuda.
 
-init y connect no sobrescriben configuraciones diferentes. doctor es de solo lectura.`;
+init y connect no sobrescriben configuraciones diferentes. doctor, status y sync plan son de solo lectura.`;
 
-export async function runCli(argv, io = defaultIo()) {
+export async function runCli(argv, io = defaultIo(), context = {}) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
     io.out(HELP);
     return 0;
@@ -69,9 +76,90 @@ export async function runCli(argv, io = defaultIo()) {
     return runStatusCommand(rest, io);
   }
 
+  if (command === "sync") {
+    return runSyncCommand(rest, io, context);
+  }
+
   io.err(`Comando desconocido: ${command}`);
   io.err(HELP);
   return 2;
+}
+
+async function runSyncCommand(rest, io, context) {
+  const [operation, ...argumentsRest] = rest;
+  if (operation !== "plan") {
+    io.err(
+      operation
+        ? `Operación de sync desconocida: ${operation}`
+        : "Debes indicar una operación de sync: plan."
+    );
+    return 2;
+  }
+
+  const options = {
+    targetPath: process.cwd()
+  };
+  let json = false;
+  let strict = false;
+  let targetProvided = false;
+
+  for (let index = 0; index < argumentsRest.length; index += 1) {
+    const argument = argumentsRest[index];
+    if (argument === "--json") {
+      json = true;
+      continue;
+    }
+    if (argument === "--strict") {
+      strict = true;
+      continue;
+    }
+    if (argument === "--manifest" || argument === "--limit") {
+      const value = argumentsRest[index + 1];
+      if (!value || value.startsWith("--")) {
+        io.err(`La opción ${argument} requiere un valor.`);
+        return 2;
+      }
+      if (argument === "--manifest") {
+        options.manifestPath = path.resolve(value);
+      } else {
+        options.limit = value;
+      }
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith("--")) {
+      io.err(`Opción desconocida: ${argument}`);
+      return 2;
+    }
+    if (targetProvided) {
+      io.err(`Ruta adicional no esperada: ${argument}`);
+      return 2;
+    }
+    options.targetPath = path.resolve(argument);
+    targetProvided = true;
+  }
+
+  let report;
+  try {
+    report = await planMemorySync(options, context);
+  } catch (error) {
+    if (error instanceof SyncPlanningError) {
+      for (const detail of error.details) {
+        io.err(`- ${detail}`);
+      }
+      return 1;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    io.err(`No se pudo preparar la sincronización: ${message}`);
+    return 1;
+  }
+
+  if (json) {
+    io.out(JSON.stringify(report, null, 2));
+  } else {
+    io.out(formatSyncPlanReport(report));
+  }
+  return strict && report.status === "pending" ? 1 : 0;
 }
 
 async function runStatusCommand(rest, io) {
@@ -456,6 +544,29 @@ function formatStatusReport(report) {
   lines.push(
     `${report.summary.errors} errores, ${report.summary.warnings} advertencias, ${report.summary.healthyAgents} agentes saludables, ${report.summary.pendingAgents} pendientes`
   );
+  return lines.join("\n");
+}
+
+function formatSyncPlanReport(report) {
+  const lines = [
+    `Project Memory Sync Plan: ${report.status.toUpperCase()}`,
+    `Repositorio: ${report.repository}`,
+    `Rama revisada: ${report.branch}`,
+    `Registro: ${report.ledgerPath}`,
+    `Línea base: ${report.baseline ? `#${report.baseline.number} (${report.baseline.mergedAt})` : "no disponible"}`,
+    "",
+    `${report.reviewed.length} PR revisados, ${report.pending.length} pendientes`
+  ];
+
+  for (const pullRequest of report.pending) {
+    lines.push(
+      `#${pullRequest.number} ${pullRequest.title} — ${pullRequest.mergedAt}`
+    );
+    lines.push(`    ${pullRequest.url}`);
+  }
+  if (report.pending.length === 0) {
+    lines.push("No hay Pull Requests fusionados pendientes de revisión.");
+  }
   return lines.join("\n");
 }
 
