@@ -210,7 +210,8 @@ La CLI evoluciona sin modificar este contrato y ofrece:
 - `project-memory doctor`: validar manifiesto, estructura, enlaces, Git y posibles secretos;
 - `project-memory connect`: preparar la integración segura de Codex, Claude
   Code o Gemini CLI, con vista previa e idempotencia;
-- `project-memory status`: resumir salud, sincronización y conexiones.
+- `project-memory status`: resumir salud, sincronización y conexiones en modo
+  de solo lectura.
 
 Las operaciones destructivas estarán fuera de v0.1. La vista previa será el comportamiento predeterminado y los cambios requerirán una opción explícita de aplicación.
 
@@ -237,6 +238,18 @@ servidor filesystem.
 Repetir la operación sobre una conexión correcta conserva la configuración sin
 duplicarla. El comando no copia credenciales, no modifica el repositorio fuente
 y no escribe contenido en la bóveda.
+
+### Contrato de `status`
+
+`project-memory status` combina el diagnóstico de la memoria con la inspección
+de Skill, MCP y política de herramientas para todos los agentes habilitados. No
+aplica planes ni modifica archivos.
+
+Una memoria y conexiones completas producen `OK`; elementos que necesitan
+creación o actualización producen `WARNING`; manifiestos inválidos, fallos de
+inspección y configuraciones homónimas diferentes producen `ERROR`. El modo
+`--strict` convierte las advertencias en un código de salida distinto de cero
+para su uso en automatizaciones.
 
 ## Criterios de aceptación del contrato base
 

@@ -101,6 +101,20 @@ La vista previa no modifica el equipo. Después de revisarla, `--apply` crea
 homónimos diferentes. La guía completa está en
 [`docs/project-memory-connect.md`](docs/project-memory-connect.md).
 
+## Consultar el estado
+
+`project-memory status` reúne el diagnóstico de la bóveda y la comprobación de
+todas las conexiones habilitadas:
+
+```bash
+project-memory status /ruta/a/proyecto-memory
+```
+
+La orden es de solo lectura. Admite `--agent`, `--json` y `--strict`, y distingue
+entre un sistema saludable, una conexión pendiente y un conflicto. Consulta
+[`docs/project-memory-status.md`](docs/project-memory-status.md) para ver el
+contrato completo.
+
 ## Límites
 
 - No guardar secretos, credenciales, tokens ni datos personales.

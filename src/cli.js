@@ -3,6 +3,7 @@ import path from "node:path";
 import { connectMemory, ConnectionError } from "./connect.js";
 import { diagnoseMemory } from "./doctor.js";
 import { initializeMemory, InitializationError } from "./init.js";
+import { inspectMemoryStatus } from "./status.js";
 
 const HELP = `project-memory
 
@@ -10,6 +11,7 @@ Uso:
   project-memory init <destino> [opciones]
   project-memory connect [ruta] --agent <agente> [opciones]
   project-memory doctor [ruta] [opciones]
+  project-memory status [ruta] [opciones]
 
 Opciones de init:
   --project-id <id>           Identificador del proyecto.
@@ -32,6 +34,11 @@ Opciones de connect:
   --agent <agente>   Agente a conectar: codex, claude o gemini.
   --manifest <ruta>  Selecciona un manifiesto concreto.
   --apply            Aplica el plan; sin esta opción solo previsualiza.
+
+Opciones de status:
+  --agent <agente>   Limita la inspección a un agente declarado.
+  --manifest <ruta>  Selecciona un manifiesto concreto.
+  --strict           Devuelve error cuando existan advertencias.
 
 Opciones comunes:
   --json             Imprime la salida como JSON.
@@ -58,9 +65,82 @@ export async function runCli(argv, io = defaultIo()) {
     return runConnectCommand(rest, io);
   }
 
+  if (command === "status") {
+    return runStatusCommand(rest, io);
+  }
+
   io.err(`Comando desconocido: ${command}`);
   io.err(HELP);
   return 2;
+}
+
+async function runStatusCommand(rest, io) {
+  const options = {
+    targetPath: process.cwd()
+  };
+  let json = false;
+  let strict = false;
+  let targetProvided = false;
+
+  for (let index = 0; index < rest.length; index += 1) {
+    const argument = rest[index];
+
+    if (argument === "--json") {
+      json = true;
+      continue;
+    }
+    if (argument === "--strict") {
+      strict = true;
+      continue;
+    }
+    if (argument === "--agent" || argument === "--manifest") {
+      const value = rest[index + 1];
+      if (!value || value.startsWith("--")) {
+        io.err(`La opción ${argument} requiere un valor.`);
+        return 2;
+      }
+      if (argument === "--agent") {
+        options.agentId = value;
+      } else {
+        options.manifestPath = path.resolve(value);
+      }
+      index += 1;
+      continue;
+    }
+    if (argument.startsWith("--")) {
+      io.err(`Opción desconocida: ${argument}`);
+      return 2;
+    }
+    if (targetProvided) {
+      io.err(`Ruta adicional no esperada: ${argument}`);
+      return 2;
+    }
+    options.targetPath = path.resolve(argument);
+    targetProvided = true;
+  }
+
+  let report;
+  try {
+    report = await inspectMemoryStatus(options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    io.err(`No se pudo inspeccionar el estado: ${message}`);
+    return 1;
+  }
+
+  if (json) {
+    io.out(JSON.stringify(report, null, 2));
+  } else {
+    io.out(formatStatusReport(report));
+  }
+
+  if (report.status === "error") {
+    return 1;
+  }
+  if (strict && report.status === "warning") {
+    return 1;
+  }
+  return 0;
 }
 
 async function runConnectCommand(rest, io) {
@@ -334,6 +414,48 @@ function formatConnectReport(report) {
     lines.push("");
     lines.push("Vista previa: repite el comando con --apply para conectar el agente.");
   }
+  return lines.join("\n");
+}
+
+function formatStatusReport(report) {
+  const lines = [
+    `Project Memory Status: ${report.status.toUpperCase()}`,
+    `Proyecto: ${report.project?.name ?? "no determinado"}${report.project?.id ? ` (${report.project.id})` : ""}`,
+    `Manifiesto: ${report.manifestPath ?? "no encontrado"}`,
+    `Bóveda: ${report.memory.vaultPath ?? "no determinada"}`,
+    `Memoria: ${report.memory.status.toUpperCase()} — ${report.memory.summary.errors} errores, ${report.memory.summary.warnings} advertencias`,
+    ""
+  ];
+
+  const symbols = {
+    ok: "✓",
+    warning: "!",
+    error: "✗",
+    disabled: "-"
+  };
+  for (const agent of report.agents) {
+    lines.push(`${symbols[agent.status]} ${agent.id}: ${agent.summary}`);
+    for (const component of agent.components) {
+      if (component.action !== "unchanged") {
+        lines.push(`    - ${component.id}: ${component.message}`);
+      }
+    }
+    for (const detail of agent.details ?? []) {
+      lines.push(`    - ${detail}`);
+    }
+  }
+
+  for (const finding of report.findings) {
+    lines.push(`${symbols[finding.level] ?? "!"} ${finding.message}`);
+    for (const detail of finding.details ?? []) {
+      lines.push(`    - ${detail}`);
+    }
+  }
+
+  lines.push("");
+  lines.push(
+    `${report.summary.errors} errores, ${report.summary.warnings} advertencias, ${report.summary.healthyAgents} agentes saludables, ${report.summary.pendingAgents} pendientes`
+  );
   return lines.join("\n");
 }
 
