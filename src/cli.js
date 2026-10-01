@@ -6,6 +6,7 @@ import { initializeMemory, InitializationError } from "./init.js";
 import { inspectMemoryStatus } from "./status.js";
 import { planMemorySync, SyncPlanningError } from "./sync.js";
 import { inspectMemorySync, inspectionErrorReport, formatSyncInspectionReport } from "./sync-inspect.js";
+import { recordMemorySync, recordErrorReport, formatSyncRecordReport } from "./sync-record.js";
 
 const HELP = `project-memory
 
@@ -16,6 +17,7 @@ Uso:
   project-memory status [ruta] [opciones]
   project-memory sync plan [ruta] [opciones]
   project-memory sync inspect [ruta] --pr <número> [opciones]
+  project-memory sync record [ruta] --pr <número> --outcome <valor> --reviewed [opciones]
 
 Opciones de init:
   --project-id <id>           Identificador del proyecto.
@@ -59,7 +61,20 @@ Opciones comunes:
   --json             Imprime la salida como JSON.
   -h, --help         Muestra esta ayuda.
 
-init y connect no sobrescriben configuraciones diferentes. doctor, status y sync son de solo lectura.`;
+Opciones de sync record:
+  --pr <número>          PR fusionado explícito del repositorio configurado.
+  --outcome <valor>      no-documentation-change o documentation-updated.
+  --reviewed            Declara que la revisión semántica está terminada.
+  --summary <texto>     Resumen seguro; obligatorio cuando cambian notas.
+  --note <ruta>         Nota ya actualizada, relativa y exacta; repetible.
+  --ack-warning <código> text-limit o unsafe-reference revisada; repetible.
+  --manifest <ruta>    Selecciona un manifiesto concreto.
+  --apply               Añade únicamente la fila validada del registro.
+
+init y connect no sobrescriben configuraciones diferentes. doctor, status,
+sync plan e inspect son de solo lectura. sync record solo escribe con --apply.
+Evita editar o sincronizar la memoria durante --apply: su bloqueo no controla
+editores externos. sync record no crea commits ni hace push.`;
 
 export async function runCli(argv, io = defaultIo(), context = {}) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
@@ -96,11 +111,12 @@ export async function runCli(argv, io = defaultIo(), context = {}) {
 async function runSyncCommand(rest, io, context) {
   const [operation, ...argumentsRest] = rest;
   if (operation === "inspect") return runSyncInspectCommand(argumentsRest, io, context);
+  if (operation === "record") return runSyncRecordCommand(argumentsRest, io, context);
   if (operation !== "plan") {
     io.err(
       operation
         ? `Operación de sync desconocida: ${operation}`
-        : "Debes indicar una operación de sync: plan o inspect."
+        : "Debes indicar una operación de sync: plan, inspect o record."
     );
     return 2;
   }
@@ -206,6 +222,53 @@ async function runSyncInspectCommand(args, io, context) {
   } catch (error) {
     const report = inspectionErrorReport(error);
     if (json) io.out(JSON.stringify(report, null, 2)); else for (const message of report.details) io.err(`- ${message}`);
+    return report.code === "invalid-option" ? 2 : 1;
+  }
+}
+
+async function runSyncRecordCommand(args, io, context) {
+  const options = { targetPath: process.cwd(), notes: [], ackWarnings: [] };
+  const values = new Map([["--pr", "pr"], ["--outcome", "outcome"], ["--summary", "summary"],
+    ["--manifest", "manifestPath"], ["--note", "notes"], ["--ack-warning", "ackWarnings"]]);
+  const seen = new Map();
+  const json = args.includes("--json");
+  let targetProvided = false;
+  const invalid = () => {
+    const report = { command: "sync record", status: "error", code: "invalid-option",
+      details: ["Opción desconocida, incompleta o contradictoria de sync record."], wrote: false };
+    if (json) io.out(JSON.stringify(report, null, 2)); else io.err(report.details[0]);
+    return 2;
+  };
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+    if (argument === "--json") continue;
+    if (argument === "--apply" || argument === "--reviewed") {
+      options[argument === "--apply" ? "apply" : "reviewed"] = true;
+      continue;
+    }
+    if (values.has(argument)) {
+      const value = args[++index];
+      if (!value || value.startsWith("-")) return invalid();
+      const key = values.get(argument);
+      if (key === "notes" || key === "ackWarnings") options[key].push(value);
+      else {
+        if (seen.has(argument) && seen.get(argument) !== value) return invalid();
+        seen.set(argument, value);
+        options[key] = key === "manifestPath" ? path.resolve(value) : value;
+      }
+      continue;
+    }
+    if (argument.startsWith("-") || targetProvided) return invalid();
+    options.targetPath = path.resolve(argument);
+    targetProvided = true;
+  }
+  try {
+    const report = await recordMemorySync(options, context);
+    io.out(json ? JSON.stringify(report, null, 2) : formatSyncRecordReport(report));
+    return ["preview", "recorded", "unchanged"].includes(report.status) ? 0 : 1;
+  } catch (error) {
+    const report = recordErrorReport(error);
+    if (json) io.out(JSON.stringify(report, null, 2)); else io.err(formatSyncRecordReport(report));
     return report.code === "invalid-option" ? 2 : 1;
   }
 }

@@ -157,6 +157,42 @@ Los estados `ready`, `partial` y `blocked` describen la evidencia disponible;
 `partial` y `blocked` devuelven código 1. Admite `--max-files` (200 por defecto).
 Consulta el [contrato y la evidencia local](project-memory-sync-inspect.md).
 
+## Registrar una revisión terminada
+
+`sync record` deja constancia de una conclusión ya revisada. Su vista previa
+consulta GitHub, verifica el PR fusionado y comprueba el registro y los cambios
+locales, sin escribir archivos:
+
+```bash
+project-memory sync record /ruta/a/proyecto-memory \
+  --pr 42 --outcome no-documentation-change --reviewed
+```
+
+Si el resultado es correcto y autorizas guardar la fila, repite la orden con
+`--apply`. Si actualizaste notas, declara un resumen y sus rutas exactas:
+
+```bash
+project-memory sync record /ruta/a/proyecto-memory \
+  --pr 42 --outcome documentation-updated --reviewed \
+  --summary "Actualizar el contrato de integración" \
+  --note "03-IMPLEMENTACION/Contrato de integración.md"
+```
+
+El PR, la ruta y la nota son ejemplos; usa las rutas permitidas de tu memoria.
+Las notas deben estar editadas y revisadas antes: el comando no las redacta.
+`--reviewed` declara una revisión semántica terminada; no certifica el código.
+Admite `--manifest` y `--json`. No admite `--force`, `--commit` ni `--push`.
+
+Para registrar una revisión nueva exige comprobaciones completas y satisfactorias;
+se detiene ante archivos ajenos, conflictos, enlaces inseguros o patrones de
+secretos. Repetir el mismo resultado conserva la fila y su fecha.
+**No edites ni sincronices la memoria durante `--apply`**: su bloqueo coordina
+esta herramienta, no Obsidian ni otros editores.
+
+La nueva base está implementada, probada y aprobada para su commit local;
+su publicación está pendiente. Consulta [el contrato y sus límites](project-memory-sync-record.md)
+antes de aplicarla sobre una memoria real. No añade archivos a Git ni hace push.
+
 ## Límites
 
 - No guardar secretos, credenciales, tokens ni datos personales.

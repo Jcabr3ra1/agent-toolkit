@@ -760,7 +760,7 @@ function checkGit(vaultPath, syncMode, report) {
 function runGit(directory, args) {
   try {
     // Diagnostic status must not refresh the index or acquire optional locks.
-    const stdout = execFileSync("git", ["--no-optional-locks", "-C", directory, ...args], {
+    const stdout = execFileSync("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "-C", directory, ...args], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();

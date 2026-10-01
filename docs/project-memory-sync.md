@@ -141,9 +141,10 @@ project-memory sync plan [ruta]
 2. `sync inspect`: base disponible de solo lectura para un PR explícito;
    [contrato, límites y evidencia local](project-memory-sync-inspect.md), sin edición
    todavía.
-3. `sync record`: [especificación propuesta](project-memory-sync-record.md)
-   para registrar revisiones sin duplicarlas; pendiente de aprobación e
-   implementación.
+3. `sync record`: base implementada y verificada localmente para registrar
+   revisiones sin duplicarlas, con vista previa y `--apply` limitado al registro;
+   [contrato, límites y evidencia](project-memory-sync-record.md). No actualiza
+   las notas técnicas ni crea commits. Esta entrega aún no se ha publicado.
 4. Adaptador de automatización: ejecución programada y silenciosa cuando no hay
    novedades.
 5. Proveedores adicionales mediante adaptadores separados.

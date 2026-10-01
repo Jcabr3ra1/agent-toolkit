@@ -2,17 +2,19 @@
 
 ## Estado
 
-- Propuesta de especificación; pendiente de aprobación e implementación.
+- Especificación aprobada; base implementada y verificada localmente.
 - Fecha: 2026-10-01.
-- Profundidad: rigurosa; es la primera operación de `sync` que escribiría datos.
+- Profundidad: rigurosa; es la primera operación de `sync` que escribe datos.
 - Alcance: registrar una revisión terminada en el Markdown de una memoria.
 - Dependencias: [sync plan](project-memory-sync.md),
   [sync inspect](project-memory-sync-inspect.md) y
   [diagnóstico de la memoria](project-memory-doctor.md).
 
-El usuario autorizó diseñar esta etapa. Este documento no activa escritura,
-no añade un comando ejecutable y no autoriza cambios en ninguna bóveda.
-La publicación de la biblioteca en GitHub es un encargo separado.
+El usuario aprobó el contrato y autorizó implementar y probar la base en
+Agent-Toolkit. El comando está disponible en esta revisión local; su ejecución
+sobre una memoria real requiere autorización específica. No se registraron PR
+reales ni se modificó AVISENS. El usuario aprobó también la entrega y autorizó
+su commit local. La publicación en GitHub requiere autorización separada.
 
 ## Problema
 
@@ -35,7 +37,7 @@ agrega archivos a Git, hace push, fusiona PR, programa tareas, ejecuta modelos
 de IA ni instala configuraciones. No implementa permisos permanentes ni el
 modo autónomo. El código del repositorio fuente no se modifica.
 
-## Punto de partida comprobado
+## Punto de partida antes de esta entrega
 
 - La tabla Markdown es el estado canónico de cambios revisados.
 - `readReviewedPullRequests` acepta el encabezado canónico y uno legado.
@@ -43,9 +45,9 @@ modo autónomo. El código del repositorio fuente no se modifica.
 - `sync inspect` consulta un PR explícito, sus archivos y comprobaciones.
 - Su estado `ready` no demuestra una revisión semántica ni aprueba el código.
 - El manifiesto declara repositorio, rama de revisión, bóveda y política.
-- Hay 101 pruebas existentes; ninguna verifica todavía `sync record`.
+- Había 101 pruebas existentes; ninguna verificaba `sync record`.
 
-## Interfaz propuesta, todavía no disponible
+## Interfaz implementada
 
 ```text
 project-memory sync record [ruta]
@@ -120,8 +122,10 @@ Con `no-documentation-change`, escribir como resultado exactamente
 `Sin cambios documentales`. Rechazar `--note` y `--summary`; no buscar cambios
 que documentar ni inferirlos a partir de nombres de archivos.
 
-La memoria debe estar limpia, salvo artefactos ignorados habituales que no
-participen en la operación. El ledger también debe estar limpio y versionado.
+Para una revisión nueva, la memoria debe estar limpia, salvo artefactos
+ignorados habituales que no participen en la operación. El ledger debe estar
+versionado y coincidir con HEAD y staging. La repetición sin commit admite solo
+la fila propia exacta descrita en RF-05, no otras ediciones del registro.
 
 ### Notas actualizadas
 
@@ -142,6 +146,14 @@ por el operador autorizado; `record` no las escribe.
 - Revisar notas y diff con controles de formato, enlaces y patrones sensibles;
   esos controles no sustituyen la revisión del significado ni detectan todos
   los secretos posibles.
+- Revisar tanto el archivo actual como el contenido preparado para commit:
+  una nota staged debe ser un Markdown regular, sin conflictos ni texto UTF-8
+  inválido. No basta con que la versión visible en Obsidian sea correcta.
+
+Las rutas se deduplican y ordenan para comparar resultados de forma estable.
+La celda de resultado usa exactamente `resumen; Notas: ruta1, ruta2`.
+La bóveda debe tener su propio repositorio Git; `assume-unchanged` y
+`skip-worktree` impiden afirmar limpieza y bloquean el registro.
 
 No tocar cambios del repositorio fuente. Se consulta la evidencia remota;
 la suciedad de un checkout fuente no autoriza a repararlo ni se confunde con
@@ -158,6 +170,11 @@ A diferencia del lector tolerante de `plan`, la escritura exige exactamente
 cinco columnas y una tabla no ambigua. Admitir los dos encabezados existentes
 sin convertir uno al otro. Filas malformadas, duplicadas o referencias a otro
 repositorio impiden aplicar: no se reparan silenciosamente.
+
+No se toman tablas ilustrativas dentro de código, frontmatter o comentarios
+HTML como registros. Se preserva el BOM UTF-8 cuando existe. Los saltos de
+línea deben ser uniformes: LF o CRLF; mezclarlos requiere corregir el archivo
+antes de registrar. Un documento no cerrado o incompatible no se normaliza.
 
 La fila guarda:
 
@@ -190,10 +207,17 @@ de cambios ajenos. No exigir que las notas de una fila ya registrada sigan
 modificadas hoy: pueden haberse guardado en un commit. No revalidar retrospectivamente
 un resultado semántico como si se estuviera realizando una revisión nueva.
 
+Si se repite `--apply` antes del commit, se admite que el ledger esté modificado
+únicamente por la fila exacta que esta operación habría añadido al HEAD limpio.
+Su versión staged debe coincidir con HEAD o con ese mismo resultado completo;
+un cambio ajeno preparado para commit también bloquea. Después del commit, la
+fila revisada conserva su fecha aunque las notas ya estén limpias.
+
 ## RF-06. Escribir sin sobrescribir trabajo concurrente
 
 La vista previa no escribe nada: ni temporales, bloqueos, índices ni caches.
-Usar Git con `--no-optional-locks` durante las inspecciones.
+Usar Git con `--no-optional-locks` durante las inspecciones y desactivar
+`core.fsmonitor` solo para esas invocaciones, sin cambiar la configuración local.
 
 Con `--apply`, crear un bloqueo exclusivo de esta operación junto al registro.
 Otro bloqueo detiene la escritura; no borrar uno antiguo automáticamente.
@@ -231,12 +255,15 @@ repositorio, rama, PR, SHA de integración, ruta del ledger, resultado, notas,
 advertencias admitidas y si hubo escritura. No imprime credenciales, stderr
 original del proveedor, cuerpos de notas o diffs completos.
 
-Límites propuestos: ledger 1 MiB, 20 notas por registro, 1 MiB por nota y 5 MiB
-en total; consultas e informe mantienen los límites de `inspect`. Un límite
-excedido bloquea: no truncar un archivo antes de validarlo o sobrescribirlo.
-El proceso de secretos se aplica a la información completa dentro de esos límites.
+Límites implementados: ledger y manifiesto 1 MiB cada uno, 20 notas por registro,
+1 MiB por nota y 5 MiB de notas en total. Índice y respuestas locales de Git:
+5 MiB; cada invocación de Git tiene 10 segundos de límite. La inspección remota
+usa los presupuestos existentes de `inspect`, con inventario de hasta 1000
+archivos. Un límite excedido bloquea: no truncar un archivo antes de validarlo
+o sobrescribirlo. El filtro de secretos se aplica a toda la información leída
+dentro de esos límites, incluido el contenido staged de las notas.
 
-## Diseño y tareas después de aprobar
+## Diseño implementado
 
 1. Separar lectura estricta y representación de filas del ledger, manteniendo
    compatibilidad del lector actual. Probar encabezados y tablas ambiguas.
@@ -249,13 +276,13 @@ El proceso de secretos se aplica a la información completa dentro de esos lími
 5. Revisar todas las pruebas anteriores y nuevas, documentación y diff.
    No registrar un PR real como prueba sin autorización separada.
 
-Archivos previstos: `src/sync-record.js`, un lector compartido del ledger si
-la separación lo justifica, `src/cli.js` y `test/sync-record.test.js`; posibles
-ajustes acotados de `src/sync.js` y `src/sync-inspect.js`. No hay cambios de
-esquema previstos. Las notas de producto y uso se actualizarán al implementar,
-no para anunciar ahora una capacidad inexistente.
+Componentes: `src/sync-record.js` prepara y aplica; `src/sync-ledger.js` valida
+y representa la tabla; `src/cli.js` expone opciones e informes;
+`test/sync-record.test.js` verifica el contrato. Un ajuste acotado de
+`src/doctor.js` desactiva fsmonitor en las consultas diagnósticas. No se cambian
+el esquema, las conexiones ni las semánticas de `sync plan` y `sync inspect`.
 
-## Criterios de aceptación y pruebas previstas
+## Criterios de aceptación
 
 - CA-01: Un PR fusionado de la rama declarada puede producir una vista previa;
   PR abierto, otra rama, identidad inválida o GitHub indisponible no escriben.
@@ -293,11 +320,37 @@ Reversión: antes de aplicar no hay nada que revertir. Después, revisar el diff
 y restaurar únicamente la fila de esta operación con autorización y control
 de cambios posteriores; nunca resetear la bóveda completa.
 
-## Evidencia y puerta de aprobación
+## Evidencia local y revisión de calidad
 
-Esta entrega es un diseño. No se ejecutaron pruebas de un comando inexistente
-ni se modificó un registro real. Quedan pendientes aprobación del contrato,
-implementación y evidencia de CA-01 a CA-10.
+Verificación del 1 de octubre de 2026: `npm test`, con 213 pruebas aprobadas,
+0 fallos y 0 omitidas. Incluye las 101 pruebas anteriores y 112 pruebas nuevas
+de `sync record`. Todas las bóvedas y repositorios usados por esta entrega son
+temporales; la evidencia de GitHub es simulada. Una prueba integra el diagnóstico
+real con vista previa y aplicación en una memoria temporal.
+
+| Criterio | Evidencia en `test/sync-record.test.js` |
+| --- | --- |
+| CA-01 | PR fusionado, abierto, identidad incorrecta, rama distinta y proveedor no disponible |
+| CA-02 | Snapshots de bytes y permisos en memoria, fuente, índice y configuración; también ante entradas y fallos |
+| CA-03 | Diferencia limitada al ledger; conservación de notas y staging; limpieza propia |
+| CA-04 | Repetición antes/después de commit, fecha preservada, conflictos y tablas inválidas |
+| CA-05 | CI adverso, pendiente, ausente y cobertura incompleta; excepciones explícitas acotadas |
+| CA-06 | Notas exactas, cambios ajenos, rutas prohibidas, symlinks, límites, secretos y staging |
+| CA-07 | Encabezados canónico/legado, LF/CRLF, frontmatter, BOM y lectura mediante `plan` |
+| CA-08 | Bloqueo existente incluso ignorado por Git, cambios concurrentes y fallos simulados de escritura/rename |
+| CA-09 | CLI, JSON, códigos y distinción de escritura aplicada con error posterior |
+| CA-10 | Suite anterior sin regresiones y pruebas nuevas aisladas de proyectos reales |
+
+Resultado de revisión: aprobado con observaciones. No se ha probado esta
+operación con un PR real, en Windows ni ante pérdida de energía. Los fallos de
+disco se simulan; no equivalen a probar todos los errores de cada sistema de
+archivos. Se preservan los bits de permisos comprobados, no se promete copiar
+ACL o atributos extendidos. El bloqueo coordina esta operación, no editores
+externos. Los filtros no garantizan detectar todo dato sensible.
+
+La entrega está aprobada para su commit local; no se publica en esta etapa.
+Tampoco se aplicó `record` sobre AVISENS o sobre otra memoria real. La
+publicación, la adopción real y la automatización son etapas separadas.
 
 La primera base se propone conservadora: sin CI comprobable o cobertura
 completa no cierra automáticamente la revisión. Otros proveedores, políticas

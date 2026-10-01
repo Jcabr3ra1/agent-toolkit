@@ -47,6 +47,8 @@ verdad: las notas explican el contexto, no lo sustituyen.
   en el registro de la memoria.
 - **Reunir evidencia de un cambio**: qué archivos afectó, qué comprobaciones
   tiene y qué áreas de las notas conviene revisar.
+- **Registrar una revisión terminada** con vista previa y autorización explícita,
+  sin duplicar su registro ni escribir otras notas.
 
 También incluye procedimientos reutilizables para definir requisitos,
 documentar decisiones, revisar calidad y pasar trabajo entre sesiones, junto
@@ -64,8 +66,9 @@ con perfiles especializados de exploración, análisis y tutoría.
    inspeccionan cambios; una persona o un agente autorizado decide qué notas
    deben actualizarse.
 
-La consulta de memoria está separada de su escritura. La CLI todavía no edita
-automáticamente las notas ni marca revisiones como completadas.
+La consulta de memoria está separada de su escritura. La CLI puede registrar
+una conclusión ya revisada, pero no redacta ni actualiza automáticamente las
+notas técnicas. Registrar tampoco significa aprobar el código.
 
 ## Pensado para más de un proyecto
 
@@ -90,7 +93,7 @@ clona las memorias ni conecta automáticamente los agentes.
 
 ## En qué punto está
 
-**Base funcional en desarrollo · versión 0.1.0.** Hay 101 pruebas automatizadas
+**Base funcional en desarrollo · versión 0.1.0.** Hay 213 pruebas automatizadas
 aprobadas en la revisión local del 1 de octubre de 2026 y una inspección real
 de GitHub documentada. Eso no equivale a una certificación de producción ni a
 compatibilidad probada en todos los sistemas operativos.
@@ -100,7 +103,7 @@ compatibilidad probada en todos los sistemas operativos.
 | Crear, diagnosticar y conectar memorias | Implementado |
 | Consultar el estado de las conexiones | Implementado |
 | Detectar e inspeccionar cambios fusionados | Implementado |
-| Registrar revisiones sin duplicarlas | Especificación propuesta |
+| Registrar revisiones sin duplicarlas | Implementado y probado localmente; pendiente de publicación |
 | Actualizar notas con autorización y verificaciones | Pendiente |
 | Integrar el ciclo completo con una automatización | Pendiente |
 | Elegir modos tutor y autónomo | Propuesta separada; no activada |
@@ -115,8 +118,8 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
 - [Guía de uso e instalación](docs/uso.md): comandos y conexiones locales.
 - [Arquitectura del sistema](docs/project-memory-system.md): separación de
   herramientas, código y memoria.
-- [Siguiente etapa: registro de revisiones](docs/project-memory-sync-record.md):
-  propuesta de comportamiento antes de implementarlo.
+- [Registro de revisiones](docs/project-memory-sync-record.md): comportamiento,
+  controles y evidencia de la nueva base local.
 - [Identidad visual](assets/brand/README.md): concepto y origen del logo.
 
 La biblioteca se respalda en GitHub como repositorio privado. No incluye las
