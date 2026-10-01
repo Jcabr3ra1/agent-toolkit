@@ -2,10 +2,11 @@
 
 ## Estado
 
-- Especificación aprobada; base implementada y verificada. Sin publicación remota.
+- Especificación aprobada; base implementada y verificada.
 - Fecha de propuesta: 2026-09-30.
 - Aprobación e implementación local: 2026-09-30.
 - Aprobación del registro de evidencia y commit local: 2026-10-01.
+- Publicación autorizada en el respaldo privado de la biblioteca: 2026-10-01.
 - Profundidad: rigurosa por el tratamiento de información privada y evidencia.
 - Entrega: inspección de un PR de GitHub en modo de solo lectura.
 - Depende de [Project Memory Sync](project-memory-sync.md).

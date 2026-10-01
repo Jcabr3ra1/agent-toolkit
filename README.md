@@ -1,161 +1,123 @@
-# Agent Toolkit
+<p align="center">
+  <img src="assets/brand/agent-toolkit-mark.png" alt="Símbolo de Agent Toolkit: piezas conectadas alrededor de una memoria común" width="144">
+</p>
 
-Núcleo personal y reutilizable para conectar agentes con distintos proyectos sin mezclar su contexto específico. Reúne Skills, perfiles especializados y el contrato base del sistema de memorias de proyecto.
+<h1 align="center">Agent Toolkit</h1>
 
-## Estructura
+<p align="center"><strong>El contexto de tu proyecto, compartido entre tus agentes.</strong></p>
 
-- `skills/`: procedimientos reutilizables compatibles con el formato `SKILL.md`.
-- `agents/codex/`: agentes personales de Codex en formato TOML.
-- `agents/claude/`: subagentes personales de Claude Code en Markdown con frontmatter YAML.
-- `docs/`: arquitectura, decisiones y guías del sistema reutilizable.
-- `schemas/`: contratos verificables para manifiestos y configuraciones.
-- `bin/`: punto de entrada de la CLI `project-memory`.
-- `src/`: diagnósticos y operaciones seguras de la CLI.
-- `test/`: pruebas automáticas con el ejecutor nativo de Node.js.
+<p align="center">Una memoria organizada · Varios agentes · Tú mantienes el control</p>
 
-La arquitectura inicial del sistema de memoria está en [`docs/project-memory-system.md`](docs/project-memory-system.md). Su manifiesto se valida con [`schemas/project-memory.schema.json`](schemas/project-memory.schema.json).
+## ¿Para qué sirve?
 
-## Skills disponibles
+Cambias de chat o de asistente y vuelves a explicar el proyecto desde cero.
+Las decisiones quedan dispersas, las notas envejecen y se repite trabajo que
+ya estaba hecho.
 
-- `spec-driven-development`: transforma una necesidad en especificación, plan, tareas y verificación.
-- `decision-records`: documenta decisiones confirmadas con contexto y consecuencias.
-- `project-handoff`: prepara traspasos breves y verificables entre sesiones o agentes.
-- `quality-gate`: revisa entregas contra requisitos, riesgos y evidencia.
+Agent Toolkit ayuda a organizar ese contexto para que tus agentes encuentren
+lo que necesitan, sepan dónde comprobarlo y puedan continuar con menos
+explicaciones repetidas.
 
-## Perfiles disponibles
+No es otro chatbot ni un agente que hace todo por su cuenta. Es una caja de
+herramientas para conectar asistentes con una memoria de proyecto clara,
+compartida y mantenible.
 
-- `project_explorer`: explora repositorios en modo de solo lectura.
-- `requirements_analyst`: convierte necesidades en requisitos comprobables.
-- `solution_architect`: compara alternativas técnicas y sus consecuencias.
-- `quality_reviewer`: detecta defectos, riesgos y pruebas faltantes.
-- `docs_researcher`: consulta documentación oficial y versionada.
-- `implementation_tutor`: guía implementaciones paso a paso sin sustituir al usuario.
+## Una memoria que puedes entender
 
-## Instalación local
+**Obsidian sigue siendo parte del sistema.** Allí puedes leer y organizar las
+notas del proyecto: su propósito, arquitectura, decisiones, avances y pendientes.
+Son archivos de texto; no una memoria invisible que solo entiende una IA.
 
-Este repositorio es la fuente canónica. Sus componentes se instalan mediante enlaces simbólicos:
+Los agentes consultan esa misma información mediante una conexión limitada.
+Sus instrucciones les ayudan a buscar primero y leer solo lo pertinente.
+El código y las pruebas del proyecto siguen siendo la fuente principal de
+verdad: las notas explican el contexto, no lo sustituyen.
 
-- Skills para Codex: `~/.agents/skills/`.
-- Skills para Claude Code: `~/.claude/skills/`.
-- Skills para Gemini CLI: `~/.gemini/antigravity-cli/skills/`.
-- Agentes para Codex: `~/.codex/agents/`.
-- Agentes para Claude Code: `~/.claude/agents/`.
+## Lo que puedes hacer hoy
 
-Los enlaces evitan copias divergentes: una actualización en esta biblioteca queda disponible para las plataformas conectadas después de reiniciar la sesión cuando sea necesario.
+- **Preparar una memoria nueva** con una estructura común, sin copiar los datos
+  de otro proyecto ni sobrescribir archivos distintos.
+- **Conectar Codex, Claude Code y Gemini CLI** mediante sus configuraciones
+  locales de Skills y acceso de lectura. Cada conexión requiere comprobarse
+  también en el cliente real.
+- **Detectar problemas** en la estructura, los enlaces, la configuración y
+  posibles secretos antes de seguir trabajando.
+- **Consultar el estado** de la memoria y de las conexiones declaradas.
+- **Encontrar cambios integrados en GitHub** que aún no aparecen como revisados
+  en el registro de la memoria.
+- **Reunir evidencia de un cambio**: qué archivos afectó, qué comprobaciones
+  tiene y qué áreas de las notas conviene revisar.
 
-## Memorias de proyecto
+También incluye procedimientos reutilizables para definir requisitos,
+documentar decisiones, revisar calidad y pasar trabajo entre sesiones, junto
+con perfiles especializados de exploración, análisis y tutoría.
 
-Cada proyecto conserva por separado:
+## Cómo encaja en tu trabajo
 
-- su repositorio como fuente principal de verdad;
-- una bóveda privada para contexto estable;
-- un MCP de solo lectura;
-- una Skill específica que aplica búsqueda progresiva;
-- reglas de escritura y sincronización controladas.
+1. **Organizas el proyecto.** Su código vive en su repositorio y su contexto en
+   una memoria independiente.
+2. **Conectas tus asistentes.** Consultan las notas relevantes y contrastan las
+   afirmaciones con las fuentes del proyecto.
+3. **Desarrollas y revisas los cambios.** Una rama en progreso no se presenta
+   como comportamiento ya integrado.
+4. **Revisas el impacto en la memoria.** Las herramientas actuales detectan e
+   inspeccionan cambios; una persona o un agente autorizado decide qué notas
+   deben actualizarse.
 
-`Agent-Toolkit` contiene únicamente componentes reutilizables. No almacena el conocimiento privado de los proyectos.
+La consulta de memoria está separada de su escritura. La CLI todavía no edita
+automáticamente las notas ni marca revisiones como completadas.
 
-## Diagnóstico de una memoria
+## Pensado para más de un proyecto
 
-La primera herramienta ejecutable es `project-memory doctor`. Inspecciona una memoria sin modificarla.
+Agent Toolkit contiene las herramientas generales. Cada proyecto conserva su
+propia memoria, instrucciones y límites de acceso.
 
-```bash
-npm install
-node bin/project-memory.js doctor /ruta/a/la/memoria
-```
+Puedes reutilizar la estructura sin llevarte las decisiones, documentos
+privados o credenciales de un proyecto a otro. Clonar esta biblioteca tampoco
+clona las memorias ni conecta automáticamente los agentes.
 
-Opciones principales:
+## Control y límites claros
 
-- `--manifest <ruta>`: utiliza un manifiesto concreto.
-- `--json`: devuelve un informe estructurado.
-- `--strict`: trata las advertencias como error.
+- Las conexiones de memoria se preparan con herramientas de **solo lectura**.
+- Crear memorias y conexiones tiene una vista previa; aplicar cambios exige
+  una acción explícita.
+- No se deben guardar contraseñas, tokens, credenciales ni datos personales en
+  las memorias. Las comprobaciones ayudan, pero no garantizan detectar todo.
+- La herramienta se detiene ante los conflictos que comprueba; no intenta
+  resolverlos sobrescribiendo archivos.
+- No instala un sistema de permisos sin restricciones ni garantiza que todos
+  los clientes se comporten igual.
 
-La guía completa está en [`docs/project-memory-doctor.md`](docs/project-memory-doctor.md).
+## En qué punto está
 
-## Crear una memoria
+**Base funcional en desarrollo · versión 0.1.0.** Hay 101 pruebas automatizadas
+aprobadas en la revisión local del 1 de octubre de 2026 y una inspección real
+de GitHub documentada. Eso no equivale a una certificación de producción ni a
+compatibilidad probada en todos los sistemas operativos.
 
-`project-memory init` genera una vista previa segura de una memoria canónica:
+| Etapa | Estado |
+| --- | --- |
+| Crear, diagnosticar y conectar memorias | Implementado |
+| Consultar el estado de las conexiones | Implementado |
+| Detectar e inspeccionar cambios fusionados | Implementado |
+| Registrar revisiones sin duplicarlas | Especificación propuesta |
+| Actualizar notas con autorización y verificaciones | Pendiente |
+| Integrar el ciclo completo con una automatización | Pendiente |
+| Elegir modos tutor y autónomo | Propuesta separada; no activada |
+| Búsqueda semántica y nuevos proveedores | Evolución posterior, no comprometida |
 
-```bash
-project-memory init /ruta/al/proyecto-memory \
-  --project-id mi-proyecto \
-  --project-name "Mi Proyecto" \
-  --source /ruta/al/repositorio
-```
+El objetivo de la primera versión completa es cerrar el ciclo de revisión y
+mantenimiento con controles. Las capacidades avanzadas se añadirán cuando
+resuelvan una necesidad comprobada, no como requisitos para empezar.
 
-La creación solo ocurre al repetir el comando con `--apply`. No sobrescribe archivos distintos ni configura Git, MCP o agentes por su cuenta. Consulta [`docs/project-memory-init.md`](docs/project-memory-init.md) para ver el contrato completo.
+## ¿Quieres usarlo o entender cómo está construido?
 
-## Conectar un agente
+- [Guía de uso e instalación](docs/uso.md): comandos y conexiones locales.
+- [Arquitectura del sistema](docs/project-memory-system.md): separación de
+  herramientas, código y memoria.
+- [Siguiente etapa: registro de revisiones](docs/project-memory-sync-record.md):
+  propuesta de comportamiento antes de implementarlo.
+- [Identidad visual](assets/brand/README.md): concepto y origen del logo.
 
-`project-memory connect` inspecciona y prepara la Skill, el MCP y la política de
-solo lectura de una plataforma concreta:
-
-```bash
-project-memory connect /ruta/a/proyecto-memory --agent codex
-project-memory connect /ruta/a/proyecto-memory --agent claude
-project-memory connect /ruta/a/proyecto-memory --agent gemini
-```
-
-La vista previa no modifica el equipo. Después de revisarla, `--apply` crea
-únicamente los elementos ausentes y se detiene ante enlaces o servidores
-homónimos diferentes. La guía completa está en
-[`docs/project-memory-connect.md`](docs/project-memory-connect.md).
-
-## Consultar el estado
-
-`project-memory status` reúne el diagnóstico de la bóveda y la comprobación de
-todas las conexiones habilitadas:
-
-```bash
-project-memory status /ruta/a/proyecto-memory
-```
-
-La orden es de solo lectura. Admite `--agent`, `--json` y `--strict`, y distingue
-entre un sistema saludable, una conexión pendiente y un conflicto. Consulta
-[`docs/project-memory-status.md`](docs/project-memory-status.md) para ver el
-contrato completo.
-
-## Planificar una sincronización
-
-`project-memory sync plan` detecta los Pull Requests de GitHub que fueron
-fusionados en la rama configurada y todavía no aparecen como revisados en el
-registro Markdown de la memoria:
-
-```bash
-project-memory sync plan /ruta/a/proyecto-memory
-```
-
-La orden es de solo lectura: no modifica notas, no registra PR y no crea commits.
-Admite `--limit`, `--json` y `--strict`. Consulta
-[`docs/project-memory-sync.md`](docs/project-memory-sync.md) para ver el contrato
-completo.
-
-## Inspeccionar un cambio fusionado
-
-`sync inspect` reúne evidencia de un PR explícito y sugiere áreas de la memoria
-que conviene revisar. Usa el repositorio y la rama declarados en el manifiesto:
-
-```bash
-project-memory sync inspect /ruta/a/proyecto-memory --pr 42
-project-memory sync inspect /ruta/a/proyecto-memory --pr 42 --json --strict
-```
-
-El número `42` es un ejemplo: sustitúyelo por el PR que quieras inspeccionar.
-Requiere GitHub CLI (`gh`) disponible y autenticado para ese repositorio.
-No descarga código ni diffs, no ejecuta pruebas y no modifica notas ni el registro.
-Los estados `ready`, `partial` y `blocked` describen la evidencia disponible;
-`ready` no aprueba el código ni autoriza actualizar Obsidian. Con `--strict`,
-`partial` y `blocked` devuelven código 1. Admite `--max-files` (200 por defecto).
-Consulta el [contrato y la evidencia local](docs/project-memory-sync-inspect.md).
-
-## Límites
-
-- No guardar secretos, credenciales, tokens ni datos personales.
-- No incluir conocimiento exclusivo de un proyecto.
-- Mantener las instrucciones específicas dentro del repositorio o memoria de cada proyecto.
-- Revisar y validar cada componente antes de instalarlo.
-- Mantener los perfiles generales en modo de solo lectura salvo que exista una necesidad y autorización claras.
-
-## Versionado
-
-La biblioteca se versiona localmente con Git. La creación de un repositorio remoto es una decisión separada.
+La biblioteca se respalda en GitHub como repositorio privado. No incluye las
+bóvedas de los proyectos ni publica su contenido.

@@ -275,8 +275,17 @@ para su uso en automatizaciones.
 ## Decisiones pendientes
 
 - Elegir el nombre público del comando y del paquete.
-- Decidir si `Agent-Toolkit` tendrá un remoto privado.
 - Definir el formato de distribución para Windows cuando los enlaces simbólicos no estén disponibles.
 - Seleccionar el mecanismo de activación de automatizaciones por eventos.
 
 Estas decisiones no bloquean el contrato ni la plantilla canónica.
+
+## Respaldo de la biblioteca
+
+El 2026-10-01 el usuario autorizó publicar esta biblioteca en un repositorio
+privado de GitHub. Es un respaldo independiente de las memorias: no contiene
+las bóvedas, manifiestos locales ni información privada de proyectos.
+
+La creación manual del remoto no añade esa capacidad a `project-memory init`
+ni cambia los permisos MCP. El README principal presenta el producto en
+lenguaje sencillo; los comandos se conservan en la [guía de uso](uso.md).
