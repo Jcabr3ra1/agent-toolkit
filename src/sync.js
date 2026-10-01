@@ -80,7 +80,7 @@ function normalizeLimit(value) {
   return limit;
 }
 
-function readManifest(manifestPath) {
+export function readManifest(manifestPath) {
   try {
     return JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   } catch (error) {
@@ -91,7 +91,7 @@ function readManifest(manifestPath) {
   }
 }
 
-function validateAutomation(manifest) {
+export function validateAutomation(manifest) {
   const details = [];
   if (manifest.automation?.enabled !== true) {
     details.push("automation.enabled debe estar activado.");
@@ -145,7 +145,7 @@ export function parseGitHubRepository(remoteUrl) {
   return `${parts[0]}/${parts[1]}`;
 }
 
-function readReviewedPullRequests(ledgerPath, repository) {
+export function readReviewedPullRequests(ledgerPath, repository) {
   let content;
   try {
     const stats = fs.lstatSync(ledgerPath);

@@ -130,6 +130,24 @@ Admite `--limit`, `--json` y `--strict`. Consulta
 [`docs/project-memory-sync.md`](docs/project-memory-sync.md) para ver el contrato
 completo.
 
+## Inspeccionar un cambio fusionado
+
+`sync inspect` reúne evidencia de un PR explícito y sugiere áreas de la memoria
+que conviene revisar. Usa el repositorio y la rama declarados en el manifiesto:
+
+```bash
+project-memory sync inspect /ruta/a/proyecto-memory --pr 42
+project-memory sync inspect /ruta/a/proyecto-memory --pr 42 --json --strict
+```
+
+El número `42` es un ejemplo: sustitúyelo por el PR que quieras inspeccionar.
+Requiere GitHub CLI (`gh`) disponible y autenticado para ese repositorio.
+No descarga código ni diffs, no ejecuta pruebas y no modifica notas ni el registro.
+Los estados `ready`, `partial` y `blocked` describen la evidencia disponible;
+`ready` no aprueba el código ni autoriza actualizar Obsidian. Con `--strict`,
+`partial` y `blocked` devuelven código 1. Admite `--max-files` (200 por defecto).
+Consulta el [contrato y la evidencia local](docs/project-memory-sync-inspect.md).
+
 ## Límites
 
 - No guardar secretos, credenciales, tokens ni datos personales.

@@ -138,7 +138,9 @@ project-memory sync plan [ruta]
 ## Evolución prevista
 
 1. `sync plan`: detección segura y reproducible de PR pendientes.
-2. `sync inspect`: paquete de evidencia y mapa de áreas candidatas.
+2. `sync inspect`: base disponible de solo lectura para un PR explícito;
+   [contrato, límites y evidencia local](project-memory-sync-inspect.md), sin edición
+   todavía.
 3. `sync record`: registro idempotente después de una revisión completada.
 4. Adaptador de automatización: ejecución programada y silenciosa cuando no hay
    novedades.

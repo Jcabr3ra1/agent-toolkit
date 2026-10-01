@@ -5,6 +5,7 @@ import { diagnoseMemory } from "./doctor.js";
 import { initializeMemory, InitializationError } from "./init.js";
 import { inspectMemoryStatus } from "./status.js";
 import { planMemorySync, SyncPlanningError } from "./sync.js";
+import { inspectMemorySync, inspectionErrorReport, formatSyncInspectionReport } from "./sync-inspect.js";
 
 const HELP = `project-memory
 
@@ -14,6 +15,7 @@ Uso:
   project-memory doctor [ruta] [opciones]
   project-memory status [ruta] [opciones]
   project-memory sync plan [ruta] [opciones]
+  project-memory sync inspect [ruta] --pr <número> [opciones]
 
 Opciones de init:
   --project-id <id>           Identificador del proyecto.
@@ -47,11 +49,17 @@ Opciones de sync plan:
   --limit <número>   Máximo de PR fusionados; por defecto 100.
   --strict           Devuelve error cuando existan PR pendientes.
 
+Opciones de sync inspect:
+  --pr <número>      PR fusionado explícito del repositorio configurado.
+  --manifest <ruta>  Selecciona un manifiesto concreto.
+  --max-files <n>    Máximo de archivos visibles; 200 por defecto, rango 1–1000.
+  --strict           Devuelve error si la evidencia es partial o blocked.
+
 Opciones comunes:
   --json             Imprime la salida como JSON.
   -h, --help         Muestra esta ayuda.
 
-init y connect no sobrescriben configuraciones diferentes. doctor, status y sync plan son de solo lectura.`;
+init y connect no sobrescriben configuraciones diferentes. doctor, status y sync son de solo lectura.`;
 
 export async function runCli(argv, io = defaultIo(), context = {}) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
@@ -87,11 +95,12 @@ export async function runCli(argv, io = defaultIo(), context = {}) {
 
 async function runSyncCommand(rest, io, context) {
   const [operation, ...argumentsRest] = rest;
+  if (operation === "inspect") return runSyncInspectCommand(argumentsRest, io, context);
   if (operation !== "plan") {
     io.err(
       operation
         ? `Operación de sync desconocida: ${operation}`
-        : "Debes indicar una operación de sync: plan."
+        : "Debes indicar una operación de sync: plan o inspect."
     );
     return 2;
   }
@@ -160,6 +169,45 @@ async function runSyncCommand(rest, io, context) {
     io.out(formatSyncPlanReport(report));
   }
   return strict && report.status === "pending" ? 1 : 0;
+}
+
+async function runSyncInspectCommand(args, io, context) {
+  const options = { targetPath: process.cwd() };
+  const values = new Map([["--pr", "pr"], ["--manifest", "manifestPath"], ["--max-files", "maxFiles"]]);
+  const seen = new Map();
+  const json = args.includes("--json");
+  const strict = args.includes("--strict");
+  let targetProvided = false;
+  const invalid = (message) => {
+    const report = { command: "sync inspect", status: "error", code: "invalid-option", details: [message] };
+    if (json) io.out(JSON.stringify(report, null, 2)); else io.err(message);
+    return 2;
+  };
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+    if (argument === "--json" || argument === "--strict") continue;
+    if (values.has(argument)) {
+      const value = args[++index];
+      if (!value || value.startsWith("-")) return invalid("Una opción de inspect requiere un valor válido.");
+      if (seen.has(argument) && seen.get(argument) !== value) return invalid("Una opción repetida tiene valores diferentes.");
+      seen.set(argument, value);
+      options[values.get(argument)] = argument === "--manifest" ? path.resolve(value) : value;
+      continue;
+    }
+    if (argument.startsWith("-")) return invalid("Opción desconocida de sync inspect.");
+    if (targetProvided) return invalid("Solo se admite una ruta de memoria.");
+    options.targetPath = path.resolve(argument);
+    targetProvided = true;
+  }
+  try {
+    const report = await inspectMemorySync(options, context);
+    io.out(json ? JSON.stringify(report, null, 2) : formatSyncInspectionReport(report));
+    return strict && report.status !== "ready" ? 1 : 0;
+  } catch (error) {
+    const report = inspectionErrorReport(error);
+    if (json) io.out(JSON.stringify(report, null, 2)); else for (const message of report.details) io.err(`- ${message}`);
+    return report.code === "invalid-option" ? 2 : 1;
+  }
 }
 
 async function runStatusCommand(rest, io) {

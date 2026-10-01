@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import Ajv2020 from "ajv/dist/2020.js";
+import { SECRET_PATTERNS } from "./sensitive-data.js";
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_SCHEMA_PATH = path.resolve(
@@ -55,26 +56,6 @@ const TEXT_EXTENSIONS = new Set([
   ".yaml",
   ".yml"
 ]);
-
-const SECRET_PATTERNS = [
-  {
-    name: "clave privada",
-    pattern: /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/
-  },
-  {
-    name: "token de GitHub",
-    pattern: /\bgh[pousr]_[A-Za-z0-9]{20,}\b/
-  },
-  {
-    name: "clave de acceso de AWS",
-    pattern: /\bAKIA[0-9A-Z]{16}\b/
-  },
-  {
-    name: "asignación sensible",
-    pattern:
-      /\b(?:password|passwd|api[_-]?key|secret|token)\b\s*[:=]\s*["']?[^\s"'{}]{8,}/i
-  }
-];
 
 export async function diagnoseMemory(targetPath, options = {}) {
   const report = createReport();
@@ -778,7 +759,8 @@ function checkGit(vaultPath, syncMode, report) {
 
 function runGit(directory, args) {
   try {
-    const stdout = execFileSync("git", ["-C", directory, ...args], {
+    // Diagnostic status must not refresh the index or acquire optional locks.
+    const stdout = execFileSync("git", ["--no-optional-locks", "-C", directory, ...args], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
