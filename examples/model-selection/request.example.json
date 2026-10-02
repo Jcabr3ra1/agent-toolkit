@@ -1,0 +1,50 @@
+{
+  "kind": "model-request",
+  "schemaVersion": "1.0.0",
+  "projectId": "demo-project",
+  "taskId": "demo-paragraph",
+  "revision": "r01",
+  "role": "tutor",
+  "mode": "tutor",
+  "evaluationTime": "2026-10-02T14:00:00Z",
+  "provider": "example-provider",
+  "client": "example-cli",
+  "category": "documentation",
+  "difficulty": "low",
+  "risk": "low",
+  "requirements": {
+    "tools": ["read-files"],
+    "inputModalities": ["text"],
+    "outputFormats": ["markdown"],
+    "contextTokens": 2000,
+    "riskFactors": []
+  },
+  "authorizationContext": {
+    "referenceId": "demo-human-authorization",
+    "scopeRefs": ["demo-readme-paragraph"],
+    "allowedActions": ["read", "explain", "propose", "verify"],
+    "activeWriter": "user",
+    "accessType": "session-account"
+  },
+  "history": {
+    "correctionRound": 0,
+    "executionsUsed": 0,
+    "durationUsedSeconds": 0
+  },
+  "availability": [
+    {
+      "profileId": "demo-light",
+      "status": "available",
+      "checkedAt": "2026-10-02T13:50:00Z",
+      "provenance": "user-declaration",
+      "evidenceRef": "demo-availability-declaration"
+    },
+    {
+      "profileId": "demo-balanced",
+      "status": "unknown",
+      "checkedAt": "2026-10-02T13:50:00Z",
+      "provenance": "user-declaration",
+      "evidenceRef": "demo-availability-declaration"
+    }
+  ]
+}

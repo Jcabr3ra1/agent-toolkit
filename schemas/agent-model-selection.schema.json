@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json",
+  "title": "Agent Model Selection Contracts",
+  "description": "Contratos propuestos de catálogo, política y solicitud. Validar no selecciona, autoriza ni ejecuta agentes.",
+  "oneOf": [
+    { "$ref": "#/$defs/catalog" },
+    { "$ref": "#/$defs/policy" },
+    { "$ref": "#/$defs/request" }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 80,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^r[0-9]{2,6}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$",
+      "description": "Instante UTC explícito; la validación debe comprobar también el calendario."
+    },
+    "text": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "role": { "enum": ["coordinator", "reviewer", "tutor", "proposer", "executor"] },
+    "category": { "enum": ["documentation", "tutoring", "proposal", "diagnostic", "application", "review"] },
+    "difficulty": { "enum": ["low", "medium", "high"] },
+    "risk": { "enum": ["low", "high"] },
+    "mode": { "enum": ["tutor", "autonomous"] },
+    "idList": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/id" },
+      "description": "Identificadores de evidencia, no contenido privado ni demostración de permiso."
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tools", "inputModalities", "outputFormats", "maxContextTokens"],
+      "properties": {
+        "tools": { "$ref": "#/$defs/idList" },
+        "inputModalities": {
+          "type": "array", "uniqueItems": true, "maxItems": 4,
+          "items": { "enum": ["text", "image", "audio", "video"] }
+        },
+        "outputFormats": { "$ref": "#/$defs/idList" },
+        "maxContextTokens": {
+          "type": ["integer", "null"], "minimum": 1, "maximum": 100000000,
+          "description": "null significa desconocido, no ilimitado."
+        }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "category", "difficulties", "risks", "evidenceRefs"],
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "category": { "$ref": "#/$defs/category" },
+        "difficulties": {
+          "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/difficulty" }
+        },
+        "risks": {
+          "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/risk" }
+        },
+        "evidenceRefs": { "$ref": "#/$defs/evidenceRefs" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profileId", "provider", "client", "requestedModel", "versionPolicy", "status", "accessType", "declaredCapabilities", "verifiedCapabilities", "effortOptions", "evaluations", "sources", "reviewedAt"],
+      "properties": {
+        "profileId": { "$ref": "#/$defs/id" },
+        "provider": { "$ref": "#/$defs/id" },
+        "client": { "$ref": "#/$defs/id" },
+        "requestedModel": {
+          "type": "string", "minLength": 2, "maxLength": 200,
+          "pattern": "^(?!.*(?:^|[-/:._])[Ll][Aa][Tt][Ee][Ss][Tt](?:$|[-/:._]))[A-Za-z0-9][A-Za-z0-9._:/-]*$"
+        },
+        "versionPolicy": { "enum": ["pinned", "approved-alias"] },
+        "status": { "enum": ["candidate", "approved", "deprecated", "disabled"] },
+        "accessType": { "const": "session-account" },
+        "declaredCapabilities": { "$ref": "#/$defs/capabilities" },
+        "verifiedCapabilities": { "$ref": "#/$defs/capabilities" },
+        "effortOptions": { "$ref": "#/$defs/idList" },
+        "evaluations": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/evaluation" }
+        },
+        "sources": { "$ref": "#/$defs/evidenceRefs" },
+        "reviewedAt": { "$ref": "#/$defs/timestamp" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "approved" } }, "required": ["status"] },
+          "then": { "properties": { "evaluations": { "type": "array", "minItems": 1 } } }
+        }
+      ]
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "catalogId", "revision", "profiles"],
+      "properties": {
+        "kind": { "const": "model-catalog" },
+        "schemaVersion": { "const": "1.0.0" },
+        "catalogId": { "$ref": "#/$defs/id" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "profiles": {
+          "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/profile" }
+        }
+      }
+    },
+    "priority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profileId", "rank"],
+      "properties": {
+        "profileId": { "$ref": "#/$defs/id" },
+        "rank": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "effort": { "$ref": "#/$defs/id" }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "provider", "client", "modes", "categories", "priorities"],
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "provider": { "$ref": "#/$defs/id" },
+        "client": { "$ref": "#/$defs/id" },
+        "modes": {
+          "type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/mode" }
+        },
+        "categories": {
+          "type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/category" }
+        },
+        "priorities": {
+          "type": "array", "minItems": 1, "maxItems": 256, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/priority" }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "policyId", "revision", "catalogId", "catalogRevision", "execution", "accessType", "allowProviderSwitch", "allowImplicitFallback", "maxCorrectionRounds", "maxFutureExecutions", "maxFutureDurationSeconds", "availabilityMaxAgeSeconds", "routes"],
+      "properties": {
+        "kind": { "const": "model-policy" },
+        "schemaVersion": { "const": "1.0.0" },
+        "policyId": { "$ref": "#/$defs/id" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "catalogId": { "$ref": "#/$defs/id" },
+        "catalogRevision": { "$ref": "#/$defs/revision" },
+        "execution": { "const": "recommend-only" },
+        "accessType": { "const": "session-account" },
+        "allowProviderSwitch": { "const": false },
+        "allowImplicitFallback": { "const": false },
+        "maxCorrectionRounds": { "const": 2 },
+        "maxFutureExecutions": { "type": "integer", "minimum": 1, "maximum": 100 },
+        "maxFutureDurationSeconds": { "type": "integer", "minimum": 1, "maximum": 86400 },
+        "availabilityMaxAgeSeconds": { "type": "integer", "minimum": 1, "maximum": 604800 },
+        "routes": {
+          "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/route" }
+        }
+      }
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profileId", "status", "checkedAt", "provenance", "evidenceRef"],
+      "properties": {
+        "profileId": { "$ref": "#/$defs/id" },
+        "status": { "enum": ["available", "unavailable", "unknown"] },
+        "checkedAt": { "$ref": "#/$defs/timestamp" },
+        "provenance": { "enum": ["user-declaration", "client-metadata"] },
+        "evidenceRef": { "$ref": "#/$defs/id" }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tools": { "$ref": "#/$defs/idList" },
+        "inputModalities": {
+          "type": "array", "minItems": 1, "maxItems": 4, "uniqueItems": true,
+          "items": { "enum": ["text", "image", "audio", "video"] }
+        },
+        "outputFormats": {
+          "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "contextTokens": { "type": "integer", "minimum": 1, "maximum": 100000000 },
+        "riskFactors": {
+          "type": "array", "maxItems": 5, "uniqueItems": true,
+          "items": { "enum": ["authentication", "security", "migration", "irreversible-action", "sensitive-data"] }
+        }
+      },
+      "description": "Campos ausentes significan información pendiente. tools: [] y riskFactors: [] declaran explícitamente ninguno."
+    },
+    "authorizationContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["referenceId", "scopeRefs", "allowedActions", "activeWriter", "accessType"],
+      "properties": {
+        "referenceId": { "$ref": "#/$defs/id" },
+        "scopeRefs": { "type": "array", "allOf": [{ "$ref": "#/$defs/idList" }], "minItems": 1 },
+        "allowedActions": {
+          "type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": true,
+          "items": { "enum": ["read", "explain", "propose", "apply", "verify"] }
+        },
+        "activeWriter": { "enum": ["user", "authorized-executor"] },
+        "accessType": { "const": "session-account" }
+      },
+      "description": "Resumen del alcance, no prueba de autorización. Un receptor verifica permiso humano en un canal de confianza."
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correctionRound", "executionsUsed", "durationUsedSeconds"],
+      "properties": {
+        "correctionRound": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "executionsUsed": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "durationUsedSeconds": { "type": "integer", "minimum": 0, "maximum": 86400 },
+        "previousProfileId": { "$ref": "#/$defs/id" }
+      },
+      "description": "Acumulado de toda la tarea, no de una revisión o modelo. Su integridad se contrasta externamente."
+    },
+    "escalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reason", "evidenceRefs"],
+      "properties": {
+        "reason": { "enum": ["quality", "permission", "environment", "quota", "authentication", "stale-base", "checks-not-run"] },
+        "evidenceRefs": { "$ref": "#/$defs/evidenceRefs" },
+        "failedCriteria": { "$ref": "#/$defs/idList" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "reason": { "const": "quality" } }, "required": ["reason"] },
+          "then": { "required": ["failedCriteria"], "properties": { "failedCriteria": { "type": "array", "minItems": 1 } } }
+        }
+      ]
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "schemaVersion", "projectId", "taskId", "revision", "role", "mode", "evaluationTime"],
+      "properties": {
+        "kind": { "const": "model-request" },
+        "schemaVersion": { "const": "1.0.0" },
+        "projectId": { "$ref": "#/$defs/id" },
+        "taskId": { "$ref": "#/$defs/id" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "role": { "$ref": "#/$defs/role" },
+        "mode": { "$ref": "#/$defs/mode" },
+        "evaluationTime": { "$ref": "#/$defs/timestamp" },
+        "provider": { "$ref": "#/$defs/id" },
+        "client": { "$ref": "#/$defs/id" },
+        "category": { "$ref": "#/$defs/category" },
+        "difficulty": { "$ref": "#/$defs/difficulty" },
+        "risk": { "$ref": "#/$defs/risk" },
+        "requirements": { "$ref": "#/$defs/requirements" },
+        "authorizationContext": { "$ref": "#/$defs/authorizationContext" },
+        "history": { "$ref": "#/$defs/history" },
+        "availability": {
+          "type": "array", "maxItems": 256, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/availability" }
+        },
+        "explicitProfileId": { "$ref": "#/$defs/id" },
+        "escalation": { "$ref": "#/$defs/escalation" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "tutor" } }, "required": ["mode"] },
+          "then": {
+            "properties": {
+              "role": { "enum": ["coordinator", "reviewer", "tutor", "proposer"] },
+              "authorizationContext": {
+                "type": "object",
+                "properties": {
+                  "activeWriter": { "const": "user" },
+                  "allowedActions": { "type": "array", "items": { "enum": ["read", "explain", "propose", "verify"] } }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "kind": "model-policy",
+  "schemaVersion": "1.0.0",
+  "policyId": "demo-policy",
+  "revision": "r01",
+  "catalogId": "demo-catalog",
+  "catalogRevision": "r01",
+  "execution": "recommend-only",
+  "accessType": "session-account",
+  "allowProviderSwitch": false,
+  "allowImplicitFallback": false,
+  "maxCorrectionRounds": 2,
+  "maxFutureExecutions": 3,
+  "maxFutureDurationSeconds": 900,
+  "availabilityMaxAgeSeconds": 3600,
+  "routes": [
+    {
+      "role": "tutor",
+      "provider": "example-provider",
+      "client": "example-cli",
+      "modes": ["tutor"],
+      "categories": ["documentation"],
+      "priorities": [
+        { "profileId": "demo-light", "rank": 10 },
+        { "profileId": "demo-balanced", "rank": 20, "effort": "standard" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "kind": "model-catalog",
+  "schemaVersion": "1.0.0",
+  "catalogId": "demo-catalog",
+  "revision": "r01",
+  "profiles": [
+    {
+      "profileId": "demo-light",
+      "provider": "example-provider",
+      "client": "example-cli",
+      "requestedModel": "example-light-v1",
+      "versionPolicy": "pinned",
+      "status": "approved",
+      "accessType": "session-account",
+      "declaredCapabilities": {
+        "tools": ["read-files"],
+        "inputModalities": ["text"],
+        "outputFormats": ["markdown"],
+        "maxContextTokens": 16000
+      },
+      "verifiedCapabilities": {
+        "tools": ["read-files"],
+        "inputModalities": ["text"],
+        "outputFormats": ["markdown"],
+        "maxContextTokens": 8000
+      },
+      "effortOptions": [],
+      "evaluations": [
+        {
+          "role": "tutor",
+          "category": "documentation",
+          "difficulties": ["low"],
+          "risks": ["low"],
+          "evidenceRefs": ["demo-light-evaluation"]
+        }
+      ],
+      "sources": ["demo-capabilities-source"],
+      "reviewedAt": "2026-10-02T13:00:00Z"
+    },
+    {
+      "profileId": "demo-balanced",
+      "provider": "example-provider",
+      "client": "example-cli",
+      "requestedModel": "example-balanced-v1",
+      "versionPolicy": "pinned",
+      "status": "approved",
+      "accessType": "session-account",
+      "declaredCapabilities": {
+        "tools": ["read-files"],
+        "inputModalities": ["text", "image"],
+        "outputFormats": ["markdown", "json"],
+        "maxContextTokens": 64000
+      },
+      "verifiedCapabilities": {
+        "tools": ["read-files"],
+        "inputModalities": ["text"],
+        "outputFormats": ["markdown"],
+        "maxContextTokens": 32000
+      },
+      "effortOptions": ["standard", "deep"],
+      "evaluations": [
+        {
+          "role": "tutor",
+          "category": "documentation",
+          "difficulties": ["low", "medium"],
+          "risks": ["low"],
+          "evidenceRefs": ["demo-balanced-evaluation"]
+        }
+      ],
+      "sources": ["demo-capabilities-source"],
+      "reviewedAt": "2026-10-02T13:00:00Z"
+    }
+  ]
+}
