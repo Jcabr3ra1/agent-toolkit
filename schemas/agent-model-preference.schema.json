@@ -1,0 +1,573 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-toolkit.local/schemas/agent-model-preference.schema.json",
+  "title": "Agent Model Preference Contracts v2",
+  "description": "Cargar junto al esquema local 1.0.0 de confianza; las referencias no se descargan. Validación y selección sin ejecución.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/catalog"
+    },
+    {
+      "$ref": "#/$defs/policy"
+    },
+    {
+      "$ref": "#/$defs/request"
+    }
+  ],
+  "$defs": {
+    "evaluation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "category",
+        "difficulties",
+        "risks",
+        "evidenceRefs",
+        "effort"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evaluation/properties/role"
+        },
+        "category": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evaluation/properties/category"
+        },
+        "difficulties": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evaluation/properties/difficulties"
+        },
+        "risks": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evaluation/properties/risks"
+        },
+        "evidenceRefs": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evaluation/properties/evidenceRefs"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "provider",
+        "client",
+        "requestedModel",
+        "versionPolicy",
+        "status",
+        "accessType",
+        "declaredCapabilities",
+        "verifiedCapabilities",
+        "effortOptions",
+        "sources",
+        "reviewedAt",
+        "evaluations",
+        "familyId",
+        "versionOrdinal",
+        "versionEvidenceRefs"
+      ],
+      "properties": {
+        "profileId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/profileId"
+        },
+        "provider": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/provider"
+        },
+        "client": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/client"
+        },
+        "requestedModel": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/requestedModel"
+        },
+        "versionPolicy": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/versionPolicy"
+        },
+        "status": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/status"
+        },
+        "accessType": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/accessType"
+        },
+        "declaredCapabilities": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/declaredCapabilities"
+        },
+        "verifiedCapabilities": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/verifiedCapabilities"
+        },
+        "effortOptions": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/effortOptions"
+        },
+        "sources": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/sources"
+        },
+        "reviewedAt": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/profile/properties/reviewedAt"
+        },
+        "familyId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+        },
+        "versionOrdinal": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "versionEvidenceRefs": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evidenceRefs"
+        },
+        "evaluations": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/evaluation"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "approved"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "evaluations": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "option": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "effort",
+        "effortRank",
+        "progressionRank",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "profileId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effortRank": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "progressionRank": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "evidenceRefs": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evidenceRefs"
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ruleId",
+        "category",
+        "difficulty",
+        "risk",
+        "maxEffortRank",
+        "options",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "ruleId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+        },
+        "category": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/category"
+        },
+        "difficulty": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/difficulty"
+        },
+        "risk": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/risk"
+        },
+        "maxEffortRank": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "options": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/option"
+          }
+        },
+        "evidenceRefs": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evidenceRefs"
+        }
+      }
+    },
+    "family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "familyId",
+        "rank",
+        "profileIds",
+        "effortRules",
+        "evidenceRefs"
+      ],
+      "properties": {
+        "familyId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "profileIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+          }
+        },
+        "effortRules": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/rule"
+          }
+        },
+        "evidenceRefs": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/evidenceRefs"
+        }
+      }
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "provider",
+        "client",
+        "modes",
+        "categories",
+        "families"
+      ],
+      "properties": {
+        "role": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/route/properties/role"
+        },
+        "provider": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/route/properties/provider"
+        },
+        "client": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/route/properties/client"
+        },
+        "modes": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/route/properties/modes"
+        },
+        "categories": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/route/properties/categories"
+        },
+        "families": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/family"
+          }
+        }
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "correctionRound",
+        "executionsUsed",
+        "durationUsedSeconds"
+      ],
+      "properties": {
+        "correctionRound": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/history/properties/correctionRound"
+        },
+        "executionsUsed": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/history/properties/executionsUsed"
+        },
+        "durationUsedSeconds": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/history/properties/durationUsedSeconds"
+        },
+        "previousProfileId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/history/properties/previousProfileId"
+        },
+        "previousEffort": {
+          "anyOf": [
+            {
+              "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "catalogId",
+        "revision",
+        "profiles"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/catalog/properties/kind"
+        },
+        "catalogId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/catalog/properties/catalogId"
+        },
+        "revision": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/catalog/properties/revision"
+        },
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/profile"
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "policyId",
+        "revision",
+        "catalogId",
+        "catalogRevision",
+        "execution",
+        "accessType",
+        "allowProviderSwitch",
+        "allowImplicitFallback",
+        "maxCorrectionRounds",
+        "maxFutureExecutions",
+        "maxFutureDurationSeconds",
+        "availabilityMaxAgeSeconds",
+        "schemaVersion",
+        "routes"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/kind"
+        },
+        "policyId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/policyId"
+        },
+        "revision": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/revision"
+        },
+        "catalogId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/catalogId"
+        },
+        "catalogRevision": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/catalogRevision"
+        },
+        "execution": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/execution"
+        },
+        "accessType": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/accessType"
+        },
+        "allowProviderSwitch": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/allowProviderSwitch"
+        },
+        "allowImplicitFallback": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/allowImplicitFallback"
+        },
+        "maxCorrectionRounds": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/maxCorrectionRounds"
+        },
+        "maxFutureExecutions": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/maxFutureExecutions"
+        },
+        "maxFutureDurationSeconds": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/maxFutureDurationSeconds"
+        },
+        "availabilityMaxAgeSeconds": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/policy/properties/availabilityMaxAgeSeconds"
+        },
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "routes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/route"
+          }
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "schemaVersion",
+        "projectId",
+        "taskId",
+        "revision",
+        "role",
+        "mode",
+        "evaluationTime"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/kind"
+        },
+        "projectId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/projectId"
+        },
+        "taskId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/taskId"
+        },
+        "revision": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/revision"
+        },
+        "role": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/role"
+        },
+        "mode": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/mode"
+        },
+        "evaluationTime": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/evaluationTime"
+        },
+        "provider": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/provider"
+        },
+        "client": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/client"
+        },
+        "category": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/category"
+        },
+        "difficulty": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/difficulty"
+        },
+        "risk": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/risk"
+        },
+        "requirements": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/requirements"
+        },
+        "authorizationContext": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/authorizationContext"
+        },
+        "availability": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/availability"
+        },
+        "explicitProfileId": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/explicitProfileId"
+        },
+        "escalation": {
+          "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/request/properties/escalation"
+        },
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "history": {
+          "$ref": "#/$defs/history"
+        },
+        "explicitEffort": {
+          "anyOf": [
+            {
+              "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "mode": { "const": "tutor" } },
+            "required": ["mode"]
+          },
+          "then": {
+            "properties": {
+              "role": { "enum": ["coordinator", "reviewer", "tutor", "proposer"] },
+              "authorizationContext": {
+                "type": "object",
+                "properties": {
+                  "activeWriter": { "const": "user" },
+                  "allowedActions": {
+                    "type": "array",
+                    "items": { "enum": ["read", "explain", "propose", "verify"] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

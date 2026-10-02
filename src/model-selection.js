@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import Ajv2020 from "ajv/dist/2020.js";
 
+import { createPreferenceSelector } from "./model-preference.js";
+
 const SCHEMA_ID = "https://agent-toolkit.local/schemas/agent-model-selection.schema.json";
 const SELECTOR_VERSION = "1.0.0";
 const DOCUMENTS = ["request", "catalog", "policy"];
@@ -33,7 +35,7 @@ const CATEGORY_ACTIONS = {
  * it; neither initialization nor recommendation reads files or launches clients.
  * Recommendations describe declared permission/evidence, never authenticate it.
  */
-export function createModelSelector(schema) {
+export function createModelSelector(schema, preferenceSchema) {
   const schemaCopy = copyJson(schema);
   if (schemaCopy.$id !== SCHEMA_ID) throw new Error("Unsupported selector schema");
   const ajv = new Ajv2020({ strict: true, allErrors: true });
@@ -43,6 +45,13 @@ export function createModelSelector(schema) {
     name, ajv.compile({ $ref: `${SCHEMA_ID}#/$defs/${name}` })
   ]));
   const schemaSha256 = hashJson(schemaCopy);
+  const selectPreference = preferenceSchema === undefined ? null : createPreferenceSelector(
+    schemaCopy, copyJson(preferenceSchema), {
+      hashJson, isUtcTimestamp, emptyReport, finish, semanticIssues,
+      taskBlocks, profileExclusions, matchingEvaluations, compareText, uniqueIssues,
+      hasDuplicates, REQUIRED_REQUEST_FIELDS, REQUIRED_REQUIREMENTS
+    }
+  );
 
   return function selectModel(input) {
     let data;
@@ -54,6 +63,11 @@ export function createModelSelector(schema) {
     if (!data || Array.isArray(data) || typeof data !== "object" ||
         Object.keys(data).some((key) => !DOCUMENTS.includes(key))) {
       return emptyReport(schemaSha256, "invalid", "invalid-envelope");
+    }
+
+    if (DOCUMENTS.some((name) => data[name]?.schemaVersion === "2.0.0")) {
+      return selectPreference ? selectPreference(data)
+        : emptyReport(schemaSha256, "invalid", "preference-schema-not-loaded");
     }
 
     const report = emptyReport(schemaSha256);

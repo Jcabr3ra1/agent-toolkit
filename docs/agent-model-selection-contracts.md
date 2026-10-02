@@ -11,6 +11,11 @@ y comprobación. Esta etapa crea datos y pruebas de estructura, no un ejecutor.
 
 ## Tres documentos, un esquema versionado
 
+Esta sección describe `1.0.0`, que se conserva sin modificar. La extensión
+`2.0.0` utiliza un esquema separado y añade familias, versiones y evaluaciones
+por esfuerzo: [contrato y límites](agent-model-preference.md). No mezcla ni
+migra automáticamente los documentos de las dos versiones.
+
 El [esquema JSON](../schemas/agent-model-selection.schema.json) agrupa tres
 contratos con `kind` distinto y `schemaVersion: "1.0.0"`. Cada documento se
 valida por separado, sin resolver referencias de Internet ni descargar datos.

@@ -74,6 +74,13 @@ identificará sus bytes por separado. Una huella no demuestra permiso humano.
 
 ## RF-02. Propuesta: conservar procedencia
 
+Para decisiones `2.0.0`, conservar también familia/orden, ordinal y evidencia
+de versión, regla/ajuste y evidencia de esfuerzo, y progresión de calidad.
+Son los campos de la [extensión de preferencias](agent-model-preference.md),
+no un único rango de inteligencia. Registrar una selección no demuestra el
+esfuerzo real de la respuesta ni autoriza ejecutar. Las entregas históricas v1
+y el piloto privado no se rellenan ni se modifican retrospectivamente.
+
 La propuesta referenciará la decisión que recibió sin convertirla en ejecución:
 modelo solicitado, selección consumida y limitaciones. Si el receptor encuentra
 identidad, revisión, proveedor o cliente incompatibles, señalará el bloqueo;

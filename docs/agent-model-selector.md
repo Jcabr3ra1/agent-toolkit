@@ -15,6 +15,13 @@ libre ni consulta cuentas para descubrir qué modelo tienen. Sigue la
 
 ## API de la base
 
+La [extensión autorizada de preferencias](agent-model-preference.md) añade
+`createModelSelector(baseSchema, preferenceSchema)` para entradas `2.0.0`.
+Ambos esquemas se proporcionan en memoria y son de confianza. Omitir el segundo
+mantiene solo `1.0.0`; cargarlo no cambia las decisiones de solicitudes `1.0.0`.
+El orden y la evidencia de cierre descritos más abajo pertenecen a la base v1;
+la extensión tiene contrato, pruebas y evidencia separados. No integra un CLI.
+
 `createModelSelector(schema)` recibe el esquema empaquetado, cargado por el
 consumidor como JSON de confianza, y devuelve `selectModel(input)`. La separación
 evita lecturas de archivos dentro del núcleo y no necesita modificar el requisito

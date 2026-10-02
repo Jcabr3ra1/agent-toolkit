@@ -12,6 +12,13 @@ sesión, configura clientes, inicia agentes, instala herramientas, modifica cód
 de proyectos, contrata API ni crea commits. Las conexiones y cuotas reales de
 las cuentas siguen pendientes de comprobación para el futuro ejecutor.
 
+La [extensión de versiones y esfuerzo](agent-model-preference.md)
+recoge la preferencia posterior del usuario por versiones recientes dentro
+de la familia adecuada y esfuerzo variable. Su especificación e implementación
+fueron autorizadas por separado: el contrato `2.0.0` añade esa decisión y el
+contrato `1.0.0` conserva el comportamiento descrito aquí. No hay migración,
+clientes activos ni ejecución implícita.
+
 ## Problema y evidencia
 
 El piloto tutor completó un cambio pequeño de documentación. El encargo no
