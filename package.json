@@ -5,7 +5,8 @@
   "description": "Herramientas reutilizables para memorias de proyecto y agentes locales.",
   "type": "module",
   "bin": {
-    "project-memory": "./bin/project-memory.js"
+    "project-memory": "./bin/project-memory.js",
+    "agent-task": "./bin/agent-task.js"
   },
   "scripts": {
     "test": "node --test"
