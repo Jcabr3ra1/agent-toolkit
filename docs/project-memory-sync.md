@@ -145,9 +145,13 @@ project-memory sync plan [ruta]
    revisiones sin duplicarlas, con vista previa y `--apply` limitado al registro;
    [contrato, límites y evidencia](project-memory-sync-record.md). No actualiza
    las notas técnicas ni crea commits. Esta entrega aún no se ha publicado.
-4. Adaptador de automatización: ejecución programada y silenciosa cuando no hay
+4. `sync apply`: base local probada para aplicar propuestas explícitas ya
+   revisadas con huella, evidencia fresca y escritura limitada a notas;
+   [contrato y resultados parciales](project-memory-sync-apply.md). No redacta,
+   registra ni publica automáticamente; entrega local revisada, publicación separada.
+5. Adaptador de automatización: ejecución programada y silenciosa cuando no hay
    novedades.
-5. Proveedores adicionales mediante adaptadores separados.
+6. Proveedores adicionales mediante adaptadores separados.
 
 ## Criterios de aceptación
 

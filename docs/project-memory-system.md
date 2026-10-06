@@ -251,6 +251,22 @@ inspección y configuraciones homónimas diferentes producen `ERROR`. El modo
 `--strict` convierte las advertencias en un código de salida distinto de cero
 para su uso en automatizaciones.
 
+## Actualización controlada de notas
+
+El ciclo local distingue detección (`sync plan`), evidencia (`sync inspect`),
+aplicación de contenido ya revisado (`sync apply`) y registro de la conclusión
+(`sync record`). No se encadenan como autorizaciones implícitas.
+
+`apply` exige una propuesta externa, versiones exactas y la huella de una vista
+previa aprobada. Valida una memoria virtual antes de escribir y comparte bloqueo
+con `record`. Reemplaza solo notas existentes, sin tocar el ledger o Git. Varias
+notas no forman una transacción atómica: un fallo exige revisar el resultado
+parcial, sin rollback automático. Su base está probada y revisada para entrega
+local; adopción real, publicación y automatización requieren pasos separados.
+
+El [contrato de aplicación](project-memory-sync-apply.md) documenta los límites,
+la evidencia y lo que no certifica. MCP y las conexiones siguen en solo lectura.
+
 ## Criterios de aceptación del contrato base
 
 - El esquema acepta el ejemplo documentado.

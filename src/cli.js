@@ -7,6 +7,7 @@ import { inspectMemoryStatus } from "./status.js";
 import { planMemorySync, SyncPlanningError } from "./sync.js";
 import { inspectMemorySync, inspectionErrorReport, formatSyncInspectionReport } from "./sync-inspect.js";
 import { recordMemorySync, recordErrorReport, formatSyncRecordReport } from "./sync-record.js";
+import { applyMemorySync, applyErrorReport, formatSyncApplyReport } from "./sync-apply.js";
 
 const HELP = `project-memory
 
@@ -18,6 +19,7 @@ Uso:
   project-memory sync plan [ruta] [opciones]
   project-memory sync inspect [ruta] --pr <número> [opciones]
   project-memory sync record [ruta] --pr <número> --outcome <valor> --reviewed [opciones]
+  project-memory sync apply [ruta] --proposal <archivo> [opciones]
 
 Opciones de init:
   --project-id <id>           Identificador del proyecto.
@@ -71,10 +73,19 @@ Opciones de sync record:
   --manifest <ruta>    Selecciona un manifiesto concreto.
   --apply               Añade únicamente la fila validada del registro.
 
+Opciones de sync apply:
+  --proposal <archivo>  Propuesta JSON revisada, externa a la bóveda.
+  --manifest <ruta>     Selecciona un manifiesto concreto.
+  --ack-warning <código> text-limit o unsafe-reference observada; repetible.
+  --apply                Reemplaza solo las notas pendientes enumeradas.
+  --reviewed             Declara revisión semántica; obligatorio al aplicar.
+  --expect <sha256>     Huella de la vista previa aprobada; exige --apply.
+
 init y connect no sobrescriben configuraciones diferentes. doctor, status,
-sync plan e inspect son de solo lectura. sync record solo escribe con --apply.
+sync plan e inspect son de solo lectura. sync record y apply escriben con --apply.
 Evita editar o sincronizar la memoria durante --apply: su bloqueo no controla
-editores externos. sync record no crea commits ni hace push.`;
+editores externos. Ni record ni apply crean commits o hacen push. apply puede
+quedar parcial entre notas: no revierte ni registra automáticamente el PR.`;
 
 export async function runCli(argv, io = defaultIo(), context = {}) {
   if (argv.length === 0 || argv.includes("--help") || argv.includes("-h")) {
@@ -112,11 +123,12 @@ async function runSyncCommand(rest, io, context) {
   const [operation, ...argumentsRest] = rest;
   if (operation === "inspect") return runSyncInspectCommand(argumentsRest, io, context);
   if (operation === "record") return runSyncRecordCommand(argumentsRest, io, context);
+  if (operation === "apply") return runSyncApplyCommand(argumentsRest, io, context);
   if (operation !== "plan") {
     io.err(
       operation
         ? `Operación de sync desconocida: ${operation}`
-        : "Debes indicar una operación de sync: plan, inspect o record."
+        : "Debes indicar una operación de sync: plan, inspect, record o apply."
     );
     return 2;
   }
@@ -269,6 +281,40 @@ async function runSyncRecordCommand(args, io, context) {
   } catch (error) {
     const report = recordErrorReport(error);
     if (json) io.out(JSON.stringify(report, null, 2)); else io.err(formatSyncRecordReport(report));
+    return report.code === "invalid-option" ? 2 : 1;
+  }
+}
+
+async function runSyncApplyCommand(args, io, context) {
+  const options = { targetPath: process.cwd(), ackWarnings: [] }, json = args.includes("--json"), seen = new Map();
+  const values = new Map([["--proposal", "proposalPath"], ["--manifest", "manifestPath"], ["--expect", "expect"], ["--ack-warning", "ackWarnings"]]);
+  let targetProvided = false;
+  const invalid = () => {
+    const report = { command: "sync apply", status: "error", code: "invalid-option", details: ["Opción desconocida, incompleta o contradictoria de sync apply."], wrote: false };
+    if (json) io.out(JSON.stringify(report, null, 2)); else io.err(report.details[0]);
+    return 2;
+  };
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === "--json") continue;
+    if (arg === "--apply" || arg === "--reviewed") { options[arg.slice(2)] = true; continue; }
+    if (values.has(arg)) {
+      const value = args[++index]; if (!value || value.startsWith("-")) return invalid();
+      const key = values.get(arg);
+      if (key === "ackWarnings") options.ackWarnings.push(value);
+      else { if (seen.has(arg) && seen.get(arg) !== value) return invalid(); seen.set(arg, value); options[key] = value; }
+      continue;
+    }
+    if (arg.startsWith("-") || targetProvided) return invalid();
+    options.targetPath = path.resolve(arg); targetProvided = true;
+  }
+  try {
+    const report = await applyMemorySync(options, context);
+    io.out(json ? JSON.stringify(report, null, 2) : formatSyncApplyReport(report));
+    return ["preview", "applied", "unchanged"].includes(report.status) ? 0 : 1;
+  } catch (error) {
+    const report = applyErrorReport(error);
+    if (json) io.out(JSON.stringify(report, null, 2)); else io.err(formatSyncApplyReport(report));
     return report.code === "invalid-option" ? 2 : 1;
   }
 }

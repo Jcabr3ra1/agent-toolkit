@@ -276,6 +276,40 @@ La nueva base está implementada, probada y aprobada para su commit local;
 su publicación está pendiente. Consulta [el contrato y sus límites](project-memory-sync-record.md)
 antes de aplicarla sobre una memoria real. No añade archivos a Git ni hace push.
 
+## Aplicar una propuesta revisada de notas
+
+`sync apply` no redacta notas: valida un JSON con su contenido completo, las
+rutas existentes, los archivos fuente del PR y las huellas de sus versiones.
+Guarda ese JSON fuera de la bóveda y prepara primero una vista previa:
+
+```bash
+project-memory sync apply /ruta/a/proyecto-memory \
+  --proposal /ruta/a/propuestas/cambio-42.json --json
+```
+
+Revisa las diferencias y el significado contra el repositorio. Solo después
+de autorizar ese plan concreto repite la orden con su `planId`:
+
+```bash
+project-memory sync apply /ruta/a/proyecto-memory \
+  --proposal /ruta/a/propuestas/cambio-42.json \
+  --apply --reviewed --expect "HUELLA_SHA256_DEL_PLAN_REVISADO"
+```
+
+Las rutas y la huella son ilustrativas. Exige Git limpio, salvo notas declaradas
+que ya coincidan con la propuesta, PR fusionado y CI completo satisfactorio.
+**Pausa Obsidian y la sincronización mientras aplicas.** El bloqueo se comparte
+con `sync record`, pero no controla otros editores.
+
+Un fallo entre notas puede devolver `partial` con `wrote: true`: revisa las
+rutas aplicadas, satisfechas, pendientes e inciertas. No hay rollback automático.
+El comando no modifica el ledger, staging, commits, conexiones ni Skills.
+`sync record` y el respaldo Git se realizan por separado y con su autorización.
+
+La base está implementada, probada y revisada para entrega local; no se ha
+publicado ni aplicado sobre una memoria real. Consulta el
+[contrato JSON, límites y evidencia](project-memory-sync-apply.md) antes de usarla.
+
 ## Límites
 
 - No guardar secretos, credenciales, tokens ni datos personales.

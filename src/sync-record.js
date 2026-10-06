@@ -8,6 +8,7 @@ import { inspectMemorySync } from "./sync-inspect.js";
 import { parseGitHubRepository, validateAutomation } from "./sync.js";
 import { appendLedgerRecord, parseWritableLedger } from "./sync-ledger.js";
 import { containsSensitiveData, isCredentialPath } from "./sensitive-data.js";
+import { syncWriteLockPath } from "./sync-files.js";
 
 export const RECORD_LIMITS = Object.freeze({ ledger: 1024 * 1024, note: 1024 * 1024,
   notes: 20, totalNotes: 5 * 1024 * 1024, manifest: 1024 * 1024, git: 5 * 1024 * 1024 });
@@ -382,7 +383,7 @@ function assertSnapshot(before, after) {
 function applyRecord(plan, context) {
   const { vault, files, before, ledgerFile, proposal, report } = plan;
   const parent = path.dirname(ledgerFile.path);
-  const lockPath = path.join(parent, ".project-memory-sync-record.lock");
+  const lockPath = syncWriteLockPath(vault);
   const temporary = path.join(parent, `.project-memory-sync-record-${randomUUID()}.tmp`);
   let lockFd, tempFd, lockIdentity, tempIdentity, wrote = false, primary, cleanupFailed = false;
   const io = context.fileOperations ?? fs;

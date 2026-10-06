@@ -219,7 +219,7 @@ La vista previa no escribe nada: ni temporales, bloqueos, índices ni caches.
 Usar Git con `--no-optional-locks` durante las inspecciones y desactivar
 `core.fsmonitor` solo para esas invocaciones, sin cambiar la configuración local.
 
-Con `--apply`, crear un bloqueo exclusivo de esta operación junto al registro.
+Con `--apply`, crear un bloqueo exclusivo compartido con `sync apply` junto al registro.
 Otro bloqueo detiene la escritura; no borrar uno antiguo automáticamente.
 Rechazar symlinks o rutas que escapen a la bóveda antes y durante la aplicación.
 
@@ -229,7 +229,7 @@ Escribir la propuesta en un temporal exclusivo del mismo directorio, conservar
 permisos del archivo original y sustituirlo mediante renombrado atómico.
 Limpiar únicamente artefactos creados por esta ejecución.
 
-El protocolo coordina instancias de `record`; no bloquea a Obsidian o a otro
+El protocolo coordina instancias de `record` y `apply`; no bloquea a Obsidian o a otro
 editor que ignore el bloqueo. No se prometerá ausencia absoluta de carreras
 con procesos externos: el operador debe evitar editar o sincronizar la memoria
 durante la aplicación. Esta limitación debe figurar en ayuda y resultados.
@@ -351,6 +351,11 @@ externos. Los filtros no garantizan detectar todo dato sensible.
 La entrega está aprobada para su commit local; no se publica en esta etapa.
 Tampoco se aplicó `record` sobre AVISENS o sobre otra memoria real. La
 publicación, la adopción real y la automatización son etapas separadas.
+
+La etapa posterior de [`sync apply`](project-memory-sync-apply.md) reutiliza
+solo el nombre de bloqueo mediante `src/sync-files.js`, manteniendo
+`.project-memory-sync-record.lock`. La suite conjunta verifica que un bloqueo
+existente impide ambas escrituras y conserva las 112 pruebas de `record`.
 
 La primera base se propone conservadora: sin CI comprobable o cobertura
 completa no cierra automáticamente la revisión. Otros proveedores, políticas
