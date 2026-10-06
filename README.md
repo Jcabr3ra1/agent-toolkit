@@ -49,6 +49,17 @@ verdad: las notas explican el contexto, no lo sustituyen.
   tiene y qué áreas de las notas conviene revisar.
 - **Registrar una revisión terminada** con vista previa y autorización explícita,
   sin duplicar su registro ni escribir otras notas.
+- **Aplicar cambios de notas ya revisados**: muestra las diferencias, exige la
+  huella del plan aprobado y comprueba versiones, enlaces y evidencia antes
+  de reemplazar únicamente las notas enumeradas.
+- **Preparar un encargo para otro agente**: a partir de los datos explícitos
+  de una tarea, sugiere modelo y esfuerzo y arma un borrador que revisas y
+  entregas tú. La sugerencia usa datos revisados que tú proporcionas; no
+  comprueba cuentas, disponibilidad actual ni qué modelo responderá. No envía
+  el encargo ni arranca otros asistentes.
+- **Comprobar una entrega contra lo revisado**: detecta diferencias en los
+  archivos que indicas, antes o después del trabajo. No revisa archivos fuera
+  de esa lista ni sustituye la revisión de calidad.
 
 También incluye procedimientos reutilizables para definir requisitos,
 documentar decisiones, revisar calidad y pasar trabajo entre sesiones, junto
@@ -66,9 +77,10 @@ con perfiles especializados de exploración, análisis y tutoría.
    inspeccionan cambios; una persona o un agente autorizado decide qué notas
    deben actualizarse.
 
-La consulta de memoria está separada de su escritura. La CLI puede registrar
-una conclusión ya revisada, pero no redacta ni actualiza automáticamente las
-notas técnicas. Registrar tampoco significa aprobar el código.
+La consulta de memoria está separada de su escritura. La CLI puede aplicar
+texto previamente redactado y autorizado y registrar una conclusión revisada
+en otra operación. No redacta ni actualiza automáticamente las notas técnicas.
+Registrar tampoco significa aprobar el código.
 
 ## Pensado para más de un proyecto
 
@@ -93,10 +105,11 @@ clona las memorias ni conecta automáticamente los agentes.
 
 ## En qué punto está
 
-**Base funcional en desarrollo · versión 0.1.0.** Hay 213 pruebas automatizadas
-aprobadas en la revisión local del 1 de octubre de 2026 y una inspección real
-de GitHub documentada. Eso no equivale a una certificación de producción ni a
-compatibilidad probada en todos los sistemas operativos.
+**Base funcional en desarrollo · versión 0.1.0.** La entrega versionada
+localmente y verificada el 6 de octubre de 2026 pasó 1.001 pruebas automatizadas.
+Las etapas experimentales que aún no forman parte de esa entrega se revisan
+por separado. También hay una inspección real de GitHub documentada; nada de
+esto equivale a una certificación de producción o de todos los sistemas operativos.
 
 | Etapa | Estado |
 | --- | --- |
@@ -104,9 +117,11 @@ compatibilidad probada en todos los sistemas operativos.
 | Consultar el estado de las conexiones | Implementado |
 | Detectar e inspeccionar cambios fusionados | Implementado |
 | Registrar revisiones sin duplicarlas | Implementado y probado localmente; pendiente de publicación |
-| Actualizar notas con autorización y verificaciones | Pendiente |
+| Aplicar notas revisadas con autorización y verificaciones | Versionado y probado localmente; publicación pendiente |
 | Integrar el ciclo completo con una automatización | Pendiente |
-| Elegir modos tutor y autónomo | Propuesta separada; no activada |
+| Preparar borradores de encargo tutor o autónomo | Versionado y probado localmente; entrega manual, publicación pendiente |
+| Comprobar archivos de una entrega contra lo revisado | Versionado y probado localmente; solo archivos indicados, publicación pendiente |
+| Lanzar agentes o aplicar encargos automáticamente | Pendiente; sin ejecución nativa admitida |
 | Búsqueda semántica y nuevos proveedores | Evolución posterior, no comprometida |
 
 El objetivo de la primera versión completa es cerrar el ciclo de revisión y
@@ -120,6 +135,12 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
   herramientas, código y memoria.
 - [Registro de revisiones](docs/project-memory-sync-record.md): comportamiento,
   controles y evidencia de la nueva base local.
+- [Aplicación de notas revisadas](docs/project-memory-sync-apply.md): plan
+  aprobado, escritura limitada y tratamiento de resultados parciales.
+- [Preparación de encargos](docs/agent-task-prepare.md): borrador revisable,
+  límites y ejemplo ficticio.
+- [Comprobación de entregas](docs/agent-task-verify.md): comparación de los archivos
+  indicados, sin aprobación automática ni ejecución de agentes.
 - [Identidad visual](assets/brand/README.md): concepto y origen del logo.
 
 La biblioteca se respalda en GitHub como repositorio privado. No incluye las

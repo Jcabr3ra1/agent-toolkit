@@ -1,6 +1,6 @@
 # Plantilla canónica de memoria de proyecto
 
-Esta plantilla crea una memoria independiente para un proyecto sin copiar conocimiento de otros proyectos.
+Esta plantilla es una base reutilizable para organizar la memoria de un proyecto: sus decisiones, su arquitectura, sus entregas y el contexto que necesitan los agentes, guardados aparte del código fuente. Cada proyecto empieza con una copia limpia, sin información de otros proyectos. Copiarla no deja la memoria ni la conexión con los agentes funcionando: hay que personalizarla, validarla y comprobarla como se explica más abajo.
 
 ## Contenido
 
@@ -23,7 +23,7 @@ Los archivos Markdown utilizan estas variables:
 | `{{INTEGRATION_BRANCH}}` | Rama donde se integran cambios, si existe |
 | `{{DATE}}` | Fecha absoluta en formato `AAAA-MM-DD` |
 
-El futuro comando `project-memory init` reemplazará estas variables. Para una instalación manual deben sustituirse antes de activar la Skill.
+El comando `project-memory init` ya sustituye estas variables al preparar una memoria nueva. Por defecto muestra una vista previa; solo `--apply` crea los archivos. No configura Git, MCP ni enlaces globales. Consulta la [guía de creación](../../docs/project-memory-init.md) y ejecuta `project-memory doctor <destino> --strict` antes de conectar agentes. En una preparación manual, sustituye las variables antes de activar la Skill.
 
 ## Estructura de la bóveda
 
@@ -45,7 +45,7 @@ Las carpetas representan responsabilidades estables. Un proyecto puede añadir �
 
 El manifiesto utiliza `memory.layout.profile: canonical-v1` para exigir esta estructura. Una memoria anterior con una organización estable diferente puede usar el perfil `declared` y enumerar sus carpetas y notas fundamentales, sin renombrarlas ni duplicarlas.
 
-## Uso manual provisional
+## Alternativa de preparación manual
 
 1. Copiar esta carpeta fuera de `Agent-Toolkit`.
 2. Reemplazar todas las variables `{{...}}`.
