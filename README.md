@@ -105,11 +105,16 @@ clona las memorias ni conecta automáticamente los agentes.
 
 ## En qué punto está
 
-**Base funcional en desarrollo · versión 0.1.0.** La entrega versionada
-localmente y verificada el 6 de octubre de 2026 pasó 1.001 pruebas automatizadas.
-Las etapas experimentales que aún no forman parte de esa entrega se revisan
-por separado. También hay una inspección real de GitHub documentada; nada de
-esto equivale a una certificación de producción o de todos los sistemas operativos.
+**Base funcional local · versión 0.1.0 · beta privada en preparación.** La última
+regresión funcional documentada, del 9 de octubre de 2026, pasó 3.279 pruebas.
+Los cierres posteriores son documentales y no repiten esa ejecución. Es evidencia
+local con datos y procesos ficticios, no una certificación de producción, cuentas
+o compatibilidad completa entre sistemas operativos.
+
+El hito **R1** organiza el siguiente paso: guía inicial, validación del recorrido
+integrado con un proyecto ficticio y publicación privada revisada. Son entregas
+separadas; preparar esta guía no significa que las otras dos ya estén completas
+ni que haya una nueva versión publicada en GitHub.
 
 | Etapa | Estado |
 | --- | --- |
@@ -121,6 +126,7 @@ esto equivale a una certificación de producción o de todos los sistemas operat
 | Integrar el ciclo completo con una automatización | Pendiente |
 | Preparar borradores de encargo tutor o autónomo | Versionado y probado localmente; entrega manual, publicación pendiente |
 | Comprobar archivos de una entrega contra lo revisado | Versionado y probado localmente; solo archivos indicados, publicación pendiente |
+| Empezar con ayudas y un encargo ficticio | Guía local disponible; validación integrada y publicación separadas |
 | Lanzar agentes o aplicar encargos automáticamente | Pendiente; sin ejecución nativa admitida |
 | Búsqueda semántica y nuevos proveedores | Evolución posterior, no comprometida |
 
@@ -130,7 +136,11 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
 
 ## ¿Quieres usarlo o entender cómo está construido?
 
+- [Primeros pasos](docs/primeros-pasos.md): una prueba local sencilla, sin
+  conectar cuentas ni ejecutar otros agentes.
 - [Guía de uso e instalación](docs/uso.md): comandos y conexiones locales.
+- [Primera beta privada](docs/agent-toolkit-private-beta.md): alcance, criterios
+  y puertas que faltan antes de publicar el estado revisado.
 - [Arquitectura del sistema](docs/project-memory-system.md): separación de
   herramientas, código y memoria.
 - [Registro de revisiones](docs/project-memory-sync-record.md): comportamiento,
@@ -143,5 +153,6 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
   indicados, sin aprobación automática ni ejecución de agentes.
 - [Identidad visual](assets/brand/README.md): concepto y origen del logo.
 
-La biblioteca se respalda en GitHub como repositorio privado. No incluye las
-bóvedas de los proyectos ni publica su contenido.
+La publicación prevista es en GitHub privado. La copia local y el remoto pueden
+tener estados distintos; R1 exige comprobarlo antes de publicar. La biblioteca
+no incluye las bóvedas de los proyectos ni publica su contenido.

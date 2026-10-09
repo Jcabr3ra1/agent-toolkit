@@ -4,6 +4,11 @@ Esta guía reúne la información técnica que antes estaba en el README princip
 Para conocer el propósito sin entrar en comandos, vuelve a la
 [presentación del proyecto](../README.md).
 
+Si es tu primera prueba, empieza por [Primeros pasos](primeros-pasos.md): usa
+ayudas y datos ficticios, sin instalar clientes ni ejecutar IA. El
+[hito R1](agent-toolkit-private-beta.md) separa esa base local de la validación
+integrada, una instalación limpia y la publicación privada pendiente.
+
 Los ejemplos que empiezan con `project-memory` presuponen que el comando está
 instalado en tu equipo. Desde el repositorio también puedes ejecutarlos usando
 `node bin/project-memory.js` seguido de la operación. `npm install` instala las
