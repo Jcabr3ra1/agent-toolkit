@@ -4,8 +4,8 @@ Esta base organiza el trabajo entre Codex, Claude y Gemini mediante archivos.
 Tú decides cuándo pasar al siguiente agente. No es un ejecutor, un servicio
 de API ni una conexión automática entre tus chats.
 
-Contrato documental previo: `docs/agent-team-handoffs.md`, aprobado pero pendiente
-de versionado por separado; no forma parte de esta entrega.
+Contrato documental: [equipo mediante archivos compartidos](../../docs/agent-team-handoffs.md),
+consolidado junto con esta guía. El historial del piloto permanece separado.
 Adaptación aprobada: [modelos en los traspasos](../../docs/agent-team-model-handoff.md).
 Las reglas del proyecto y los permisos de cada cliente siguen mandando.
 
@@ -36,12 +36,31 @@ Una estructura posible, todavía sin instalar:
 Las rutas concretas se acuerdan para cada trabajo. No meter esta carpeta en GitHub,
 la bóveda, una carpeta sincronizada o un repositorio público por defecto.
 
+## Ayudas locales disponibles
+
+El [preparador](../../docs/agent-task-prepare.md) genera un borrador por destinatario
+a partir de cuatro JSON explícitos. El
+[verificador](../../docs/agent-task-verify.md) compara los archivos listados en un
+contrato fijado. Para consultar su ayuda desde la raíz de Agent-Toolkit, sin
+instalación global:
+
+```text
+node bin/agent-task.js --help
+node bin/agent-task.js verify --help
+```
+
+`prepare` no escribe ni envía el encargo, ni interpreta tareas libres mediante IA
+ni verifica cuentas. `verify` no aplica una propuesta ni acredita permisos,
+calidad, estado Git completo o modelo. `prepared-draft` y `matched` no autorizan
+al siguiente agente: la revisión humana y el permiso del receptor siguen aparte.
+
 ## Modelo recomendado y modelo observado
 
 El [selector local](../../docs/agent-model-selector.md) recomienda a partir de
 solicitud, catálogo y política; no guarda informes, ejecuta IA o cambia el CLI.
-Estas plantillas tampoco lo invocan automáticamente. Su nuevo bloque se completa
-manualmente antes de dejar listo un encargo bajo esta política.
+Estas plantillas tampoco lo invocan automáticamente. Su bloque se completa
+manualmente o con un borrador del preparador, que luego se revisa; no deja listo
+un encargo bajo esta política por el simple éxito de la preparación.
 
 1. El coordinador obtiene una decisión para el participante y rol realmente
    encargados, con datos de confianza y acceso declarado. Si faltan datos, no
@@ -180,10 +199,15 @@ Un paso tutor puede quedar verificado en código y desconocido en modelo: ambos
 resultados se registran sin atribuir el código del usuario a una IA. Esta tabla
 no demuestra cumplimiento de agentes reales ni instala barreras técnicas.
 
-## Qué falta
+## Qué falta y qué ya se puede utilizar
 
-Probar un traspaso manual nuevo con la selección documentada cuando exista
-inventario y evaluación autorizados de modelos. No repetir ni alterar el piloto
-histórico para rellenar datos que faltaban. La ejecución local automática por CLI
-necesitará especificación, permisos y pruebas separados. No hay comandos nuevos
-de Agent-Toolkit para este flujo todavía ni garantía de consumo ilimitado.
+Las plantillas, preparación de borradores y verificación de archivos pueden
+apoyar entregas manuales delimitadas. Sus datos ficticios no sirven como política
+real de modelos. Cuando exista inventario y evaluación aprobados, un traspaso
+nuevo conservará sus propios permisos y evidencia; no se repite ni altera el
+piloto histórico para rellenar datos faltantes.
+
+La ejecución automática de clientes reales sigue sin admisión: necesita evidencia,
+permisos y pruebas separados. Los comandos locales existentes no la habilitan ni
+garantizan consumo ilimitado. Esta actualización documental del 2026-10-09 no
+instala perfiles, cambia modelos activos o activa autonomía global.
