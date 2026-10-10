@@ -105,29 +105,29 @@ clona las memorias ni conecta automáticamente los agentes.
 
 ## En qué punto está
 
-**Base funcional local · versión 0.1.0 · beta privada en preparación.** La última
+**Base funcional local · versión 0.1.0 · beta privada publicada.** La última
 regresión funcional documentada, del 9 de octubre de 2026, pasó 3.280 pruebas.
 Los cierres posteriores son documentales y no repiten esa ejecución. Es evidencia
 local con datos y procesos ficticios, no una certificación de producción, cuentas
 o compatibilidad completa entre sistemas operativos.
 
-El hito **R1** separa guía inicial, validación integrada y publicación privada.
-Las dos primeras entregas ya están verificadas: el recorrido ficticio crea una
-memoria, aplica una nota revisada y registra el cambio sin duplicarlo. La revisión
-de publicación está aprobada y su envío autorizado, pendiente de comprobar el
-resultado remoto. Eso no activa clientes de IA ni una automatización real.
+El hito **R1** está completo: guía inicial, recorrido integrado ficticio y
+publicación privada comprobada el 9 de octubre de 2026. Puedes obtener la
+biblioteca desde [su repositorio privado](https://github.com/Jcabr3ra1/agent-toolkit)
+si tienes acceso. Eso no instala conexiones, activa clientes de IA ni configura
+una automatización real. No se creó una etiqueta o release por llamarla beta.
 
 | Etapa | Estado |
 | --- | --- |
 | Crear, diagnosticar y conectar memorias | Implementado |
 | Consultar el estado de las conexiones | Implementado |
 | Detectar e inspeccionar cambios fusionados | Implementado |
-| Registrar revisiones sin duplicarlas | Implementado y probado localmente; pendiente de publicación |
-| Aplicar notas revisadas con autorización y verificaciones | Versionado y probado localmente; publicación pendiente |
+| Registrar revisiones sin duplicarlas | Disponible en la beta privada y probado localmente |
+| Aplicar notas revisadas con autorización y verificaciones | Disponible en la beta privada; texto y plan revisados por separado |
 | Integrar el ciclo completo con una automatización | Pendiente |
-| Preparar borradores de encargo tutor o autónomo | Versionado y probado localmente; entrega manual, publicación pendiente |
-| Comprobar archivos de una entrega contra lo revisado | Versionado y probado localmente; solo archivos indicados, publicación pendiente |
-| Empezar con ayudas y un encargo ficticio | Guía local disponible; validación integrada y publicación separadas |
+| Preparar borradores de encargo tutor o autónomo | Disponible en la beta privada; entrega manual |
+| Comprobar archivos de una entrega contra lo revisado | Disponible en la beta privada; solo archivos indicados |
+| Empezar con ayudas y un encargo ficticio | Guía disponible y comprobada localmente |
 | Recorrido completo con proyecto y memoria ficticios | Verificado localmente; GitHub y conexiones simulados, no una instalación real |
 | Lanzar agentes o aplicar encargos automáticamente | Pendiente; sin ejecución nativa admitida |
 | Búsqueda semántica y nuevos proveedores | Evolución posterior, no comprometida |
@@ -141,8 +141,8 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
 - [Primeros pasos](docs/primeros-pasos.md): una prueba local sencilla, sin
   conectar cuentas ni ejecutar otros agentes.
 - [Guía de uso e instalación](docs/uso.md): comandos y conexiones locales.
-- [Primera beta privada](docs/agent-toolkit-private-beta.md): alcance, criterios
-  y puertas que faltan antes de publicar el estado revisado.
+- [Primera beta privada](docs/agent-toolkit-private-beta.md): alcance, criterios,
+  evidencia y cierre de las tres entregas.
 - [Arquitectura del sistema](docs/project-memory-system.md): separación de
   herramientas, código y memoria.
 - [Registro de revisiones](docs/project-memory-sync-record.md): comportamiento,
@@ -155,6 +155,6 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
   indicados, sin aprobación automática ni ejecución de agentes.
 - [Identidad visual](assets/brand/README.md): concepto y origen del logo.
 
-La publicación prevista es en GitHub privado. La copia local y el remoto pueden
-tener estados distintos; R1 exige comprobarlo antes de publicar. La biblioteca
-no incluye las bóvedas de los proyectos ni publica su contenido.
+La beta se conserva en GitHub privado. Clonar la biblioteca no copia las bóvedas
+de tus proyectos ni conecta automáticamente tus agentes. Los cambios futuros
+seguirán necesitando revisión antes de sincronizar la copia local y el remoto.

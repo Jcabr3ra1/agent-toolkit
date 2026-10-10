@@ -6,8 +6,8 @@
   2026-10-09 (America/Bogota), con commit local de cuatro documentos.
 - R1.2: validación ficticia comprobada y conservada como prueba repetible;
   cierre y commit local de dos archivos autorizados el 2026-10-09.
-- R1.3: revisión previa completada; commits documentales y publicación privada
-  autorizados el 2026-10-09. Pendiente de envío y comprobación remota.
+- R1.3: publicación del contenido revisado confirmada el 2026-10-09 en GitHub
+  privado; cierre documental posterior dentro de las dos rutas autorizadas.
 - Versión declarada del paquete: `0.1.0`, sin cambio de versión en esta entrega.
 - Profundidad: estándar para R1.1; rigurosa para las puertas de escritura,
   conservación de datos y publicación de las etapas posteriores.
@@ -199,8 +199,9 @@ revisado sin migraciones o resets. La limpieza futura no incluye proyectos reale
 - [x] R1.2: lote aislado ejecutado; recorrido y bloqueos conservados en
   `test/private-beta-integration.test.js`; cierre, regresión y commit local de
   ese test y este documento. Código de producción intacto; sin publicación.
-- [ ] R1.3: revisión saliente y destino privado; push únicamente con autorización
-  específica. No mezclar una publicación con una instalación o inferencia real.
+- [x] R1.3: historial/destino revisados, push autorizado y contenido publicado
+  verificado por SHA y privacidad; cierre documental posterior. Sin tags,
+  releases, npm, instalación de clientes o inferencia.
 
 ## Evidencia histórica de cierre R1.1
 
@@ -282,9 +283,10 @@ escaneo limitado de patrones sensibles comprobados, sin garantía universal de
 ausencia de secretos. Staging por dos rutas exactas, commit local e índice final
 vacío; sin push. La copia aislada propia se retira sin borrar dependencias originales.
 
-Quality-gate: **Aprobado para R1.2 ficticio y consolidación local**. R1 tiene dos
-de tres entregas completadas; R1.3 sigue sin ejecutar. Este conteo no representa
-un porcentaje de capacidades de modelos o del alcance global futuro del Toolkit.
+Quality-gate de R1.2: **Aprobado para validación ficticia y consolidación local**.
+En ese cierre había dos de tres entregas completadas y R1.3 aún no se ejecutaba.
+Ese conteo histórico no representa un porcentaje de capacidades de modelos o
+del alcance global futuro del Toolkit.
 Las referencias de presentación anteriores conservan su evidencia histórica;
 su contraste con esta entrega forma parte de la puerta de publicación R1.3.
 
@@ -327,15 +329,46 @@ inesperados o cambio de privacidad detienen la operación sin forzar ni
 sobrescribir. Solo después del primer envío verificado se registrará el cierre
 real en otro commit documental dentro de estas dos rutas autorizadas.
 
-### Resultado remoto
+### Resultado remoto verificado — 2026-10-09
 
-Pendiente. No se declara R1.3 completada por una revisión favorable o un commit
-local; requiere confirmar el SHA enviado y la privacidad del destino.
+La autorización incluyó publicar el historial y registrar su cierre con los
+commits documentales necesarios, sin ampliar las dos rutas. Se creó el commit
+de preparación `7ed7c304d309dc362a865287f58ade78dd504450`, solo con README y
+este documento. La revisión posterior añadió esas dos versiones: 28 commits,
+260 blobs distintos y las mismas 19 coincidencias ficticias, sin nuevos
+hallazgos de publicación.
+
+El preflight inmediato volvió a confirmar destino único, árbol limpio,
+repositorio private, rama `main`, SHA remoto esperado, ausencia de divergencia,
+reglas de rama, workflows y webhooks activos. No se desactivaron protecciones
+ni hooks para publicar. Se ejecutó un push normal de `HEAD:refs/heads/main`,
+sin force y con publicación automática de tags deshabilitada solo para ese comando.
+
+Resultado: exit 0. La consulta posterior independiente confirmó:
+
+- `Jcabr3ra1/agent-toolkit`: private, no archivado ni deshabilitado.
+- `refs/heads/main`: `7ed7c304d309dc362a865287f58ade78dd504450`, idéntico al HEAD
+  local enviado y a `origin/main` tras el push.
+- Código de producción, dependencias y el test con regresión de 3.280 pruebas
+  conservados; no se repitió esa regresión para cambios exclusivamente documentales.
+
+Este registro y el estado final del README se publican en un segundo commit
+documental dentro de la misma autorización, después de esa verificación real.
+El segundo envío vuelve a comprobar privacidad y SHA remoto esperado. La evidencia
+anterior identifica el primer contenido publicado; no intenta contener la huella
+de su propio commit. El SHA final del cierre se contrasta de nuevo después del envío.
+
+Quality-gate: **Aprobado para publicación privada del alcance revisado**.
+R1 tiene **3 de 3 entregas completadas**: guía, integración ficticia y publicación
+del contenido comprobada. No es una release de npm ni un runtime nativo admitido.
+La instalación limpia, plataformas adicionales, automatización completa y AD-3
+siguen pendientes de sus propios diseños, evidencias y permisos.
 
 ## Preguntas abiertas
 
 - Casos o plataformas adicionales de integración, si se decide ampliar cobertura;
   no se consideran probados por este recorrido ficticio.
-- Destino/rama y estado remoto vigentes en el momento de R1.3.
+- Disponibilidad y políticas del remoto para futuras publicaciones; los valores
+  observados en R1.3 no se heredan como autorización o garantía permanente.
 - Entornos adicionales e instalación limpia que se decidan validar después;
   no se comprometen ahora ni se afirman comprobados.
