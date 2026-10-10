@@ -106,15 +106,16 @@ clona las memorias ni conecta automáticamente los agentes.
 ## En qué punto está
 
 **Base funcional local · versión 0.1.0 · beta privada en preparación.** La última
-regresión funcional documentada, del 9 de octubre de 2026, pasó 3.279 pruebas.
+regresión funcional documentada, del 9 de octubre de 2026, pasó 3.280 pruebas.
 Los cierres posteriores son documentales y no repiten esa ejecución. Es evidencia
 local con datos y procesos ficticios, no una certificación de producción, cuentas
 o compatibilidad completa entre sistemas operativos.
 
-El hito **R1** organiza el siguiente paso: guía inicial, validación del recorrido
-integrado con un proyecto ficticio y publicación privada revisada. Son entregas
-separadas; preparar esta guía no significa que las otras dos ya estén completas
-ni que haya una nueva versión publicada en GitHub.
+El hito **R1** separa guía inicial, validación integrada y publicación privada.
+Las dos primeras entregas ya están verificadas: el recorrido ficticio crea una
+memoria, aplica una nota revisada y registra el cambio sin duplicarlo. La revisión
+de publicación está aprobada y su envío autorizado, pendiente de comprobar el
+resultado remoto. Eso no activa clientes de IA ni una automatización real.
 
 | Etapa | Estado |
 | --- | --- |
@@ -127,6 +128,7 @@ ni que haya una nueva versión publicada en GitHub.
 | Preparar borradores de encargo tutor o autónomo | Versionado y probado localmente; entrega manual, publicación pendiente |
 | Comprobar archivos de una entrega contra lo revisado | Versionado y probado localmente; solo archivos indicados, publicación pendiente |
 | Empezar con ayudas y un encargo ficticio | Guía local disponible; validación integrada y publicación separadas |
+| Recorrido completo con proyecto y memoria ficticios | Verificado localmente; GitHub y conexiones simulados, no una instalación real |
 | Lanzar agentes o aplicar encargos automáticamente | Pendiente; sin ejecución nativa admitida |
 | Búsqueda semántica y nuevos proveedores | Evolución posterior, no comprometida |
 

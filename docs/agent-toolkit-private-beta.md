@@ -6,7 +6,8 @@
   2026-10-09 (America/Bogota), con commit local de cuatro documentos.
 - R1.2: validación ficticia comprobada y conservada como prueba repetible;
   cierre y commit local de dos archivos autorizados el 2026-10-09.
-- R1.3: revisión y publicación privada propuestas; requieren autorización aparte.
+- R1.3: revisión previa completada; commits documentales y publicación privada
+  autorizados el 2026-10-09. Pendiente de envío y comprobación remota.
 - Versión declarada del paquete: `0.1.0`, sin cambio de versión en esta entrega.
 - Profundidad: estándar para R1.1; rigurosa para las puertas de escritura,
   conservación de datos y publicación de las etapas posteriores.
@@ -286,6 +287,50 @@ de tres entregas completadas; R1.3 sigue sin ejecutar. Este conteo no representa
 un porcentaje de capacidades de modelos o del alcance global futuro del Toolkit.
 Las referencias de presentación anteriores conservan su evidencia histórica;
 su contraste con esta entrega forma parte de la puerta de publicación R1.3.
+
+## R1.3 — Revisión previa y publicación autorizada
+
+Revisión del 2026-10-09 (America/Bogota), antes de modificar o publicar:
+
+- Destino confirmado: `Jcabr3ra1/agent-toolkit`, visibilidad private, rama `main`.
+  No se consultó autenticación ni cuentas de clientes de IA.
+- Remoto observado: `5e3fad16039546309e5f5f28d1b7be85f6cccaba`.
+  Coincidía con la referencia local `origin/main`; no se ejecutó fetch.
+- HEAD revisado: `107a119e09e0a0b2da12dc96dbea515bc854f0fa`.
+  Los 27 commits pendientes son un avance fast-forward desde ese remoto.
+- Inventario histórico: 27 árboles, 258 blobs distintos, 3.229.030 bytes y
+  238 rutas; 172 rutas difieren entre la base remota y HEAD.
+- Escaneo limitado y revisión contextual: 19 coincidencias de datos ficticios
+  en pruebas negativas, sin secretos reales confirmados. Sin rutas de bóvedas,
+  encargos privados o almacenes de credenciales versionadas. No es una garantía
+  universal de ausencia de secretos o datos sensibles.
+- El único blob binario revisado es el logo, idéntico al de la base remota.
+  No hay enlaces simbólicos versionados en los árboles inspeccionados.
+- Respuestas remotas: repositorio no archivado/deshabilitado, push permitido
+  por el servidor, rama sin protección declarada, cero reglas de rama,
+  workflows o webhooks activos. Es información observada, no consentimiento
+  humano ni garantía permanente de que no puedan cambiar las políticas.
+
+El usuario autorizó actualizar únicamente README y este registro, crear los
+commits documentales necesarios y publicar el historial revisado en
+`origin/main`. La publicación no incluye force, tags, releases, npm, cambios de
+visibilidad, activación de CI, instalaciones, automatizaciones o inferencia.
+
+Quality-gate previo: **Aprobado con observación documental**. El README aún
+citaba 3.279 pruebas y el estado anterior a R1.2; se ajusta a la regresión
+documentada de 3.280, sin repetir pruebas de código ni renovar su fecha.
+Las comprobaciones anteriores de R1.1/R1.2 conservan sus alcances y resultados.
+
+Antes de cada push se revalidarán destino, privacidad, rama y SHA remoto
+esperado, además de los bytes e índice locales. Divergencia, rechazo, hooks
+inesperados o cambio de privacidad detienen la operación sin forzar ni
+sobrescribir. Solo después del primer envío verificado se registrará el cierre
+real en otro commit documental dentro de estas dos rutas autorizadas.
+
+### Resultado remoto
+
+Pendiente. No se declara R1.3 completada por una revisión favorable o un commit
+local; requiere confirmar el SHA enviado y la privacidad del destino.
 
 ## Preguntas abiertas
 
