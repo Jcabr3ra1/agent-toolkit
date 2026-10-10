@@ -4,7 +4,8 @@
 
 - R1.1: verificado para consolidación documental local; autorización del
   2026-10-09 (America/Bogota), con commit local de cuatro documentos.
-- R1.2: validación integrada propuesta; requiere autorización de su lote aislado.
+- R1.2: validación ficticia comprobada y conservada como prueba repetible;
+  cierre y commit local de dos archivos autorizados el 2026-10-09.
 - R1.3: revisión y publicación privada propuestas; requieren autorización aparte.
 - Versión declarada del paquete: `0.1.0`, sin cambio de versión en esta entrega.
 - Profundidad: estándar para R1.1; rigurosa para las puertas de escritura,
@@ -110,7 +111,7 @@ la regresión completa en todas esas versiones, Linux o Windows.
 - CA-R05: el commit contiene solo las cuatro rutas; no hay push ni instalación.
   La cifra histórica de regresión no se presenta como una ejecución nueva de R1.1.
 
-### R1.2 — Validación integrada, propuesta
+### R1.2 — Validación integrada ficticia
 
 - CA-R06: un lote autorizado usa exclusivamente directorios temporales propios,
   fuente Git y memoria ficticias separadas; evidencia GitHub simulada y explícita.
@@ -129,6 +130,8 @@ la regresión completa en todas esas versiones, Linux o Windows.
 
 - CA-R10: destino, rama, privacidad y estado remoto se comprueban bajo permiso
   explícito. Se revisa el historial que efectivamente saldrá, no solo el último diff.
+  La presentación y sus referencias de versión/pruebas deben contrastarse con
+  la entrega saliente antes de publicar, sin renovar observaciones históricas.
 - CA-R11: conflictos, datos sensibles o un destino dudoso bloquean la publicación;
   no se fuerza, borra ni reescribe historia para resolverlos sin otra autorización.
 - CA-R12: después de un push autorizado se contrasta el commit remoto exacto y
@@ -152,9 +155,10 @@ la regresión completa en todas esas versiones, Linux o Windows.
 ## Diseño propuesto
 
 No añadir un runner de IA o un comando de publicación en R1.1. La guía reutiliza
-los bins y JSON actuales. R1.2 debe diseñar un lote aislado con APIs existentes
-y dependencias de prueba confiables para GitHub, no abrir cuentas para completar
-fixtures. Si necesita un test nuevo, debe fijar antes sus archivos y efectos.
+los bins y JSON actuales. R1.2 usa APIs existentes en una fuente/memoria
+ficticias y respuestas GitHub simuladas. El lote temporal se ejecutó primero;
+después se autorizó conservar [la prueba integrada](../test/private-beta-integration.test.js)
+y actualizar este cierre. No se abrieron cuentas para completar los fixtures.
 
 R1.3 separa auditoría, aprobación y push. Una copia privada en GitHub es un respaldo
 de biblioteca, no instalación de clientes, sincronización de Obsidian o admisión
@@ -191,13 +195,13 @@ revisado sin migraciones o resets. La limpieza futura no incluye proyectos reale
 
 - [x] R1.1: cuatro documentos, ayudas/ejemplo existentes, QA y commit local.
   Archivos: este documento, `primeros-pasos.md`, `README.md`, `uso.md`.
-- [ ] R1.2: delimitar y autorizar el lote de integración antes de ejecutarlo.
-  Archivos probables: especificación/evidencia del lote y test de integración,
-  solo si la revisión del diseño determina que hace falta.
+- [x] R1.2: lote aislado ejecutado; recorrido y bloqueos conservados en
+  `test/private-beta-integration.test.js`; cierre, regresión y commit local de
+  ese test y este documento. Código de producción intacto; sin publicación.
 - [ ] R1.3: revisión saliente y destino privado; push únicamente con autorización
   específica. No mezclar una publicación con una instalación o inferencia real.
 
-## Evidencia de cierre
+## Evidencia histórica de cierre R1.1
 
 Comprobaciones ejecutadas el 2026-10-09 (America/Bogota), desde la raíz del
 Toolkit y con las dependencias existentes. Sin instalación, cuentas, red de
@@ -216,14 +220,77 @@ uso actualizados, dos documentos nuevos; ningún archivo previo borrado. Escaneo
 limitado de patrones sensibles sin hallazgos, no garantía universal de ausencia
 de secretos. Código, ejemplos y contratos conservaron sus bytes.
 
-Quality-gate: **Aprobado para R1.1 documental**. R1.2/R1.3 no se consideran
-verificadas por aprobar esta especificación. R1 tiene una de tres entregas
-completadas; ese conteo no es una medida de capacidades de modelos ni del
-porcentaje global de funcionalidades del Toolkit.
+Quality-gate de aquella entrega: **Aprobado para R1.1 documental**. En ese cierre
+solo estaba completada una de tres entregas; R1.2/R1.3 no se dieron por verificadas
+al aprobar el documento. Ese resultado histórico se conserva, sin atribuirle
+las comprobaciones posteriores.
+
+## Cierre de R1.2 — 2026-10-09
+
+Base de consolidación: `93df8fcde4455165adcdcb6af2adf17b636fc8de`.
+El usuario autorizó conservar el recorrido como prueba de integración, registrar
+este cierre y crear el commit local de las dos rutas exactas, sin push. No se
+modificaron APIs, esquemas, dependencias, perfiles instalados, proyectos reales
+o memorias de Obsidian. Tampoco se concedió admisión de clientes nativos.
+
+El test contiene **una prueba de integración** con diez pasos y siete casos
+adversos, no diecisiete pruebas independientes. Cada ejecución crea un directorio
+temporal propio, fuente y memoria Git ficticias separadas y un home de conexión
+ficticio; no cambia el HOME del proceso ni copia autenticación.
+
+| Criterio R1.2 | Evidencia ejecutada |
+| --- | --- |
+| CA-R06 | Raíz temporal física 0700 y fuente/memoria separadas; GitHub y consulta MCP simulados; el recorrido usa solo Git local del fixture con entorno mínimo, hooks vacíos y configuración global/sistema deshabilitada |
+| CA-R07 | Preview e init, repetición idempotente, doctor/status, plan/inspect, preview/aplicación autorizada, registro y cierre componen el recorrido usando las salidas anteriores |
+| CA-R08 | Repetir init/apply/record conserva bytes, identidad y tiempos; PR abierto, checks fallidos, pin incorrecto, HEAD divergente, nota distinta, cambio ajeno y PR ya revisado bloquean sin escribir |
+| CA-R09 | Snapshots de archivos/directorios y SHA-256; fuente/home ficticios intactos; solo una nota y después el registro cambian; índice preservado por las APIs; restauración de APIs instrumentadas y cleanup por identidad |
+
+`doctor` terminó ok en la memoria limpia. `status` informó warning por tres
+conexiones pendientes en el home ficticio: es esperado, no una conexión real
+instalada. Después de aplicar y registrar, doctor señaló únicamente cambios Git
+de las dos notas. El commit de esas rutas ocurrió solo en la memoria ficticia;
+el diagnóstico posterior fue ok y el plan quedó clean con un PR revisado,
+sin duplicados. No se contactó el remoto configurado en el fixture.
+
+La instrumentación cooperativa intercepta procesos/red de Node y se restaura
+incluso ante fallo. **No es un sandbox del sistema operativo**, contención atómica
+o prueba sobre la disponibilidad, políticas, cancelación o consumo de un cliente
+real. El estado upstream del fixture es una referencia local simulada; no prueba
+estado remoto vigente.
+
+Resultados de consolidación, ejecutados en macOS con Node.js `v24.14.1`:
+
+- `node --check test/private-beta-integration.test.js`: exit 0.
+- Prueba enfocada final: **1/1**, exit 0; diez pasos y siete bloqueos comprobados,
+  sin fallos, canceladas, omitidas o todo. Duración observada: 3474.830042 ms.
+- Regresión completa del candidato final aislado: **3.280/3.280**, exit 0;
+  sin fallos, canceladas, omitidas o todo. Concurrencia 1 y duración observada
+  187289.325292 ms; no es una garantía de rendimiento.
+- Candidato: base `93df8fc` más solo el nuevo test, enlazando las dependencias
+  existentes sin reinstalarlas. La primera pasada también pasó, pero tras
+  limitar el entorno de Git se repitieron enfocada y completa con los bytes finales.
+- SHA-256 del test probado:
+  `e5daa2d3f259a63c5dfa60beda67855842836891f481f3d395f36691e8d56660`.
+  Después de la regresión solo se añadió este cierre documental.
+- El caso POSIX declara Windows no validado; no se ejecutó una instalación limpia
+  ni regresión completa en otras versiones de Node o sistemas operativos.
+
+Comparación con 237 archivos previos: 236 intactos, únicamente este documento
+actualizado y un test nuevo; ningún archivo previo borrado. Formato, enlaces y
+escaneo limitado de patrones sensibles comprobados, sin garantía universal de
+ausencia de secretos. Staging por dos rutas exactas, commit local e índice final
+vacío; sin push. La copia aislada propia se retira sin borrar dependencias originales.
+
+Quality-gate: **Aprobado para R1.2 ficticio y consolidación local**. R1 tiene dos
+de tres entregas completadas; R1.3 sigue sin ejecutar. Este conteo no representa
+un porcentaje de capacidades de modelos o del alcance global futuro del Toolkit.
+Las referencias de presentación anteriores conservan su evidencia histórica;
+su contraste con esta entrega forma parte de la puerta de publicación R1.3.
 
 ## Preguntas abiertas
 
-- Alcance exacto del lote R1.2 y necesidad de nuevas pruebas de composición.
+- Casos o plataformas adicionales de integración, si se decide ampliar cobertura;
+  no se consideran probados por este recorrido ficticio.
 - Destino/rama y estado remoto vigentes en el momento de R1.3.
 - Entornos adicionales e instalación limpia que se decidan validar después;
   no se comprometen ahora ni se afirman comprobados.
