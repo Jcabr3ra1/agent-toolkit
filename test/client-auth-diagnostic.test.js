@@ -204,16 +204,31 @@ localTest("AD N1/S3.1/S3.2/S2/C1/SC handles do not cross the diagnostic boundary
     assert.equal(r.state, "blocked-before-start"); assert.equal(calls, 0);
   }
 });
-for (const kind of ["sha", "uid", "inode", "mode", "special-mode", "size", "mtime", "ctime", "hardlink", "link-inode", "link-target", "link-mtime", "parent-inode", "parent-mode", "git", "obsidian", "excluded"])
+for (const kind of ["sha", "uid", "inode", "mode", "special-mode", "setuid-mode", "sticky-mode", "size", "mtime", "ctime", "hardlink", "link-inode", "link-target", "link-mtime", "parent-inode", "parent-mode", "git", "obsidian", "excluded"])
   localTest("AD pin/parent " + kind + " rejected before spawn", async t => {
     const { cfg, artifact, entry, parent, root } = await setup(t);
+    const specialBit = { "special-mode": 0o2000, "setuid-mode": 0o4000, "sticky-mode": 0o1000 }[kind];
+    const io = {}; let specialStats = 0, opens = 0;
     if (kind === "sha") cfg.artifact.sha256 = "f".repeat(64);
     if (kind === "uid") cfg.artifact.uid++;
     if (kind === "inode") cfg.artifact.ino++;
     if (kind === "mode") await fs.chmod(artifact, 0o700);
-    if (kind === "special-mode") {
-      await fs.chmod(artifact, 0o2500); const s = await fs.lstat(artifact);
-      cfg.artifact.mode = s.mode & 4095; cfg.artifact.ctimeMs = s.ctimeMs;
+    if (specialBit) {
+      // chmod can clear setgid when the file's group is not one of ours.
+      // Model the unsafe metadata, not an OS-dependent chmod outcome; all
+      // other pin fields remain genuine and matching. Never execute this file.
+      const actual = await fs.lstat(artifact);
+      cfg.artifact.mode = (actual.mode & 4095) | specialBit;
+      io.lstat = async (...args) => {
+        const stat = await fs.lstat(...args);
+        if (args[0] !== artifact) return stat;
+        const unsafe = Object.assign(Object.create(Object.getPrototypeOf(stat)), stat, { mode: stat.mode | specialBit });
+        for (const key of ["dev", "ino", "uid", "size", "mtimeMs", "ctimeMs"]) assert.equal(unsafe[key], cfg.artifact[key]);
+        assert.equal(unsafe.mode & 4095, cfg.artifact.mode);
+        assert.equal(unsafe.isFile(), true); assert.equal(unsafe.isSymbolicLink(), false);
+        specialStats++; return unsafe;
+      };
+      io.open = async () => { opens++; throw Error("special mode must block before open"); };
     }
     if (kind === "size") cfg.artifact.size++;
     if (kind === "mtime") cfg.artifact.mtimeMs++;
@@ -226,8 +241,11 @@ for (const kind of ["sha", "uid", "inode", "mode", "special-mode", "size", "mtim
     if (kind === "parent-mode") await fs.chmod(parent, 0o755);
     if (kind === "git" || kind === "obsidian") await fs.mkdir(path.join(root, kind === "git" ? ".git" : ".obsidian"));
     if (kind === "excluded") cfg.excludedRoots = [root];
-    reviews(cfg); let calls = 0; const r = safe(await collector(cfg, permit(cfg), { spawn() { calls++; throw Error("private"); } }).run());
+    reviews(cfg); let calls = 0; const r = safe(await collector(cfg, permit(cfg), { io, spawn() { calls++; throw Error("private"); } }).run());
     assert.equal(r.state, "blocked-before-start"); assert.equal(calls, 0); assert.deepEqual(await fs.readdir(parent), []);
+    if (specialBit) {
+      assert.ok(specialStats > 0); assert.equal(opens, 0); assert.equal(r.spawnAttempts, 0); assert.equal(r.processStarted, false);
+    }
   });
 for (const kind of ["artifact", "entry", "revoke", "cancel"]) localTest("AD post-run " + kind + " discards projection", async t => {
   const { cfg, artifact, entry } = await setup(t), p = permit(cfg), abort = new AbortController(); let opens = 0;

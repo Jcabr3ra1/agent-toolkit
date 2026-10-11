@@ -9,11 +9,11 @@ decidir qué memoria o encargo real quieres preparar.
 Abre una terminal en la raíz de **Agent-Toolkit**, donde están `package.json`,
 `bin/` y `examples/`. No ejecutes estos pasos dentro del backend de otro proyecto.
 
-Si ya tienes la biblioteca local, usa esa copia revisada. Para clonar desde
-GitHub, espera a que se publique la revisión aprobada y utiliza la URL privada
-confirmada para ti. Clonar una copia antigua no incorpora cambios pendientes
-locales. La [beta R1](agent-toolkit-private-beta.md) todavía separa documentación,
-validación integrada y publicación: esta guía no realiza la clonación ni un push.
+Si ya tienes la biblioteca local, usa esa copia revisada. La [beta R1](agent-toolkit-private-beta.md)
+ya está publicada en GitHub privado; para clonar, utiliza únicamente la URL
+privada confirmada para ti. Clonar no incorpora correcciones o documentación
+todavía pendientes de commit y publicación. Esta guía no realiza la clonación
+ni un push.
 
 ```bash
 git status --short
@@ -24,9 +24,13 @@ Un checkout limpio muestra salida vacía en el primer comando. Si hay cambios
 que no reconoces, consérvalos y solicita revisión; no los borres para seguir.
 El segundo muestra tu versión de Node.js, el programa que ejecuta la herramienta.
 
-El paquete declara Node.js 20 o superior. Las comprobaciones documentadas de esta
-entrega se hicieron en macOS con Node.js `v24.14.1` y dependencias ya instaladas;
-no certifican todas las versiones o sistemas operativos.
+El paquete declara Node.js 20 o superior. R1 se comprobó en macOS con dependencias
+existentes; [R2](agent-toolkit-clean-install.md) validó una copia nueva con
+dependencias propias en macOS/arm64, Node.js `v24.14.1` y npm `11.11.0`.
+No certifica todas las versiones o sistemas operativos, ni una máquina sin
+herramientas previas. La revisión R2 incluye una corrección de prueba y su cierre
+aprobado para consolidación local; la publicación requiere autorización aparte.
+No atribuyas esa revisión final a una copia antigua.
 
 También necesitas las dependencias de esta copia, incluido Ajv. Si faltan,
 detente y prepara la instalación local con un alcance separado; consulta la
@@ -109,7 +113,12 @@ autoriza por haber completado esta prueba.
 
 ## Estado de esta guía
 
-R1.1 documenta y comprueba ayudas y preparación ficticia existentes. No demuestra
-instalación limpia, recorrido integrado de una memoria nueva, compatibilidad
-de cuentas o publicación remota. Esas verificaciones son etapas separadas de
-[R1](agent-toolkit-private-beta.md).
+R1 cerró documentación, recorrido integrado ficticio y publicación privada.
+R2 verificó instalación de cinco paquetes propios desde la lockfile, ayudas,
+ejemplo, integración 1/1 y regresión 3.282/3.282 en el candidato corregido.
+La evidencia, los intentos anteriores y los límites están en
+[Validación desde una copia nueva](agent-toolkit-clean-install.md).
+
+Completar estos pasos no ejecuta automáticamente un equipo, no conecta clientes
+reales ni acredita suscripción, disponibilidad o políticas de consumo. El cierre
+de R2 no publica por sí solo los archivos pendientes ni reemplaza su revisión.
