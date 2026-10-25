@@ -193,6 +193,83 @@ test("Claude preview is read-only, uses the selected model and effort, and ignor
   assert.equal(invocation.env.ANTHROPIC_API_KEY, undefined);
 });
 
+test("Claude failures expose a safe category and exit code without returning stderr", async () => {
+  const privateDiagnostic = "Not logged in; private-token-marker";
+  const runner = createClaudeCodeRunner({
+    claudePath: process.execPath,
+    env: { HOME: home, PATH: process.env.PATH ?? "" },
+    home,
+    runSync: fakeSyncForClaude,
+    spawn: () => {
+      const child = new EventEmitter();
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      setImmediate(() => {
+        child.emit("spawn");
+        child.stderr.end(privateDiagnostic);
+        child.stdout.end();
+        setImmediate(() => child.emit("close", 23, null));
+      });
+      return child;
+    }
+  });
+  const preview = await runner.preview({ projectRoot, task, plan: JSON.stringify(plan), model: "sonnet", effort: "medium" });
+  await assert.rejects(runner.run(preview), error => {
+    assert.match(error.message, /código de salida 23/u);
+    assert.match(error.message, /posible problema de inicio de sesión/u);
+    assert.doesNotMatch(error.message, /private-token-marker/u);
+    assert.deepEqual(error.diagnostic, {
+      kind: "process-exit",
+      exitCode: 23,
+      signal: null,
+      category: "authentication",
+      resultSubtype: null
+    });
+    return true;
+  });
+  await runner.cleanup(preview);
+});
+
+test("Claude result failures expose only a known subtype and never include the result text", async () => {
+  const privateResult = "private-result-marker";
+  const runner = createClaudeCodeRunner({
+    claudePath: process.execPath,
+    env: { HOME: home, PATH: process.env.PATH ?? "" },
+    home,
+    runSync: fakeSyncForClaude,
+    spawn: () => {
+      const child = new EventEmitter();
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      setImmediate(() => {
+        child.emit("spawn");
+        child.stdout.end(JSON.stringify({
+          type: "result", subtype: "error_max_turns", is_error: true, result: privateResult
+        }) + "\n");
+        child.stderr.end();
+        setImmediate(() => child.emit("close", 0, null));
+      });
+      return child;
+    }
+  });
+  const preview = await runner.preview({ projectRoot, task, plan: JSON.stringify(plan), model: "sonnet", effort: "medium" });
+  await assert.rejects(runner.run(preview), error => {
+    assert.match(error.message, /límite de turnos/u);
+    assert.doesNotMatch(error.message, /private-result-marker/u);
+    assert.deepEqual(error.diagnostic, {
+      kind: "result-error",
+      exitCode: null,
+      signal: null,
+      category: "result-error",
+      resultSubtype: "error_max_turns"
+    });
+    return true;
+  });
+  await runner.cleanup(preview);
+});
+
 test("Claude preview remains blocked when the CLI is not logged into Claude.ai", async () => {
   const runner = createClaudeCodeRunner({
     claudePath: process.execPath,

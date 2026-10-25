@@ -13,8 +13,61 @@ const MAX_STDERR_BYTES = 8_192;
 const RUN_TIMEOUT_MS = 180_000;
 const REQUIRED_CLAUDE_VERSION = [2, 1, 248];
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
+const CLAUDE_ERROR_SUBTYPES = new Map([
+  ["error_during_execution", "fallo durante la ejecución"],
+  ["error_max_turns", "límite de turnos"],
+  ["error_max_budget_usd", "límite de presupuesto"],
+  ["error_max_structured_output_retries", "límite de intentos de salida estructurada"],
+  ["error_max_thinking_tokens", "límite de tokens de razonamiento"]
+]);
 const CONTROL_PATTERN = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
 const PATH_SEGMENT_PATTERN = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
+
+function classifyClaudeStderr(value) {
+  const checks = [
+    ["authentication", /not logged in|not authenticated|authentication[_ ]error|please log in|run \/login|sign in to continue/u],
+    ["cli-arguments", /unknown (?:command[- ]line )?(?:option|argument)|unrecognized (?:command[- ]line )?(?:option|argument)|invalid (?:command[- ]line )?(?:option|argument)/u],
+    ["model", /model[_ ]not[_ ]found|unknown model|model .{0,40}not found|model .{0,40}not supported/u],
+    ["usage-limit", /rate limit|too many requests|usage limit|quota exceeded|overloaded[_ ]error/u],
+    ["network", /network error|connection (?:refused|reset|timed out)|timed out|timeout|econn(?:refused|reset|timedout)|fetch failed/u],
+    ["permissions", /permission denied|not permitted|access denied/u]
+  ];
+  const text = value.toLowerCase();
+  return checks.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
+}
+
+function createClaudeProcessFailure({ exitCode = null, signal = null, stderr = "", resultSubtype = null, resultIsError = false } = {}) {
+  const subtypeLabel = CLAUDE_ERROR_SUBTYPES.get(resultSubtype) ?? null;
+  const stderrCategory = classifyClaudeStderr(stderr);
+  const safeExitCode = Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255 ? exitCode : null;
+  const safeSignal = typeof signal === "string" && /^SIG[A-Z0-9]{1,16}$/u.test(signal) ? signal : null;
+  const category = subtypeLabel ? "result-error" : stderrCategory;
+  const termination = safeSignal ? "señal " + safeSignal : "código de salida " + (safeExitCode ?? "desconocido");
+  const clues = [];
+  if (subtypeLabel) clues.push("Claude indicó un " + subtypeLabel);
+  else if (resultIsError) clues.push("Claude marcó el resultado como error");
+  if (!subtypeLabel && stderrCategory) {
+    const labels = {
+      authentication: "un posible problema de inicio de sesión",
+      "cli-arguments": "una posible incompatibilidad en los argumentos del CLI",
+      model: "un posible problema con el modelo solicitado",
+      "usage-limit": "un posible límite de uso o disponibilidad del servicio",
+      network: "un posible problema de conexión",
+      permissions: "un posible problema de permisos"
+    };
+    clues.push("el diagnóstico local sugiere " + labels[stderrCategory]);
+  }
+  const message = "Claude Code no terminó correctamente (" + termination + (clues.length ? "; " + clues.join("; ") : "") + "); no se guardó una entrega.";
+  const error = new Error(message);
+  error.diagnostic = {
+    kind: subtypeLabel || resultIsError ? "result-error" : "process-exit",
+    exitCode: safeExitCode,
+    signal: safeSignal,
+    category,
+    resultSubtype: subtypeLabel ? resultSubtype : null
+  };
+  return error;
+}
 
 function reject(code) {
   throw Object.assign(new Error("La invocación local de Claude Code no se pudo preparar."), { code });
@@ -301,10 +354,15 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
     let failure = null;
     let outputBytes = 0;
     let errorBytes = 0;
+    let diagnosticBytes = 0;
+    const diagnosticChunks = [];
     let lineBuffer = "";
     let finalAnswer = null;
+    let resultSubtype = null;
+    let resultIsError = false;
     let streamInvalid = false;
     const decoder = new StringDecoder("utf8");
+    const diagnosticText = () => Buffer.concat(diagnosticChunks).toString("utf8");
     let timeout;
     let killTimeout;
     const fail = error => {
@@ -345,9 +403,15 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
       }
       for (const action of toolActivity(event, cwd, projectWrite)) report(action);
       if (event?.type === "result") {
+        resultSubtype = typeof event.subtype === "string" ? event.subtype : null;
+        resultIsError = event.is_error === true;
         if (event.is_error === true || event.subtype !== "success" || typeof event.result !== "string") {
           streamInvalid = true;
-          fail(new Error("Claude Code no terminó correctamente; no se guardó una entrega."));
+          fail(createClaudeProcessFailure({
+            stderr: diagnosticText(),
+            resultSubtype,
+            resultIsError
+          }));
           return;
         }
         finalAnswer = event.result;
@@ -372,6 +436,11 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
     });
     child.stderr.on("data", chunk => {
       errorBytes += chunk.length;
+      if (diagnosticBytes < MAX_STDERR_BYTES) {
+        const captured = chunk.subarray(0, MAX_STDERR_BYTES - diagnosticBytes);
+        diagnosticChunks.push(captured);
+        diagnosticBytes += captured.length;
+      }
       if (errorBytes > MAX_STDERR_BYTES) fail(new Error("La salida de diagnóstico de Claude Code superó el límite permitido."));
     });
     child.stdin.on("error", () => fail(new Error("No se pudo entregar el encargo a Claude Code.")));
@@ -384,7 +453,16 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
       clearTimeout(killTimeout);
       signal?.removeEventListener("abort", onAbort);
       if (failure) { rejectPromise(failure); return; }
-      if (code !== 0 || closeSignal) { rejectPromise(new Error("Claude Code no terminó correctamente; no se guardó una entrega.")); return; }
+      if (code !== 0 || closeSignal) {
+        rejectPromise(createClaudeProcessFailure({
+          exitCode: code,
+          signal: closeSignal,
+          stderr: diagnosticText(),
+          resultSubtype,
+          resultIsError
+        }));
+        return;
+      }
       lineBuffer += decoder.end();
       if (lineBuffer.trim()) consumeLine(lineBuffer.trim());
       const answer = finalAnswer?.trim();

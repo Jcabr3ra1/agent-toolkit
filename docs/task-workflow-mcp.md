@@ -115,6 +115,15 @@ acciones aparezcan en el historial del chat. Si Codex no continúa consultando
 por sí mismo, pídele: “Sigue consultando `wait_for_task_activity` para esta
 ejecución y muéstrame cada acción hasta que termine”.
 
+Si Claude termina con error, la actividad puede devolver el código de salida
+del proceso y, cuando puede inferirse de forma segura, una categoría probable
+como autenticación, argumentos del CLI, modelo, conexión o límites de uso.
+También reconoce algunos subtipos de error del flujo de Claude. Esas categorías
+son indicios, no una confirmación de la causa raíz. El texto bruto de stderr y
+la respuesta fallida no se guardan ni se muestran. Una ejecución fallida no se
+repite automáticamente; revisa el diagnóstico y prepara una vista previa nueva
+antes de intentar otra llamada.
+
 ## Cuentas, llamadas y datos locales
 
 - Cada vista previa se usa una sola vez y vence después de 20 minutos.
