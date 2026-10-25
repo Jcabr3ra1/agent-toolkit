@@ -94,10 +94,12 @@ payload, rutas, valores desconocidos o contenido sensible en stderr.
 
 ## TP-04. Entradas y procedencia
 
-El esquema nuevo tiene versión propia `1.0.0`, independiente de los documentos
-del selector. La primera CLI acepta request/catalog/policy **todos v2.0.0** para
-ofrecer familia/versiones/esfuerzo. Rechazar mezcla o v1 en esta CLI no elimina
-el soporte v1 de la biblioteca existente; no migrar documentos silenciosamente.
+El esquema de task conserva `1.0.0` para los encargos existentes; el propósito
+opcional `external-verifier` requiere task `1.1.0`, independiente de los
+documentos del selector. La CLI acepta request/catalog/policy **todos v2.0.0**
+para ofrecer familia/versiones/esfuerzo. Rechazar mezcla o v1 en esta CLI no
+elimina el soporte v1 de la biblioteca existente; no migrar documentos
+silenciosamente.
 
 | Entrada | Datos requeridos y significado |
 | --- | --- |
@@ -107,6 +109,12 @@ el soporte v1 de la biblioteca existente; no migrar documentos silenciosamente.
 | policy | Política v2 coherente con el catálogo; ruta, familias/esfuerzo y límites previamente definidos |
 
 Identidad de task: projectId/taskId/revision/role/mode, iguales a request.
+El formato task 1.1.0 admite también `identity.purpose: "external-verifier"`;
+la omisión conserva el flujo anterior. Ese propósito exige `role: reviewer`,
+`mode: autonomous`, las acciones exactas `read` y `verify`, rutas de operación
+`inspect`, prohibiciones `apply`/`propose` y ninguna comprobación ejecutable.
+El rol, modo y categoría de revisión se declaran en request y se contrastan con
+el catálogo/política; prepare no los infiere.
 Título hasta 160 caracteres; objetivo hasta 2.000. Tutor requiere número y
 descripción de un único paso; autónomo declara una entrega acotada, no un loop.
 Ambos incluyen criterios concretos y referencias que el receptor podrá revisar.
@@ -187,6 +195,7 @@ inventados como perfiles reales ni importar inventarios privados a ejemplos.
 | Autónomo, proponente | Una propuesta de cambios delimitada; escritor futuro identificado | Aplicar los cambios o seleccionar al ejecutor con la decisión del proponente |
 | Autónomo, ejecutor | Encargo draft vinculado a propuesta previa por revisión/huella | Certificar la propuesta, validar permiso humano o ejecutar automáticamente |
 | Revisor/coordinador | Revisión/preparación acotada, respetando modo y acciones declaradas | Otorgar permisos a otro agente o convertir declaraciones en pruebas |
+| Verificador externo | Revisión con rol reviewer, acciones read/verify y solo archivos inspect | Editar, proponer/aplicar cambios, ejecutar checks o ampliar el alcance |
 
 Tutor con apply, escritor distinto de user, ejecutor funcional o solicitud de
 equipo que escriba: blocked/invalid según el contrato. Autónomo incompatible
@@ -201,6 +210,15 @@ base, contexto, autorización declarada, selección, historial, criterios y entr
 No modificar las plantillas originales ni inventar decisionFileSha256: no hay
 archivo de decisión guardado. La comparación de bytes del archivo generado
 corresponde a quien lo guarde posteriormente con autorización aparte.
+
+Para `external-verifier`, prepare reemplaza las instrucciones libres de entrega
+por un pedido fijo de hallazgos sin cambios ni comandos. Esto sigue siendo un
+contrato declarado: **prepare no impone permisos al cliente receptor**. El
+encargo solo debe ejecutarse en un entorno que aplique técnicamente acceso de
+solo lectura; esa invocación pertenece a una etapa posterior del adaptador. Cada
+referencia a instrucciones, contexto, entregas previas o propuestas también
+debe apuntar a una ruta relativa incluida en la lista de archivos inspect; las
+referencias externas bloquean la preparación de este propósito.
 
 Contenido del encargo es dato no confiable: no podrá redefinir las guardas
 del preparador ni pasar por instrucciones del sistema. Escapar delimitadores,

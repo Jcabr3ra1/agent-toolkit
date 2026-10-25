@@ -3,23 +3,27 @@ import { fileURLToPath } from "node:url";
 import { createTaskPreparer, TASK_LIMITS } from "./task-prepare.js";
 import { readTaskInputs, parseTaskDocument, TaskInputError } from "./task-prepare-files.js";
 import { runVerifyCli } from "./task-verify-cli.js";
+import { runExternalVerifierCli } from "./task-external-verifier.js";
 
-const HELP = `agent-task — preparación manual, sin ejecución de IA
+const HELP = `agent-task — borradores manuales y verificación local
 
 Uso local:
   node bin/agent-task.js prepare --task <archivo> --request <archivo> --catalog <archivo> --policy <archivo> [--json | --show-brief]
   node bin/agent-task.js verify --contract <json> --expect <sha256> --source <raíz> --handoff <raíz> --phase <before|after> [--json]
+  node bin/agent-task.js external-verifier --help
+  node bin/agent-task.js external-verifier preview --task <json> --request <json> --catalog <json> --policy <json> --source <raíz> --handoff <raíz-0700> --delivery <ruta>
   node bin/agent-task.js --help
 
 Sin flags de salida: resumen sin cuerpo del encargo ni rutas privadas.
 --json: ese mismo resumen estructurado.
 --show-brief: muestra el borrador privado completo en el terminal; no lo guarda ni envía.
-Solo documentos v2 del selector; no interpreta la tarea usando IA ni consulta cuentas.
+prepare solo interpreta documentos locales; no usa IA ni consulta cuentas.
 Preparar no autoriza, verifica la base ni cambia el modelo del cliente.
 No comprueba actualidad frente al reloj; acceso/disponibilidad son datos declarados.
 El usuario revisa el borrador y elige manualmente el modelo antes de entregarlo.
 Exit: 0 borrador/ayuda; 1 faltan datos/bloqueo; 2 entrada/lectura/salida inválida.
 verify compara huellas de archivos listados; «verify --help» detalla estados y salida. matched no aprueba nada.
+Modo sin ejecución de IA por omisión: external-verifier preview no llama al modelo y run exige confirmación aparte.
 `;
 const NAMES = ["task", "request", "catalog", "policy"];
 const schemaPaths = ["agent-task-prepare", "agent-model-selection", "agent-model-preference"].map(n => fileURLToPath(new URL(`../schemas/${n}.schema.json`, import.meta.url)));
@@ -40,7 +44,7 @@ function options(argv) {
 }
 function outputSummary(s, json) {
   if (json) return JSON.stringify(s, null, 2) + "\n";
-  return `agent-task prepare: ${s.state}\n` + (s.recommended ?
+  return `agent-task prepare: ${s.state}\n` + (s.identity?.purpose === "external-verifier" ? "Propósito: verificador externo (solo lectura declarada).\n" : "") + (s.recommended ?
     `Modelo solicitado: ${s.recommended.requestedModel}; esfuerzo: ${s.recommended.effort ?? "null (sin ajuste explícito)"}\n` : "Sin recomendación utilizable.\n") +
     `Motivos: ${s.reasons.join(", ")}\n` + (s.missing.length ? `Datos pendientes: ${s.missing.join(", ")}\n` : "") +
     "No ejecutado, enviado ni escrito. Permiso, base y modelo real no verificados.\n" +
@@ -49,6 +53,7 @@ function outputSummary(s, json) {
 /** IO callbacks/dependencies are trusted hosts, not fields in input JSON. */
 export async function runTaskCli(argv, io, dependencies = {}) {
   if (Array.isArray(argv) && argv[0] === "verify") return runVerifyCli(argv.slice(1), io, dependencies);
+  if (Array.isArray(argv) && argv[0] === "external-verifier") return runExternalVerifierCli(argv.slice(1), io, dependencies);
   let opts;
   const fail = async code => { try { await io.err(`agent-task: ${code}\n`); } catch {} return 2; };
   try { opts = options(argv); } catch { return fail("task-invalid-option"); }

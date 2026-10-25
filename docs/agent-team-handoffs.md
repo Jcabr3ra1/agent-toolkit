@@ -34,6 +34,9 @@ etapa, condicionada a las cuentas, versiones y permisos reales.
 - [agent-task prepare](agent-task-prepare.md) genera un borrador por rol con
   datos explícitos; [agent-task verify](agent-task-verify.md) compara archivos
   listados. Ninguno envía encargos, acredita permiso ni arranca clientes de IA.
+- El propósito `external-verifier` de `prepare` limita el contrato a lectura y
+  verificación de rutas enumeradas. No impone un sandbox ni lanza el cliente;
+  debe ejecutarse solo en un entorno técnicamente de solo lectura.
 - Las conexiones de memoria no constituyen un canal de mensajes entre clientes.
 - Se probó una tarea documental en tutor: Claude propuso, el usuario escribió y
   Codex revisó el archivo real. Ese piloto histórico no probó aplicación

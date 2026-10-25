@@ -13,6 +13,7 @@ import { createTaskPreparer, taskHash, TASK_LIMITS } from "../src/task-prepare.j
 
 const read = p => JSON.parse(fsSync.readFileSync(new URL(p, import.meta.url), "utf8"));
 const BASE = { task: read("../examples/task-prepare/task.example.json"), ...Object.fromEntries(["request", "catalog", "policy"].map(n => [n, read(`../examples/model-selection/${n}.preference.example.json`)])) };
+const EXTERNAL_VERIFIER = Object.fromEntries(["task", "request", "catalog", "policy"].map(n => [n, read(`../examples/external-verifier/${n}.example.json`)]));
 const schemas = ["agent-task-prepare", "agent-model-selection", "agent-model-preference"].map(n => read(`../schemas/${n}.schema.json`));
 const core = createTaskPreparer(...schemas), bin = fileURLToPath(new URL("../bin/agent-task.js", import.meta.url));
 const names = ["task", "request", "catalog", "policy"], localTest = (name, fn) => test(name, { skip: !["darwin", "linux"].includes(process.platform) }, fn);
@@ -36,6 +37,20 @@ localTest("TP CLI summary/json/show-brief use the same selection; no writes or p
     if (flags.includes("--json")) { const r = JSON.parse(c.out[0]); assert.equal(r.state, "prepared-draft"); assert.equal(r.executed, false); assert.equal(r.permissionVerified, false); }
   }
   assert.deepEqual(await Promise.all(names.map(n => fs.readFile(f.paths[n]))), before); assert.deepEqual((await fs.readdir(f.root)).sort(), names.map(n => n + ".json").sort());
+});
+localTest("TP CLI labels external verifier in summary and shows the read-only brief only on request", async t => {
+  const f = await fixture(t);
+  for (const n of names) { f.data[n] = structuredClone(EXTERNAL_VERIFIER[n]); await f.save(n); }
+  const summary = capture();
+  assert.equal(await runTaskCli([...f.argv, "--json"], summary.io), 0);
+  assert.equal(JSON.parse(summary.out[0]).identity.purpose, "external-verifier");
+  const summaryText = capture();
+  assert.equal(await runTaskCli(f.argv, summaryText.io), 0);
+  assert.match(summaryText.out[0], /Propósito: verificador externo \(solo lectura declarada\)/);
+  const brief = capture();
+  assert.equal(await runTaskCli([...f.argv, "--show-brief"], brief.io), 0);
+  assert.match(brief.out[0], /Verificador externo/);
+  assert.match(brief.out[0], /Si el cliente no puede imponer acceso de solo lectura, no ejecutes este encargo/);
 });
 for (const args of [[], ["--help"], ["-h"], ["prepare", "--help"], ["prepare", "-h"]]) test("TP help without IO " + JSON.stringify(args), async () => {
   let calls = 0; const c = capture(), code = await runTaskCli(args, c.io, { readPackagedSchema() { calls++; throw Error("private"); }, fileIo: { lstat() { calls++; throw Error("private"); } } });

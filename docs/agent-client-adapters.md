@@ -8,15 +8,31 @@ no hay runner, clientes activados ni ejecuciones de IA autorizadas por este
 documento. Profundidad: rigurosa, por las fronteras de procesos,
 autenticación, contexto privado y consumo de una suscripción.
 
+### Estado vigente — 2026-10-25
+
+Se añadió una ruta acotada para `agent-task external-verifier`: solo Codex CLI,
+solo tareas con `purpose: external-verifier` y destino `openai/codex-cli`. La
+vista previa local no usa el modelo; la invocación necesita un segundo comando
+con código y huella de un solo uso después de que la persona revise cuenta,
+modelo, archivos y `argv`. Esta excepción no implementa el runner general de
+esta especificación, no habilita Claude Code/Gemini, no admite tareas de edición
+y no automatiza consentimiento. La verificación real y cualquier consumo siguen
+requiriendo autorización concreta del usuario.
+
+La ruta desactiva capacidades locales conocidas y usa el sandbox `read-only`;
+no acredita identidad exacta de cuenta, plan, cuota, número de inferencias ni
+ausencia de efectos internos del cliente. Los detalles y límites están en la
+[guía del verificador externo](agent-task-external-verifier.md).
+
 El objetivo es convertir una recomendación admisible del selector en un plan
 de participación de un cliente concreto, conservando permisos, límites y
 evidencia. Elegir modelo, preparar ejecución, ejecutar, revisar una respuesta
 y aplicar código son acciones distintas: ninguna autoriza automáticamente
 la siguiente.
 
-La primera implementación contiene únicamente un contrato y un
-planificador puro con pruebas offline. Lanzar clientes será otra etapa,
-con aprobación, evaluación y pruebas propias.
+La primera entrega A/B contenía únicamente un contrato y un planificador puro
+con pruebas offline. El lanzamiento acotado descrito arriba se añadió después y
+tiene autorización, pruebas y límites separados.
 
 La etapa B fue autorizada el 2026-10-03 con «listo dale» y añade
 [parsers offline](agent-client-output.md). No cambia la autorización de procesos
@@ -45,16 +61,19 @@ cambiar el comportamiento existente del selector para versiones anteriores.
 
 ## Alcance y exclusiones
 
-La primera versión de los adaptadores se limitará a respuestas textuales de
-tutor, proponente y revisor. El coordinador conserva la decisión y revisión.
-El usuario sigue siendo el escritor en modo tutor. Una propuesta en modo
-autónomo tampoco equivale a autorizar aplicación de archivos.
+El alcance general previsto para adaptadores se limita a respuestas textuales
+de tutor, proponente y revisor. La excepción implementada es el verificador
+externo de Codex descrito al inicio: no amplía los roles del runner general.
+El coordinador conserva la decisión y revisión. El usuario sigue siendo el
+escritor en modo tutor. Una propuesta en modo autónomo tampoco equivale a
+autorizar aplicación de archivos.
 
-Quedan fuera de alcance: edición automática de proyectos, ejecutor de código,
-Git, PR, despliegues, mantenimiento de Obsidian, instalaciones, actualización
-de clientes, configuración global, cambio de plan, login, uso de API keys,
-créditos adicionales y publicación de encargos privados. No se construye
-todavía una interfaz CLI ni un servicio de ejecución permanente.
+Quedan fuera de alcance del runner general: edición automática de proyectos,
+ejecutor de código, Git, PR, despliegues, mantenimiento de Obsidian,
+instalaciones, actualización de clientes, configuración global, cambio de plan,
+login, uso de API keys, créditos adicionales y publicación de encargos privados.
+El adaptador limitado del verificador usa la CLI ya instalada; no crea un
+servicio permanente ni admite otros roles.
 
 La arquitectura es reutilizable: los documentos públicos del Toolkit no
 incluyen rutas personales, cuentas, modelos elegidos para un proyecto ni
@@ -174,10 +193,13 @@ y límites, sin prometer aislamiento total a partir de un único flag.
 
 ## RF-05. Control de herramientas y contexto
 
-Para el alcance textual, antes de ejecutar deben estar comprobados controles
+Para cualquier runner general, antes de ejecutar deben estar comprobados controles
 que impidan herramientas, subagentes, conexiones MCP, hooks y personalizaciones
 no autorizadas. Una instrucción dentro del prompt no es un control de seguridad.
-El sandbox de solo lectura tampoco equivale a ausencia de lecturas o de red.
+El adaptador externo aplica una lista explícita de desactivaciones para las
+capacidades locales conocidas de Codex y omite su configuración de usuario; si
+no puede reconocerlas se detiene. El sandbox de solo lectura tampoco equivale a
+ausencia de lecturas o de red.
 
 No basta con bloquear herramientas después de ver un evento: una inicialización
 puede haber producido efectos antes. Si los controles preventivos no están
@@ -579,3 +601,9 @@ no revalida el comportamiento de versiones instaladas de proveedores.
 Siguiente paso: revisar por separado la etapa de control de ejecución offline,
 sin dar por admitidos clientes nativos. Publicación y cualquier llamada real
 requieren su propio alcance y autorización, no se infieren del commit local.
+
+La actualización del 2026-10-25 incorpora únicamente el adaptador de
+`external-verifier` definido al inicio de este documento. No cambia las
+conclusiones históricas de A/B ni da por probada una llamada real. La primera
+demostración con una cuenta requiere que la persona revise una vista previa y
+confirme el comando de esa tarea concreta.
