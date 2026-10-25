@@ -180,3 +180,33 @@ test("two stdio MCP processes exchange visible-session handoffs both ways withou
   await assert.rejects(fs.access(called));
   assert.deepEqual(diagnostics, []);
 });
+
+test("automatic collaborations need one confirmation and the inbox finds requests without a taskId", async () => {
+  const f = await harness();
+  const auto = { ...input, projectRoot: f.projectRoot, title: "Revisión automática", autoReviews: 2 };
+  const blocked = decode(await f.call("start_collaboration", auto));
+  assert.deepEqual({ state: blocked.state, created: blocked.created }, { state: "blocked", created: false });
+  let shown;
+  const declined = decode(await f.call("start_collaboration", auto, { mcpReq: { elicitInput: async request => {
+    shown = request.message;
+    return { action: "decline" };
+  } } }));
+  assert.equal(declined.created, false);
+  assert.match(shown, /claude envíe a codex hasta 2 encargos/u);
+  assert.deepEqual((await f.store.listCollaborations({ projectRoot: f.projectRoot })).tasks.map(task => task.taskId), [f.task.id]);
+  const task = decode(await f.call("start_collaboration", auto, f.approveContext));
+  assert.equal(task.autoApprove.maxReviews, 2);
+  const bound = { taskId: task.id, projectRoot: f.projectRoot };
+  const request = { ...bound, from: "claude", to: "codex", message: "Revisa answer.", paths: ["app.js"] };
+  assert.equal((await f.call("request_peer_review", { ...request, taskId: f.task.id })).isError, true);
+  const idle = decode(await f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", waitMs: 0 }));
+  assert.deepEqual({ review: idle.review, timedOut: idle.timedOut }, { review: null, timedOut: true });
+  const waiting = f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", waitMs: 2_000 });
+  const sent = decode(await f.call("request_peer_review", request));
+  assert.deepEqual({ sent: sent.sent, automatic: sent.automatic, startsModel: sent.startsModel }, { sent: true, automatic: true, startsModel: false });
+  const received = decode(await waiting);
+  assert.equal(received.taskId, task.id);
+  assert.equal(received.review.id, sent.review.id);
+  assert.equal((await f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", reviewId: sent.review.id })).isError, true);
+  assert.equal((await f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", waitMs: 60_001 }).catch(() => ({ isError: true }))).isError, true);
+});

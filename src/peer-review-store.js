@@ -5,7 +5,7 @@ import path from "node:path";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 export const PEER_LIMITS = Object.freeze({ contextBytes: 8_000, reportBytes: 16_000, promptBytes: 32_000,
-  paths: 64, fileBytes: 2_000_000, snapshotBytes: 8_000_000, reviews: 16, history: 16, recordBytes: 1_000_000 });
+  paths: 64, fileBytes: 2_000_000, snapshotBytes: 8_000_000, reviews: 16, history: 16, recordBytes: 1_000_000, autoReviews: 8 });
 const AGENTS = new Set(["claude", "codex"]);
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
@@ -23,6 +23,7 @@ const MESSAGES = {
   active: "Ya hay una revisión pendiente o en curso; consúltala o cancela ese encargo.",
   limit: "La colaboración alcanzó su límite de revisiones; crea una tarea nueva.",
   claim: "El encargo no está disponible para esa sesión o el comprobante no coincide.",
+  auto: "Esta colaboración no admite un envío automático de ese agente o agotó su cupo; usa preview_peer_review y la aprobación del usuario.",
   files: "No se pudo obtener una huella estable de los archivos indicados. Usa archivos regulares dentro del proyecto."
 };
 
@@ -109,6 +110,11 @@ async function snapshot(binding, paths) {
   } catch (error) { if (error instanceof PeerReviewError) throw error; fail("files"); }
 }
 
+function validAutoApprove(value) {
+  return Boolean(value) && AGENTS.has(value.from) && Number.isInteger(value.maxReviews) &&
+    value.maxReviews >= 1 && value.maxReviews <= PEER_LIMITS.autoReviews;
+}
+
 function publicTask(task) {
   const copy = structuredClone(task);
   for (const request of copy.reviews) delete request.claimHash;
@@ -166,7 +172,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
       if (record.schemaVersion !== 1 || record.kind !== "peer-review" || record.id !== id || !record.project?.root ||
           !Number.isInteger(record.revision) || record.revision < 1 || !record.context ||
           !["open", "closed"].includes(record.state) || !Array.isArray(record.history) || record.history.length > PEER_LIMITS.history ||
-          !Array.isArray(record.reviews) || record.reviews.length > PEER_LIMITS.reviews) fail("storage");
+          !Array.isArray(record.reviews) || record.reviews.length > PEER_LIMITS.reviews ||
+          (record.autoApprove !== undefined && !validAutoApprove(record.autoApprove))) fail("storage");
       return record;
     } catch (error) {
       if (error instanceof PeerReviewError) throw error;
@@ -227,6 +234,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     if (!text(input.title, 180) || !text(input.project, 240) || !text(input.objective, 4_000) ||
         !text(input.scope ?? "", 4_000, false) || !text(input.acceptance ?? "", 4_000, false) ||
         !text(input.context ?? "", PEER_LIMITS.contextBytes, false) || !AGENTS.has(input.primaryAgent)) fail("input");
+    const autoReviews = input.autoReviews ?? 0;
+    if (!Number.isInteger(autoReviews) || autoReviews < 0 || autoReviews > PEER_LIMITS.autoReviews) fail("input");
     const binding = await project(input.projectRoot);
     const at = stamp();
     const context = { author: input.primaryAgent, content: input.context ?? "", at };
@@ -234,6 +243,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
       project: { name: input.project.trim(), ...binding }, title: input.title.trim(), objective: input.objective.trim(),
       scope: input.scope ?? "", acceptance: input.acceptance ?? "", primaryAgent: input.primaryAgent,
       state: "open", revision: 1, context, history: [{ revision: 1, ...context }], reviews: [], createdAt: at, updatedAt: at };
+    // Only the primary agent may send without per-request approval, so the reviewer cannot bounce work back unattended.
+    if (autoReviews) task.autoApprove = { from: input.primaryAgent, maxReviews: autoReviews, approvedAt: at };
     await write(await storage(), task);
     return publicTask(task);
   }
@@ -296,9 +307,11 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
       limits: { readOnlyRequested: true, enforcedSandbox: false, startsModel: false, checksRequested: false } };
   }
 
-  async function dispatchReview(prepared, { previewId }) {
+  async function dispatchReview(prepared, { previewId, automatic = false }) {
     return transaction(prepared.taskId, prepared.projectRoot, async task => {
       requireOpen(task);
+      if (automatic && (task.autoApprove?.from !== prepared.from ||
+          task.reviews.filter(review => review.approval.automatic).length >= task.autoApprove.maxReviews)) fail("auto");
       if (task.revision !== prepared.contextRevision) fail("revision");
       if (task.reviews.some(review => ACTIVE.has(review.state))) fail("active");
       if (task.reviews.length >= PEER_LIMITS.reviews) fail("limit");
@@ -308,10 +321,15 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
       if (hash(prompt) !== prepared.promptSha256) fail("revision");
       const review = { id: randomUUID(), from: prepared.from, to: prepared.to, state: "pending", message: prepared.message,
         contextRevision: task.revision, snapshot: current, prompt, promptSha256: prepared.promptSha256,
-        approval: { previewId, approvedAt: stamp() }, review: null, createdAt: stamp() };
+        approval: automatic ? { automatic: true, approvedAt: stamp() } : { previewId, approvedAt: stamp() },
+        review: null, createdAt: stamp() };
       task.reviews.push(review);
       return structuredClone(review);
     });
+  }
+
+  async function requestReview(input) {
+    return dispatchReview(await prepareReview(input), { automatic: true });
   }
 
   async function claimReview({ taskId, projectRoot, reviewId, agent }) {
@@ -372,5 +390,5 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
   }
 
   return Object.freeze({ startCollaboration, getCollaboration, listCollaborations, publishContext, prepareReview,
-    dispatchReview, claimReview, submitReview, cancelReview, closeCollaboration });
+    dispatchReview, requestReview, claimReview, submitReview, cancelReview, closeCollaboration });
 }

@@ -236,3 +236,31 @@ test("the total snapshot and review count stay bounded", async () => {
   }
   await assert.rejects(f.prepare(), { code: "peer-limit" });
 });
+
+test("automatic requests are limited to the primary agent and the confirmed quota", async () => {
+  const f = await fixture();
+  const input = { ...f.bound, from: "claude", to: "codex", message: "Revisa el contrato.", paths: ["src/app.js"] };
+  await assert.rejects(f.store.requestReview(input), { code: "peer-auto" });
+  await assert.rejects(f.store.startCollaboration({ projectRoot: f.projectRoot, project: "Auto", title: "Auto",
+    objective: "Revisar", primaryAgent: "claude", autoReviews: PEER_LIMITS.autoReviews + 1 }), { code: "peer-input" });
+  const task = await f.store.startCollaboration({ projectRoot: f.projectRoot, project: "Auto", title: "Auto",
+    objective: "Revisar sin aprobar cada encargo", primaryAgent: "claude", autoReviews: 2 });
+  assert.deepEqual({ from: task.autoApprove.from, maxReviews: task.autoApprove.maxReviews }, { from: "claude", maxReviews: 2 });
+  const bound = { taskId: task.id, projectRoot: f.projectRoot };
+  const auto = { ...input, ...bound };
+  const first = await f.store.requestReview(auto);
+  assert.equal(first.state, "pending");
+  assert.equal(first.approval.automatic, true);
+  assert.equal(first.approval.previewId, undefined);
+  await assert.rejects(f.store.requestReview(auto), { code: "peer-active" });
+  const claim = await f.store.claimReview({ ...bound, reviewId: first.id, agent: "codex" });
+  await f.store.submitReview({ ...bound, reviewId: first.id, agent: "codex", claimToken: claim.claimToken, content: "Sin hallazgos." });
+  await assert.rejects(f.store.requestReview({ ...auto, from: "codex", to: "claude" }), { code: "peer-auto" });
+  const second = await f.store.requestReview(auto);
+  await f.store.cancelReview({ ...bound, reviewId: second.id });
+  await assert.rejects(f.store.requestReview(auto), { code: "peer-auto" });
+  const manual = await f.store.dispatchReview(await f.store.prepareReview(auto), { previewId: "a".repeat(32) });
+  assert.equal(manual.approval.automatic, undefined);
+  const restarted = createPeerReviewStore({ root: f.storage });
+  assert.equal((await restarted.getCollaboration(bound)).autoApprove.maxReviews, 2);
+});
