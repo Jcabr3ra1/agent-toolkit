@@ -9,7 +9,7 @@ espera la confirmación del usuario antes de llamar al cliente.
 
 - Node.js 20 o posterior.
 - Codex CLI con sesión de ChatGPT disponible.
-- Claude Code CLI 2.1.248 o posterior con sesión `claude.ai` disponible.
+- Claude Code CLI 2.1.259 o posterior con sesión `claude.ai` disponible.
 - Un repositorio local en una rama de trabajo. La implementación se bloquea en
   `main` y `master`, o si el árbol ya contiene cambios.
 
@@ -97,6 +97,13 @@ interactiva, la ejecución queda bloqueada.
 
 ## Ver la actividad de Claude
 
+El runner combina `--print --output-format stream-json` con `--verbose`, como
+requiere Claude Code para emitir los eventos. Esto permite leer la actividad y
+el resultado final; no publica el flujo bruto ni el razonamiento privado.
+El mínimo 2.1.259 corresponde a `--permission-prompts none`, que evita solicitudes
+interactivas dentro del proceso. Consulta la [documentación oficial del modo no
+interactivo](https://code.claude.com/docs/en/headless).
+
 Las llamadas a Claude corren como procesos separados; no escriben en la
 terminal interactiva de Claude que ya está abierta. `run_claude_proposal` y
 `run_claude_implementation` devuelven rápido con un `executionId`. Después,
@@ -118,6 +125,10 @@ ejecución y muéstrame cada acción hasta que termine”.
 Si Claude termina con error, la actividad puede devolver el código de salida
 del proceso y, cuando puede inferirse de forma segura, una categoría probable
 como autenticación, argumentos del CLI, modelo, conexión o límites de uso.
+Si llegó texto por `stderr` pero no coincide con las categorías conocidas, la
+actividad indica `unclassified`; esto confirma que hubo texto de diagnóstico,
+pero no revela su contenido ni determina la causa raíz. Si `stderr` estaba vacío,
+no se añade esa categoría.
 También reconoce algunos subtipos de error del flujo de Claude. Esas categorías
 son indicios, no una confirmación de la causa raíz. El texto bruto de stderr y
 la respuesta fallida no se guardan ni se muestran. Una ejecución fallida no se

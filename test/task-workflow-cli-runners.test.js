@@ -178,6 +178,7 @@ test("Claude preview is read-only, uses the selected model and effort, and ignor
   assert.equal(preview.effort, "high");
   assert.equal(preview.command.shell, false);
   assert.equal(preview.command.args[preview.command.args.indexOf("--output-format") + 1], "stream-json");
+  assert.ok(preview.command.args.includes("--verbose"));
   assert.ok(preview.command.args.includes("--restricted"));
   assert.ok(preview.command.args.includes("--permission-mode"));
   assert.ok(preview.command.args.includes("plan"));
@@ -191,6 +192,64 @@ test("Claude preview is read-only, uses the selected model and effort, and ignor
   assert.equal(proposal, "Propuesta de solo lectura.");
   assert.equal(invocation.cwd, await fs.realpath(projectRoot));
   assert.equal(invocation.env.ANTHROPIC_API_KEY, undefined);
+  assert.deepEqual(invocation.args, preview.command.args);
+});
+
+test("Claude stream-json argument conflicts are classified without exposing stderr", async () => {
+  const privateDiagnostic = "Error: When using --print, --output-format=stream-json requires --verbose\nPRIVATE_CLI_ARGUMENT_MARKER";
+  const runner = createClaudeCodeRunner({
+    claudePath: process.execPath,
+    env: { HOME: home, PATH: process.env.PATH ?? "" },
+    home,
+    runSync: fakeSyncForClaude,
+    spawn: () => {
+      const child = new EventEmitter();
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      setImmediate(() => {
+        child.emit("spawn");
+        child.stderr.end(privateDiagnostic);
+        child.stdout.end();
+        setImmediate(() => child.emit("close", 1, null));
+      });
+      return child;
+    }
+  });
+  const preview = await runner.preview({ projectRoot, task, plan: JSON.stringify(plan), model: "sonnet", effort: "medium" });
+  await assert.rejects(runner.run(preview), error => {
+    assert.match(error.message, /posible incompatibilidad en los argumentos del CLI/u);
+    assert.doesNotMatch(error.message, /stream-json|requires --verbose|PRIVATE_CLI_ARGUMENT_MARKER/u);
+    assert.deepEqual(error.diagnostic, {
+      kind: "process-exit", exitCode: 1, signal: null, category: "cli-arguments", resultSubtype: null
+    });
+    assert.doesNotMatch(JSON.stringify(error), /PRIVATE_CLI_ARGUMENT_MARKER/u);
+    return true;
+  });
+  await runner.cleanup(preview);
+});
+
+test("Claude requires a version supporting permission-prompts before a model call", async () => {
+  for (const version of ["2.1.258", "2.1.259"]) {
+    const runner = createClaudeCodeRunner({
+      claudePath: process.execPath,
+      env: { HOME: home, PATH: process.env.PATH ?? "" },
+      home,
+      runSync: (executable, args) => args[0] === "--version"
+        ? { status: 0, stdout: version + "\n", stderr: "" }
+        : fakeSyncForClaude(executable, args),
+      execute: async () => assert.fail("Preview must not call a model")
+    });
+    const prepare = () => runner.preview({ projectRoot, task, plan: JSON.stringify(plan), model: "sonnet", effort: "medium" });
+    if (version === "2.1.258") {
+      await assert.rejects(prepare(), { code: "claude-client-version-unsupported" });
+    } else {
+      const preview = await prepare();
+      assert.equal(preview.state, "ready");
+      assert.equal(preview.version, version);
+      await runner.cleanup(preview);
+    }
+  }
 });
 
 test("Claude failures expose a safe category and exit code without returning stderr", async () => {
@@ -229,6 +288,52 @@ test("Claude failures expose a safe category and exit code without returning std
     return true;
   });
   await runner.cleanup(preview);
+});
+
+test("Claude failures distinguish unmatched stderr from no stderr without returning its text", async () => {
+  const privateDiagnostic = "Opaque private diagnostic marker";
+  for (const { stderr, expectedCategory } of [
+    { stderr: privateDiagnostic, expectedCategory: "unclassified" },
+    { stderr: "", expectedCategory: null }
+  ]) {
+    const runner = createClaudeCodeRunner({
+      claudePath: process.execPath,
+      env: { HOME: home, PATH: process.env.PATH ?? "" },
+      home,
+      runSync: fakeSyncForClaude,
+      spawn: () => {
+        const child = new EventEmitter();
+        child.stdin = new PassThrough();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        setImmediate(() => {
+          child.emit("spawn");
+          child.stderr.end(stderr);
+          child.stdout.end();
+          setImmediate(() => child.emit("close", 1, null));
+        });
+        return child;
+      }
+    });
+    const preview = await runner.preview({ projectRoot, task, plan: JSON.stringify(plan), model: "sonnet", effort: "medium" });
+    await assert.rejects(runner.run(preview), error => {
+      assert.match(error.message, /código de salida 1/u);
+      assert.doesNotMatch(error.message, /Opaque private diagnostic marker/u);
+      assert.equal(error.diagnostic.category, expectedCategory);
+      assert.deepEqual(error.diagnostic, {
+        kind: "process-exit",
+        exitCode: 1,
+        signal: null,
+        category: expectedCategory,
+        resultSubtype: null
+      });
+      if (expectedCategory === "unclassified") {
+        assert.match(error.message, /no coincide con una categoría reconocida/u);
+      }
+      return true;
+    });
+    await runner.cleanup(preview);
+  }
 });
 
 test("Claude result failures expose only a known subtype and never include the result text", async () => {
@@ -381,6 +486,7 @@ test("Claude implementation preview requires a clean feature branch and only gra
   assert.equal(invocation, null);
   assert.equal(preview.state, "ready");
   assert.equal(preview.stage, "claude-implementation");
+  assert.ok(preview.command.args.includes("--verbose"));
   assert.equal(preview.workspace.branch, branch);
   assert.equal(preview.limits.projectWrite, true);
   assert.equal(preview.limits.readOnly, false);
@@ -459,6 +565,7 @@ test("Claude tutor implementation returns code without write tools or a Git requ
   assert.equal(result.response, "Cambia src/dashboard-card.js de esta forma; no he escrito archivos.");
   assert.equal(result.filesChanged, false);
   assert.equal(workspaceInspectionCount, 0);
+  assert.ok(invocation.args.includes("--verbose"));
   assert.ok(invocation);
 });
 

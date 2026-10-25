@@ -72,7 +72,7 @@ const MAX_ACTIVITY_WAIT_MS = 15_000;
 const CLAUDE_EFFORT = z.enum(["low", "medium", "high", "xhigh", "max"]);
 const CODEX_EFFORT = z.enum(["minimal", "low", "medium", "high", "xhigh"]);
 const EXECUTION_DIAGNOSTIC_CATEGORIES = new Set([
-  "authentication", "cli-arguments", "model", "usage-limit", "network", "permissions", "result-error"
+  "authentication", "cli-arguments", "model", "usage-limit", "network", "permissions", "result-error", "unclassified"
 ]);
 const EXECUTION_DIAGNOSTIC_SUBTYPES = new Set([
   "error_during_execution", "error_max_turns", "error_max_budget_usd",

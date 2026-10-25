@@ -11,7 +11,7 @@ const MAX_EVENT_STREAM_BYTES = 2_000_000;
 const MAX_EVENT_LINE_BYTES = 1_000_000;
 const MAX_STDERR_BYTES = 8_192;
 const RUN_TIMEOUT_MS = 180_000;
-const REQUIRED_CLAUDE_VERSION = [2, 1, 248];
+const REQUIRED_CLAUDE_VERSION = [2, 1, 259];
 const EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const CLAUDE_ERROR_SUBTYPES = new Map([
   ["error_during_execution", "fallo durante la ejecución"],
@@ -26,7 +26,7 @@ const PATH_SEGMENT_PATTERN = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2
 function classifyClaudeStderr(value) {
   const checks = [
     ["authentication", /not logged in|not authenticated|authentication[_ ]error|please log in|run \/login|sign in to continue/u],
-    ["cli-arguments", /unknown (?:command[- ]line )?(?:option|argument)|unrecognized (?:command[- ]line )?(?:option|argument)|invalid (?:command[- ]line )?(?:option|argument)/u],
+    ["cli-arguments", /unknown (?:command[- ]line )?(?:option|argument)|unrecognized (?:command[- ]line )?(?:option|argument)|invalid (?:command[- ]line )?(?:option|argument)|--output-format=stream-json requires --verbose/u],
     ["model", /model[_ ]not[_ ]found|unknown model|model .{0,40}not found|model .{0,40}not supported/u],
     ["usage-limit", /rate limit|too many requests|usage limit|quota exceeded|overloaded[_ ]error/u],
     ["network", /network error|connection (?:refused|reset|timed out)|timed out|timeout|econn(?:refused|reset|timedout)|fetch failed/u],
@@ -36,12 +36,13 @@ function classifyClaudeStderr(value) {
   return checks.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
 }
 
-function createClaudeProcessFailure({ exitCode = null, signal = null, stderr = "", resultSubtype = null, resultIsError = false } = {}) {
+function createClaudeProcessFailure({ exitCode = null, signal = null, stderr = "", stderrBytes = 0, resultSubtype = null, resultIsError = false } = {}) {
   const subtypeLabel = CLAUDE_ERROR_SUBTYPES.get(resultSubtype) ?? null;
   const stderrCategory = classifyClaudeStderr(stderr);
+  const hasStderr = stderrBytes > 0 || stderr.length > 0;
   const safeExitCode = Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255 ? exitCode : null;
   const safeSignal = typeof signal === "string" && /^SIG[A-Z0-9]{1,16}$/u.test(signal) ? signal : null;
-  const category = subtypeLabel ? "result-error" : stderrCategory;
+  const category = subtypeLabel ? "result-error" : stderrCategory ?? (hasStderr ? "unclassified" : null);
   const termination = safeSignal ? "señal " + safeSignal : "código de salida " + (safeExitCode ?? "desconocido");
   const clues = [];
   if (subtypeLabel) clues.push("Claude indicó un " + subtypeLabel);
@@ -56,6 +57,9 @@ function createClaudeProcessFailure({ exitCode = null, signal = null, stderr = "
       permissions: "un posible problema de permisos"
     };
     clues.push("el diagnóstico local sugiere " + labels[stderrCategory]);
+  }
+  if (!subtypeLabel && !stderrCategory && hasStderr) {
+    clues.push("el texto de diagnóstico no coincide con una categoría reconocida");
   }
   const message = "Claude Code no terminó correctamente (" + termination + (clues.length ? "; " + clues.join("; ") : "") + "); no se guardó una entrega.";
   const error = new Error(message);
@@ -218,6 +222,8 @@ function implementationPrompt({ task, plan, proposal, proposalSha256, projectWri
 function claudeArgs({ model, effort, stage }) {
   const common = [
     "--print",
+    // Print mode requires verbose output for stream-json events.
+    "--verbose",
     "--output-format", "stream-json",
     "--no-session-persistence",
     "--restricted",
@@ -409,6 +415,7 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
           streamInvalid = true;
           fail(createClaudeProcessFailure({
             stderr: diagnosticText(),
+            stderrBytes: errorBytes,
             resultSubtype,
             resultIsError
           }));
@@ -458,6 +465,7 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
           exitCode: code,
           signal: closeSignal,
           stderr: diagnosticText(),
+          stderrBytes: errorBytes,
           resultSubtype,
           resultIsError
         }));
