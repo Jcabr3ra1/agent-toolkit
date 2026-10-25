@@ -68,6 +68,16 @@ verdad: las notas explican el contexto, no lo sustituyen.
   controles de solo lectura; la llamada solo ocurre al ejecutar el comando
   `run` mostrado después de revisar la cuenta, el modelo y el alcance. La identidad
   exacta de cuenta, plan y cuota no se consultan.
+- **Pasar un plan entre Codex y Claude Code desde MCP**: el servidor local
+  `agent-toolkit-mcp` prepara llamadas de Codex CLI y Claude Code CLI con vistas
+  previas y confirmación interactiva del cliente MCP. Codex planifica; Claude
+  contrasta la propuesta y puede implementar en una rama limpia si se habilita
+  expresamente al crear la tarea; Codex puede hacer la revisión final en modo de
+  solo lectura. Cada llamada vuelve a pedir confirmación. La configuración del
+  MCP y una sesión disponible de ambas CLIs siguen siendo necesarias. Consulta
+  [Flujo local entre Codex y Claude Code](docs/task-workflow-mcp.md). La demo
+  real confirmada cubre Codex planificando y Claude proponiendo; las etapas de
+  escritura y revisión final aún requieren demostración con cuentas reales.
 
 También incluye procedimientos reutilizables para definir requisitos,
 documentar decisiones, revisar calidad y pasar trabajo entre sesiones, junto
@@ -138,7 +148,7 @@ una automatización real. No se creó una etiqueta o release por llamarla beta.
 | Preparar un encargo de verificador externo | Disponible localmente; perfil declarado, sin invocación de clientes |
 | Empezar con ayudas y un encargo ficticio | Guía disponible y comprobada localmente |
 | Recorrido completo con proyecto y memoria ficticios | Verificado localmente; GitHub y conexiones simulados, no una instalación real |
-| Lanzar agentes o aplicar encargos automáticamente | Adaptador optativo limitado al verificador Codex; otros roles y clientes, y la aplicación automática, siguen pendientes |
+| Lanzar agentes o aplicar encargos automáticamente | MCP local experimental: plan Codex → propuesta Claude → implementación optativa y autorizada → revisión final Codex; la implementación y revisión aún requieren demostración con CLIs reales |
 | Búsqueda semántica y nuevos proveedores | Evolución posterior, no comprometida |
 
 El objetivo de la primera versión completa es cerrar el ciclo de revisión y
@@ -164,6 +174,8 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
   indicados, sin aprobación automática ni ejecución de agentes.
 - [Verificador externo](docs/agent-task-external-verifier.md): encargo `reviewer`,
   vista previa confirmable de Codex CLI y límites de solo lectura.
+- [Flujo local entre Codex y Claude Code](docs/task-workflow-mcp.md): conectar el
+  MCP local, habilitar cada etapa y revisar el traspaso automático, con sus límites actuales.
 - [Identidad visual](assets/brand/README.md): concepto y origen del logo.
 
 La beta se conserva en GitHub privado. Clonar la biblioteca no copia las bóvedas
