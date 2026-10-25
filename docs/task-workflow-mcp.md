@@ -118,6 +118,10 @@ ejecución y muéstrame cada acción hasta que termine”.
 Si Claude termina con error, la actividad puede devolver el código de salida
 del proceso y, cuando puede inferirse de forma segura, una categoría probable
 como autenticación, argumentos del CLI, modelo, conexión o límites de uso.
+Si llegó texto por `stderr` pero no coincide con las categorías conocidas, la
+actividad indica `unclassified`; esto confirma que hubo texto de diagnóstico,
+pero no revela su contenido ni determina la causa raíz. Si `stderr` estaba vacío,
+no se añade esa categoría.
 También reconoce algunos subtipos de error del flujo de Claude. Esas categorías
 son indicios, no una confirmación de la causa raíz. El texto bruto de stderr y
 la respuesta fallida no se guardan ni se muestran. Una ejecución fallida no se

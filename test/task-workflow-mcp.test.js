@@ -159,6 +159,10 @@ if [ "$1" = "auth" ] && [ "$2" = "status" ]; then printf '%s\\n' '{"loggedIn":tr
 printf '%s\\n' invoked >> ${quote(claudeRuns)}
 cat >/dev/null
 if [ -f ${quote(claudeFailureFlag)} ]; then
+  if [ "$(cat ${quote(claudeFailureFlag)})" = "unclassified" ]; then
+    printf '%s\\n' 'PRIVATE_UNCLASSIFIED_DIAGNOSTIC_MARKER' >&2
+    exit 1
+  fi
   printf '%s\\n' 'Not logged in; PRIVATE_DIAGNOSTIC_MARKER' >&2
   exit 23
 fi
@@ -344,6 +348,28 @@ printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_e
   const failedStoredTask = JSON.parse(failedStoredTaskCall.content[0].text);
   assert.equal(failedStoredTask.currentStage, "claude-proposal");
   assert.equal(failedStoredTask.outputs.proposal, null);
+  assert.deepEqual(diagnostics, []);
+
+  fs.writeFileSync(claudeFailureFlag, "unclassified\n", { mode: 0o600 });
+  const unclassifiedPreviewCall = await client.callTool({ name: "preview_claude_proposal", arguments: {
+    taskId: failedTask.id, projectRoot
+  } });
+  const unclassifiedPreview = JSON.parse(unclassifiedPreviewCall.content[0].text);
+  const unclassifiedRunCall = await client.callTool({ name: "run_claude_proposal", arguments: {
+    previewId: unclassifiedPreview.previewId, confirmationCode: unclassifiedPreview.confirmationCode
+  } });
+  const unclassifiedRun = JSON.parse(unclassifiedRunCall.content[0].text);
+  const unclassifiedSnapshot = await waitForExecution(client, failedTask.id, unclassifiedRun.executionId);
+  assert.equal(unclassifiedSnapshot.state, "failed");
+  assert.deepEqual(unclassifiedSnapshot.diagnostic, {
+    kind: "process-exit", exitCode: 1, category: "unclassified"
+  });
+  assert.match(unclassifiedSnapshot.error, /no coincide con una categoría reconocida/u);
+  assert.doesNotMatch(JSON.stringify(unclassifiedSnapshot), /PRIVATE_UNCLASSIFIED_DIAGNOSTIC_MARKER/u);
+  const unclassifiedTaskCall = await client.callTool({ name: "get_task", arguments: { taskId: failedTask.id } });
+  const unclassifiedTask = JSON.parse(unclassifiedTaskCall.content[0].text);
+  assert.equal(unclassifiedTask.currentStage, "claude-proposal");
+  assert.equal(unclassifiedTask.outputs.proposal, null);
   assert.deepEqual(diagnostics, []);
 });
 

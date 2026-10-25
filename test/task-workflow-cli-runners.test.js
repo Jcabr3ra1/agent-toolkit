@@ -231,6 +231,52 @@ test("Claude failures expose a safe category and exit code without returning std
   await runner.cleanup(preview);
 });
 
+test("Claude failures distinguish unmatched stderr from no stderr without returning its text", async () => {
+  const privateDiagnostic = "Opaque private diagnostic marker";
+  for (const { stderr, expectedCategory } of [
+    { stderr: privateDiagnostic, expectedCategory: "unclassified" },
+    { stderr: "", expectedCategory: null }
+  ]) {
+    const runner = createClaudeCodeRunner({
+      claudePath: process.execPath,
+      env: { HOME: home, PATH: process.env.PATH ?? "" },
+      home,
+      runSync: fakeSyncForClaude,
+      spawn: () => {
+        const child = new EventEmitter();
+        child.stdin = new PassThrough();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        setImmediate(() => {
+          child.emit("spawn");
+          child.stderr.end(stderr);
+          child.stdout.end();
+          setImmediate(() => child.emit("close", 1, null));
+        });
+        return child;
+      }
+    });
+    const preview = await runner.preview({ projectRoot, task, plan: JSON.stringify(plan), model: "sonnet", effort: "medium" });
+    await assert.rejects(runner.run(preview), error => {
+      assert.match(error.message, /código de salida 1/u);
+      assert.doesNotMatch(error.message, /Opaque private diagnostic marker/u);
+      assert.equal(error.diagnostic.category, expectedCategory);
+      assert.deepEqual(error.diagnostic, {
+        kind: "process-exit",
+        exitCode: 1,
+        signal: null,
+        category: expectedCategory,
+        resultSubtype: null
+      });
+      if (expectedCategory === "unclassified") {
+        assert.match(error.message, /no coincide con una categoría reconocida/u);
+      }
+      return true;
+    });
+    await runner.cleanup(preview);
+  }
+});
+
 test("Claude result failures expose only a known subtype and never include the result text", async () => {
   const privateResult = "private-result-marker";
   const runner = createClaudeCodeRunner({

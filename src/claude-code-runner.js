@@ -36,12 +36,13 @@ function classifyClaudeStderr(value) {
   return checks.find(([, pattern]) => pattern.test(text))?.[0] ?? null;
 }
 
-function createClaudeProcessFailure({ exitCode = null, signal = null, stderr = "", resultSubtype = null, resultIsError = false } = {}) {
+function createClaudeProcessFailure({ exitCode = null, signal = null, stderr = "", stderrBytes = 0, resultSubtype = null, resultIsError = false } = {}) {
   const subtypeLabel = CLAUDE_ERROR_SUBTYPES.get(resultSubtype) ?? null;
   const stderrCategory = classifyClaudeStderr(stderr);
+  const hasStderr = stderrBytes > 0 || stderr.length > 0;
   const safeExitCode = Number.isInteger(exitCode) && exitCode >= 0 && exitCode <= 255 ? exitCode : null;
   const safeSignal = typeof signal === "string" && /^SIG[A-Z0-9]{1,16}$/u.test(signal) ? signal : null;
-  const category = subtypeLabel ? "result-error" : stderrCategory;
+  const category = subtypeLabel ? "result-error" : stderrCategory ?? (hasStderr ? "unclassified" : null);
   const termination = safeSignal ? "señal " + safeSignal : "código de salida " + (safeExitCode ?? "desconocido");
   const clues = [];
   if (subtypeLabel) clues.push("Claude indicó un " + subtypeLabel);
@@ -56,6 +57,9 @@ function createClaudeProcessFailure({ exitCode = null, signal = null, stderr = "
       permissions: "un posible problema de permisos"
     };
     clues.push("el diagnóstico local sugiere " + labels[stderrCategory]);
+  }
+  if (!subtypeLabel && !stderrCategory && hasStderr) {
+    clues.push("el texto de diagnóstico no coincide con una categoría reconocida");
   }
   const message = "Claude Code no terminó correctamente (" + termination + (clues.length ? "; " + clues.join("; ") : "") + "); no se guardó una entrega.";
   const error = new Error(message);
@@ -409,6 +413,7 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
           streamInvalid = true;
           fail(createClaudeProcessFailure({
             stderr: diagnosticText(),
+            stderrBytes: errorBytes,
             resultSubtype,
             resultIsError
           }));
@@ -458,6 +463,7 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
           exitCode: code,
           signal: closeSignal,
           stderr: diagnosticText(),
+          stderrBytes: errorBytes,
           resultSubtype,
           resultIsError
         }));
