@@ -2,10 +2,15 @@
 
 ## Estado y alcance
 
-Esta etapa añade un propósito explícito a `agent-task prepare` para redactar un
-encargo de revisión con el rol `reviewer`. El borrador limita las acciones
-declaradas a lectura/verificación y enumera archivos únicamente para inspección.
-La entrega sigue siendo manual: esta etapa no invoca clientes ni envía datos.
+Esta función tiene dos partes. `agent-task prepare` redacta un encargo con el rol
+`reviewer`; el subcomando optativo `agent-task external-verifier` puede invocar
+Codex CLI después de una vista previa y una confirmación separada. `prepare` nunca
+inicia un cliente. `preview` no llama al modelo. Solo `run`, ejecutado con el
+código de confirmación mostrado, envía el prompt a Codex.
+
+El adaptador inicial admite únicamente `provider: openai` y `client: codex-cli`.
+No ejecuta Claude Code, no usa API keys, no cambia de cuenta o proveedor y no
+acepta rutas de imagen. El importador de `PLAN.md` sigue fuera de este paso.
 
 El propósito no crea un tercer modo global. Requiere `mode: autonomous` para
 usar la ruta de selección del revisor ya existente, pero mantiene `read` y
@@ -45,7 +50,7 @@ Si el contrato contradice estas condiciones, la preparación queda `invalid` o
 crea la tarea no se muestran en este propósito: se reemplazan por una solicitud
 fija de hallazgos, sin cambios ni comandos.
 
-## Recorrido manual
+## Recorrido y confirmación
 
 Desde la raíz del Toolkit, el ejemplo ficticio se prepara así:
 
@@ -59,8 +64,51 @@ node bin/agent-task.js prepare \
 
 El resumen textual identifica el verificador externo; con `--json` aparece
 `identity.purpose: external-verifier`. Añade `--show-brief` solo cuando quieras
-exponer el encargo completo en el terminal. No se guarda, envía ni ejecuta
-automáticamente.
+exponer el encargo completo en el terminal. Preparar no guarda ni envía el
+encargo.
+
+Para usar el adaptador, el request, catálogo y política reales deben recomendar
+`openai/codex-cli`, y el modelo/esfuerzo deben corresponder a una ruta aprobada
+del selector. Usa una carpeta de entrega ya existente con permisos `0700`, fuera
+de la carpeta del proyecto y distinta de la carpeta personal. El directorio padre
+de `--delivery` debe existir dentro de esa carpeta y el archivo no debe existir.
+
+```bash
+node bin/agent-task.js external-verifier preview \
+  --task /ruta/privada/task.json \
+  --request /ruta/privada/request.json \
+  --catalog /ruta/privada/catalog.json \
+  --policy /ruta/privada/policy.json \
+  --source /ruta/al/proyecto \
+  --handoff /ruta/privada/handoff-0700 \
+  --delivery revision-r01.md
+```
+
+La vista previa muestra el método de autenticación ChatGPT de Codex, el modelo y
+esfuerzo, las rutas, tamaños y huellas de los archivos, la huella del prompt, el
+`argv` de `codex exec` y un comando `run` exacto de un solo uso. Añade
+`--show-prompt` si quieres inspeccionar el texto completo que se enviará. El
+Toolkit no puede leer la identidad exacta de la cuenta, su plan, su cuota ni el
+número de llamadas internas; la ejecución puede consumir uso de la sesión
+ChatGPT activa. No ejecutes el comando `run` hasta aprobar esa vista previa en
+tu conversación con el agente principal. El código vence en 20 minutos; si no lo
+usas, elimina el archivo `.agent-task-external-*.json` de la carpeta privada.
+
+El comando mostrado verifica el ticket, la cuenta y la base otra vez, y después
+lanza Codex con `--sandbox read-only`, `--ephemeral`, `--ignore-user-config`,
+aprobaciones `never` y las capacidades de shell, subagentes, plugins, apps,
+búsqueda y herramientas visuales desactivadas según la versión local. El prompt
+se envía por stdin, no en argumentos de shell. Se pasa al modelo únicamente el
+objetivo, las referencias declaradas y el texto UTF-8 de los archivos enumerados;
+no se incluye la ruta absoluta del proyecto. Si la versión no permite comprobar
+y desactivar las capacidades requeridas, o si la sesión no informa autenticación
+ChatGPT, la ejecución se bloquea.
+
+La respuesta se guarda como un archivo nuevo con permisos `0600`; no se
+sobrescribe una entrega existente. El adaptador vuelve a comprobar las huellas de
+los archivos enumerados y la huella de la entrega con `agent-task verify`. No
+reintenta una llamada fallida. Para empezar otra vez hay que preparar una nueva
+vista previa.
 
 Para comparar que los archivos listados siguen iguales antes y después de una
 revisión, prepara un contrato de `agent-task verify` con operación `inspect` y
@@ -70,21 +118,22 @@ comprobar el archivo de respuesta, su huella esperada debe revisarse primero y
 quedar fijada en un contrato aprobado aparte. Consulta
 [la guía de verify](agent-task-verify.md) para sus límites y requisitos de rutas.
 
-## Límite de solo lectura
+## Límite de solo lectura y verificación
 
-La preparación comprueba que el contrato del encargo no permite escribir; no
-configura el sistema operativo ni el cliente receptor. El texto de una
-instrucción no es una barrera técnica. **No ejecutes este encargo en un cliente
-con acceso de escritura.** La etapa del adaptador deberá imponer y probar un modo
-de solo lectura del cliente antes de invocarlo; si no puede verificarlo, debe
-detenerse. Tampoco se debe interpretar `agent-task verify: matched` como una
-prueba de calidad, de que el agente no hizo cambios transitorios, o de que no
-tocó rutas no enumeradas.
+El propósito del encargo es una declaración; el adaptador añade barreras locales
+de solo lectura y desactiva las herramientas de acceso conocidas de Codex. El
+modo `read-only` protege contra escrituras del agente, pero por sí solo permite
+leer más archivos del disco. Por eso el adaptador también desactiva shell y las
+otras capacidades conocidas, y construye el prompt únicamente con la lista
+explícita. Esto no constituye una auditoría de la implementación instalada ni
+una garantía frente a cambios transitorios. No interpretes
+`agent-task verify: matched` como prueba de calidad o de ausencia de cambios
+temporales.
 
-La base actual no conoce la cuenta, el modelo real, el consumo, la disponibilidad
-actual ni las protecciones efectivas del cliente. El borrador no les concede
-permiso. Revisa y comparte solo los archivos necesarios; hashes y rutas también
-pueden ser información privada.
+El método ChatGPT reportado y los flags aparecen antes de confirmar. La identidad
+de la cuenta, el consumo, la disponibilidad actual y las llamadas internas no se
+verifican. Revisa el alcance y comparte solo archivos necesarios; texto, hashes y
+rutas pueden ser información privada. La entrega requiere revisión humana.
 
 ## Criterios de aceptación de esta etapa
 
@@ -94,9 +143,12 @@ pueden ser información privada.
    rutas inspect, referencias contenidas en la lista y cero checks.
 3. El resumen identifica el propósito y el borrador no imprime instrucciones de
    entrega libres que contradigan el límite de lectura.
-4. Las suites completas pasan con `npm test` y una demostración local recorre
-   `prepare`, `verify --phase before` y `verify --phase after` sobre archivos
-   temporales. Esta demostración no invoca un modelo.
+4. Las suites completas pasan con `npm test`; las pruebas de `preview` y `run`
+   usan un ejecutable Codex simulado y no consumen una cuenta.
+5. Una primera vista previa y una ejecución real requieren archivos de tarea
+   aprobados por quien use el Toolkit. La confirmación concreta debe venir antes
+   de la inferencia; no se simula ni se reutiliza desde esta documentación.
 
-Este cierre no incluye el adaptador, una invocación externa real, ruta de imagen
-ni importación de `PLAN.md`.
+El adaptador Codex de esta etapa está cubierto por pruebas con un ejecutable
+simulado; todavía no se ha hecho una llamada real. Las rutas de imagen y la
+importación de `PLAN.md` permanecen fuera de este paso.

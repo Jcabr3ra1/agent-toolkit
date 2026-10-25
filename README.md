@@ -63,8 +63,11 @@ verdad: las notas explican el contexto, no lo sustituyen.
 - **Preparar una revisión externa de solo lectura**: `agent-task prepare` puede
   generar un encargo explícito para el rol `reviewer`; exige archivos de
   inspección y limita las acciones declaradas a lectura/verificación. El borrador
-  no activa ni restringe el cliente receptor; no debe ejecutarse si este no
-  aplica una barrera técnica de solo lectura.
+  no arranca clientes. Opcionalmente, `agent-task external-verifier preview`
+  prepara una invocación confirmable de Codex CLI con archivos enumerados y
+  controles de solo lectura; la llamada solo ocurre al ejecutar el comando
+  `run` mostrado después de revisar la cuenta, el modelo y el alcance. La identidad
+  exacta de cuenta, plan y cuota no se consultan.
 
 También incluye procedimientos reutilizables para definir requisitos,
 documentar decisiones, revisar calidad y pasar trabajo entre sesiones, junto
@@ -135,7 +138,7 @@ una automatización real. No se creó una etiqueta o release por llamarla beta.
 | Preparar un encargo de verificador externo | Disponible localmente; perfil declarado, sin invocación de clientes |
 | Empezar con ayudas y un encargo ficticio | Guía disponible y comprobada localmente |
 | Recorrido completo con proyecto y memoria ficticios | Verificado localmente; GitHub y conexiones simulados, no una instalación real |
-| Lanzar agentes o aplicar encargos automáticamente | Pendiente; sin ejecución nativa admitida |
+| Lanzar agentes o aplicar encargos automáticamente | Adaptador optativo limitado al verificador Codex; otros roles y clientes, y la aplicación automática, siguen pendientes |
 | Búsqueda semántica y nuevos proveedores | Evolución posterior, no comprometida |
 
 El objetivo de la primera versión completa es cerrar el ciclo de revisión y
@@ -159,8 +162,8 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
   límites y ejemplo ficticio.
 - [Comprobación de entregas](docs/agent-task-verify.md): comparación de los archivos
   indicados, sin aprobación automática ni ejecución de agentes.
-- [Verificador externo](docs/agent-task-external-verifier.md): encargo `reviewer`
-  de solo lectura y límites antes de conectar un cliente.
+- [Verificador externo](docs/agent-task-external-verifier.md): encargo `reviewer`,
+  vista previa confirmable de Codex CLI y límites de solo lectura.
 - [Identidad visual](assets/brand/README.md): concepto y origen del logo.
 
 La beta se conserva en GitHub privado. Clonar la biblioteca no copia las bóvedas
