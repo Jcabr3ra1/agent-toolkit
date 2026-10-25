@@ -123,6 +123,7 @@ test("local stdio MCP exposes opt-in implementation and final-review stages", as
   const projectRoot = path.join(root, "project-for-cli");
   const codexRuns = path.join(root, "codex-runs.txt");
   const claudeRuns = path.join(root, "claude-runs.txt");
+  const claudeFailureFlag = path.join(root, "claude-failure-flag.txt");
   fs.mkdirSync(cliDirectory, { recursive: true, mode: 0o700 });
   fs.mkdirSync(projectRoot, { recursive: true, mode: 0o700 });
   const planned = {
@@ -157,6 +158,10 @@ if [ "$1" = "--version" ]; then printf '%s\\n' '2.1.300'; exit 0; fi
 if [ "$1" = "auth" ] && [ "$2" = "status" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}'; exit 0; fi
 printf '%s\\n' invoked >> ${quote(claudeRuns)}
 cat >/dev/null
+if [ -f ${quote(claudeFailureFlag)} ]; then
+  printf '%s\\n' 'Not logged in; PRIVATE_DIAGNOSTIC_MARKER' >&2
+  exit 23
+fi
 printf '%s\\n' ${quote(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: "docs/agent-team-handoffs.md" } }] } }))}
 printf '%s\\n' ${quote(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", content: "PRIVATE_SOURCE_TEXT_MUST_NOT_APPEAR" }] } }))}
 printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Propuesta de lectura: usar una grilla responsiva y conservar los datos actuales." }))}
@@ -305,6 +310,40 @@ printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_e
   assert.equal(shared.currentStage, "awaiting-authorization");
   assert.equal(shared.outputs.plan.content, JSON.stringify(planned));
   assert.match(shared.outputs.proposal.content, /grilla responsiva/u);
+
+  const failedTaskCall = await client.callTool({ name: "start_task", arguments: {
+    ...taskInput, title: "Diagnóstico seguro", project: "mcp-failure-diagnostics"
+  } });
+  const failedTask = JSON.parse(failedTaskCall.content[0].text);
+  const failedPlanPreviewCall = await client.callTool({ name: "preview_codex_plan", arguments: {
+    taskId: failedTask.id, projectRoot, model: "gpt-6.1-sol", effort: "high"
+  } });
+  const failedPlanPreview = JSON.parse(failedPlanPreviewCall.content[0].text);
+  const failedPlanRun = await client.callTool({ name: "run_codex_plan", arguments: {
+    previewId: failedPlanPreview.previewId, confirmationCode: failedPlanPreview.confirmationCode
+  } });
+  assert.equal(failedPlanRun.isError, undefined, failedPlanRun.content?.[0]?.text);
+  fs.writeFileSync(claudeFailureFlag, "fail safely\n", { mode: 0o600 });
+  const failedClaudePreviewCall = await client.callTool({ name: "preview_claude_proposal", arguments: {
+    taskId: failedTask.id, projectRoot
+  } });
+  const failedClaudePreview = JSON.parse(failedClaudePreviewCall.content[0].text);
+  const failedClaudeRun = await client.callTool({ name: "run_claude_proposal", arguments: {
+    previewId: failedClaudePreview.previewId, confirmationCode: failedClaudePreview.confirmationCode
+  } });
+  assert.equal(failedClaudeRun.isError, undefined, failedClaudeRun.content?.[0]?.text);
+  const failedExecution = JSON.parse(failedClaudeRun.content[0].text);
+  const failedSnapshot = await waitForExecution(client, failedTask.id, failedExecution.executionId);
+  assert.equal(failedSnapshot.state, "failed");
+  assert.deepEqual(failedSnapshot.diagnostic, {
+    kind: "process-exit", exitCode: 23, category: "authentication"
+  });
+  assert.match(failedSnapshot.error, /posible problema de inicio de sesión/u);
+  assert.doesNotMatch(JSON.stringify(failedSnapshot), /PRIVATE_DIAGNOSTIC_MARKER/u);
+  const failedStoredTaskCall = await client.callTool({ name: "get_task", arguments: { taskId: failedTask.id } });
+  const failedStoredTask = JSON.parse(failedStoredTaskCall.content[0].text);
+  assert.equal(failedStoredTask.currentStage, "claude-proposal");
+  assert.equal(failedStoredTask.outputs.proposal, null);
   assert.deepEqual(diagnostics, []);
 });
 

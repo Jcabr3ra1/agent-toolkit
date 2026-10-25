@@ -71,6 +71,24 @@ const MAX_ACTIVITY_EVENTS = 40;
 const MAX_ACTIVITY_WAIT_MS = 15_000;
 const CLAUDE_EFFORT = z.enum(["low", "medium", "high", "xhigh", "max"]);
 const CODEX_EFFORT = z.enum(["minimal", "low", "medium", "high", "xhigh"]);
+const EXECUTION_DIAGNOSTIC_CATEGORIES = new Set([
+  "authentication", "cli-arguments", "model", "usage-limit", "network", "permissions", "result-error"
+]);
+const EXECUTION_DIAGNOSTIC_SUBTYPES = new Set([
+  "error_during_execution", "error_max_turns", "error_max_budget_usd",
+  "error_max_structured_output_retries", "error_max_thinking_tokens"
+]);
+
+function safeExecutionDiagnostic(value) {
+  if (!value || typeof value !== "object") return null;
+  const diagnostic = {};
+  if (value.kind === "process-exit" || value.kind === "result-error") diagnostic.kind = value.kind;
+  if (Number.isInteger(value.exitCode) && value.exitCode >= 0 && value.exitCode <= 255) diagnostic.exitCode = value.exitCode;
+  if (typeof value.signal === "string" && /^SIG[A-Z0-9]{1,16}$/u.test(value.signal)) diagnostic.signal = value.signal;
+  if (EXECUTION_DIAGNOSTIC_CATEGORIES.has(value.category)) diagnostic.category = value.category;
+  if (EXECUTION_DIAGNOSTIC_SUBTYPES.has(value.resultSubtype)) diagnostic.resultSubtype = value.resultSubtype;
+  return Object.keys(diagnostic).length ? diagnostic : null;
+}
 
 function registerTools(server, store, codexRunner, claudeRunner) {
   const previews = new Map();
@@ -93,7 +111,8 @@ function registerTools(server, store, codexRunner, claudeRunner) {
       state: execution.state,
       events: execution.events.filter(event => event.sequence > afterSequence),
       nextSequence: execution.sequence,
-      activityMayBeTruncated: afterSequence < (execution.events[0]?.sequence ?? 1) - 1
+      activityMayBeTruncated: afterSequence < (execution.events[0]?.sequence ?? 1) - 1,
+      ...(execution.diagnostic ? { diagnostic: execution.diagnostic } : {})
     };
   }
 
@@ -167,6 +186,8 @@ function registerTools(server, store, codexRunner, claudeRunner) {
         execution.error = execution.state === "cancelled"
           ? "Se detuvo la llamada de Claude. Revisa el repositorio por si quedaron cambios parciales antes de volver a intentarlo."
           : error instanceof Error ? error.message : "La llamada de Claude no pudo completarse.";
+        const diagnostic = safeExecutionDiagnostic(error?.diagnostic);
+        if (diagnostic) execution.diagnostic = diagnostic;
         if (activeExecutionByTask.get(taskId) === execution.id) activeExecutionByTask.delete(taskId);
         publishActivity(execution, `La llamada terminó sin guardar una entrega: ${execution.error}`);
       } finally {
@@ -231,7 +252,7 @@ function registerTools(server, store, codexRunner, claudeRunner) {
   }, args => invoke(() => store.getTask(args)));
 
   server.registerTool("wait_for_task_activity", {
-    description: "Espera y devuelve los nuevos hitos visibles de una ejecución de Claude, sin mostrar contenido leído ni razonamiento privado. Si state es starting o running, vuelve a llamar esta herramienta con nextSequence como afterSequence para seguir mostrando actividad hasta que termine. Cada espera dura como máximo 15 segundos y no inicia otra llamada al modelo.",
+    description: "Espera y devuelve los nuevos hitos visibles de una ejecución de Claude, sin mostrar contenido leído ni razonamiento privado. Si state es starting o running, vuelve a llamar esta herramienta con nextSequence como afterSequence para seguir mostrando actividad hasta que termine. Al fallar, puede incluir un código de salida y una categoría de error permitida, nunca el texto bruto de stderr o la respuesta fallida. Cada espera dura como máximo 15 segundos y no inicia otra llamada al modelo.",
     inputSchema: z.object({
       taskId: z.string().uuid(),
       executionId: z.string().uuid(),
