@@ -97,8 +97,26 @@ encargos cancelados o desactualizados también consumen cupo.
 - Sin confirmación interactiva o si el usuario la rechaza, la colaboración no se
   crea.
 
+## Modelo y esfuerzo recomendados
+
+`preview_peer_review` y `request_peer_review` aceptan `reviewer` con `model`,
+`effort` y `reason`: la configuración que el principal recomienda para el
+revisor y por qué. Los esfuerzos admitidos dependen del revisor: `low` a `max`
+para Claude y `minimal` a `xhigh` para Codex. La recomendación forma parte del
+prompt aprobado y de su huella, se muestra en el diálogo de confirmación y se
+guarda con el encargo.
+
+Es una recomendación declarada. El MCP no cambia el modelo de una sesión
+abierta: el usuario lo cambia con `/model` en la terminal del revisor antes de
+aprobar. El revisor compara la recomendación con su modelo y, si no coincide,
+no reclama el encargo y avisa. El esfuerzo real de la sesión no se verifica.
+
+## Uso diario con la skill
+
 La skill `skills/revision-cruzada` reduce el uso diario a un comando por
-terminal. Instálala en `~/.claude/skills/` y `~/.codex/skills/`:
+terminal y aprueba cada encargo por separado, con la recomendación delante;
+solo usa `autoReviews` si el usuario lo pide. Instálala en `~/.claude/skills/`
+y `~/.codex/skills/`:
 
 > En la sesión principal: `/revision-cruzada iniciar` (Claude) o
 > `$revision-cruzada iniciar` (Codex), y describe la tarea.

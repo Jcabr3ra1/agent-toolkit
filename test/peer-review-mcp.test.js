@@ -104,6 +104,22 @@ test("the preview cache is bounded and approval displays the complete exact prom
   assert.equal(dispatched.review.approval.previewId, latest.previewId);
 });
 
+test("approval shows the recommended reviewer model and effort before sending", async () => {
+  const f = await harness();
+  const reviewer = { model: "gpt-5-codex", effort: "xhigh", reason: "Revisión de seguridad." };
+  const preview = decode(await f.call("preview_peer_review", { ...f.bound, from: "claude", to: "codex", message: "Revisa answer.", paths: ["app.js"], reviewer }));
+  assert.deepEqual(preview.reviewer, reviewer);
+  let shown;
+  const sent = decode(await f.call("approve_peer_review", { previewId: preview.previewId, confirmationCode: preview.confirmationCode }, {
+    mcpReq: { elicitInput: async request => { shown = request.message; return { action: "accept", content: { decision: "approve" } }; } }
+  }));
+  assert.match(shown, /Recomendado para codex: modelo gpt-5-codex, esfuerzo xhigh\. Revisión de seguridad\./u);
+  assert.match(shown, /cambia el modelo en la terminal del revisor antes de aprobar/u);
+  assert.deepEqual(sent.review.reviewer, reviewer);
+  assert.equal((await f.call("preview_peer_review", { ...f.bound, from: "claude", to: "codex", message: "x", paths: ["app.js"],
+    reviewer: { ...reviewer, effort: "extreme" } }).catch(() => ({ isError: true }))).isError, true);
+});
+
 test("two stdio MCP processes exchange visible-session handoffs both ways without invoking a CLI", async t => {
   const f = await project();
   const workflowRoot = path.join(f.directory, "workflows");

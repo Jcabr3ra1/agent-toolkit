@@ -9,11 +9,16 @@ const REVIEW = { ...BOUND, reviewId: z.string().uuid() };
 const TTL_MS = 20 * 60_000;
 const MAX_PREVIEWS = 8;
 const MAX_WAIT_MS = 60_000;
+const REVIEWER = z.object({
+  model: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/u),
+  effort: z.enum(["minimal", "low", "medium", "high", "xhigh", "max"]),
+  reason: z.string().min(1).max(500)
+}).strict();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const result = value => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
 const error = message => ({ isError: true, content: [{ type: "text", text: message }] });
 
-export const PEER_REVIEW_INSTRUCTIONS = "Para colaborar entre sesiones ya abiertas de Claude y Codex, usa start_collaboration y comparte el taskId y la raíz exacta del proyecto. publish_peer_context sustituye el contexto compartido con control de versión. preview_peer_review no envía nada; muestra su contenido completo y solicita aprobación directa antes de approve_peer_review. La aprobación envía un encargo a la bandeja compartida, no inicia una CLI ni un modelo. El receptor debe estar atendiendo wait_for_peer_handoff desde su propia sesión; no se despiertan ventanas inactivas. Antes de leer debe usar claim_peer_review, revisar solo los archivos aprobados en modo de lectura, sin pruebas ni ediciones, mostrar el trabajo en su terminal y devolver el informe con submit_peer_review. El principal consulta get_collaboration para recuperar los hallazgos y su vigencia. Si el usuario pide trabajar sin aprobar cada encargo, crea la colaboración con autoReviews; el usuario lo confirma una sola vez y después el agente principal usa request_peer_review, hasta ese cupo, sin vista previa. El revisor nunca envía encargos automáticos. Sin taskId, wait_for_peer_handoff atiende todas las colaboraciones abiertas de esa raíz. No te asignes un modelo o una identidad verificada: los roles y autores son declarados, y los permisos de la sesión nativa siguen siendo los suyos. No inicies bucles de espera sin que el usuario pida atender la bandeja. Nunca apruebes encargos por tu cuenta ni envíes un encargo como respuesta a otro de forma automática.";
+export const PEER_REVIEW_INSTRUCTIONS = "Para colaborar entre sesiones ya abiertas de Claude y Codex, usa start_collaboration y comparte el taskId y la raíz exacta del proyecto. publish_peer_context sustituye el contexto compartido con control de versión. preview_peer_review no envía nada; muestra su contenido completo y solicita aprobación directa antes de approve_peer_review. Incluye en reviewer el modelo y el esfuerzo que recomiendas para el revisor con un motivo breve, para que el usuario pueda cambiarlos en la otra terminal antes de aprobar; el MCP no cambia modelos. La aprobación envía un encargo a la bandeja compartida, no inicia una CLI ni un modelo. El receptor debe estar atendiendo wait_for_peer_handoff desde su propia sesión; no se despiertan ventanas inactivas. Antes de leer debe usar claim_peer_review, revisar solo los archivos aprobados en modo de lectura, sin pruebas ni ediciones, mostrar el trabajo en su terminal y devolver el informe con submit_peer_review. El principal consulta get_collaboration para recuperar los hallazgos y su vigencia. Solo si el usuario pide expresamente trabajar sin aprobar cada encargo, crea la colaboración con autoReviews; el usuario lo confirma una sola vez y después el agente principal usa request_peer_review, hasta ese cupo, sin vista previa. El revisor nunca envía encargos automáticos. Sin taskId, wait_for_peer_handoff atiende todas las colaboraciones abiertas de esa raíz. No te asignes un modelo o una identidad verificada: los roles y autores son declarados, y los permisos de la sesión nativa siguen siendo los suyos. No inicies bucles de espera sin que el usuario pida atender la bandeja. Nunca apruebes encargos por tu cuenta ni envíes un encargo como respuesta a otro de forma automática.";
 
 export function registerPeerReviewTools(server, store = createPeerReviewStore(), { now = Date.now } = {}) {
   const previews = new Map();
@@ -62,9 +67,9 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     ...BOUND, author: AGENT, content: z.string().min(1).max(PEER_LIMITS.contextBytes), expectedRevision: z.number().int().min(1)
   }, args => store.publishContext(args));
 
-  tool("preview_peer_review", "Prepara un encargo de revisión de Claude a Codex o viceversa para una sesión ya abierta. Muestra el prompt íntegro, archivos y huellas. No envía ni ejecuta nada. Muestra la vista previa completa al usuario y espera aprobación explícita antes de approve_peer_review.", {
+  tool("preview_peer_review", "Prepara un encargo de revisión de Claude a Codex o viceversa para una sesión ya abierta. Muestra el prompt íntegro, archivos y huellas. No envía ni ejecuta nada. Muestra la vista previa completa al usuario y espera aprobación explícita antes de approve_peer_review. reviewer recomienda modelo y esfuerzo para el revisor; es una recomendación declarada, no cambia la sesión receptora.", {
     ...BOUND, from: AGENT, to: AGENT, message: z.string().min(1).max(4_000),
-    paths: z.array(z.string().min(1).max(512)).min(1).max(PEER_LIMITS.paths)
+    paths: z.array(z.string().min(1).max(512)).min(1).max(PEER_LIMITS.paths), reviewer: REVIEWER.optional()
   }, async args => {
     const prepared = await store.prepareReview(args);
     for (const [id, entry] of previews) if (entry.expires <= now()) previews.delete(id);
@@ -91,6 +96,8 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     const response = await context.mcpReq.elicitInput({
       message: ["Autoriza este encargo para una sesión ya abierta. No se iniciará una CLI ni otro modelo.",
         `Vista previa: ${preview.previewId}`, `De ${preview.from} a ${preview.to}`,
+        ...(preview.reviewer ? [`Recomendado para ${preview.to}: modelo ${preview.reviewer.model}, esfuerzo ${preview.reviewer.effort}. ${preview.reviewer.reason}`,
+          "Si quieres seguir la recomendación, cambia el modelo en la terminal del revisor antes de aprobar."] : []),
         `Proyecto: ${preview.projectRoot}`, `Versión del contexto: ${preview.contextRevision}`,
         `Huella de archivos: ${preview.snapshot.sha256}`, `Prompt completo (SHA-256 ${preview.promptSha256}):`, preview.prompt,
         "El receptor necesita estar atendiendo la bandeja. Solo se solicita lectura; sus permisos nativos no se modifican."
@@ -107,7 +114,7 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
 
   tool("request_peer_review", "Envía directamente un encargo de revisión de solo lectura en una colaboración creada con autoReviews, sin vista previa ni aprobación por encargo. Solo lo admite el agente principal y hasta el cupo confirmado; en otro caso usa preview_peer_review. No inicia modelos ni CLIs.", {
     ...BOUND, from: AGENT, to: AGENT, message: z.string().min(1).max(4_000),
-    paths: z.array(z.string().min(1).max(512)).min(1).max(PEER_LIMITS.paths)
+    paths: z.array(z.string().min(1).max(512)).min(1).max(PEER_LIMITS.paths), reviewer: REVIEWER.optional()
   }, async args => ({ state: "pending", sent: true, automatic: true, review: await store.requestReview(args), startsModel: false }));
 
   async function handoff(args) {

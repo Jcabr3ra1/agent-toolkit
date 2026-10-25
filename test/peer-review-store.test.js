@@ -273,3 +273,24 @@ test("listed collaborations show who may send automatic requests", async () => {
   assert.deepEqual({ primaryAgent: listed[f.task.id].primaryAgent, autoReviews: listed[f.task.id].autoReviews }, { primaryAgent: "claude", autoReviews: 0 });
   assert.deepEqual({ primaryAgent: listed[auto.id].primaryAgent, autoReviews: listed[auto.id].autoReviews }, { primaryAgent: "codex", autoReviews: 3 });
 });
+
+test("reviewer recommendations are validated per agent and travel inside the approved prompt", async () => {
+  const f = await fixture();
+  const reviewer = { model: "gpt-5-codex", effort: "high", reason: "Cambio de concurrencia con riesgo de carreras." };
+  for (const bad of [{ ...reviewer, effort: "max" }, { ...reviewer, model: "modelo con espacios" }, { ...reviewer, reason: "" }, { model: "x", effort: "low" }]) {
+    await assert.rejects(f.prepare({ reviewer: bad }), { code: "peer-input" });
+  }
+  await assert.rejects(f.prepare({ from: "codex", to: "claude", reviewer: { ...reviewer, model: "opus", effort: "minimal" } }), { code: "peer-input" });
+  const plain = await f.prepare();
+  assert.equal(plain.reviewer, null);
+  assert.doesNotMatch(plain.prompt, /Configuración recomendada/u);
+  const preview = await f.prepare({ reviewer });
+  assert.deepEqual(preview.reviewer, reviewer);
+  assert.match(preview.prompt, /Configuración recomendada para codex \(declarada, no verificada\): modelo gpt-5-codex, esfuerzo high/u);
+  assert.notEqual(preview.promptSha256, plain.promptSha256);
+  await assert.rejects(f.store.dispatchReview({ ...preview, reviewer: { ...reviewer, effort: "low" } }, { previewId: "a".repeat(32) }), { code: "peer-revision" });
+  const request = await f.store.dispatchReview(preview, { previewId: "a".repeat(32) });
+  assert.deepEqual(request.reviewer, reviewer);
+  const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "codex" });
+  assert.equal(claim.review.reviewer.model, "gpt-5-codex");
+});
