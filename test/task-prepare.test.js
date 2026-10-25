@@ -14,7 +14,9 @@ const read = p => JSON.parse(fs.readFileSync(new URL(p, import.meta.url), "utf8"
 const schemas = ["agent-task-prepare", "agent-model-selection", "agent-model-preference"].map(n => read(`../schemas/${n}.schema.json`));
 const core = createTaskPreparer(...schemas), select = createModelSelector(schemas[1], schemas[2]);
 const BASE = { task: read("../examples/task-prepare/task.example.json"), ...Object.fromEntries(["request", "catalog", "policy"].map(n => [n, read(`../examples/model-selection/${n}.preference.example.json`)])) };
+const EXTERNAL_VERIFIER = Object.fromEntries(["task", "request", "catalog", "policy"].map(n => [n, read(`../examples/external-verifier/${n}.example.json`)]));
 const fixture = () => structuredClone(BASE);
+const externalVerifierFixture = () => structuredClone(EXTERNAL_VERIFIER);
 const run = d => core.prepareTask(d);
 function safe(r) {
   for (const [k, v] of Object.entries(TASK_FACTS)) assert.equal(r[k], v);
@@ -109,6 +111,43 @@ function roleFixture(role, mode) {
 for (const [role, mode] of [["proposer", "autonomous"], ["executor", "autonomous"], ["reviewer", "autonomous"], ["coordinator", "tutor"], ["reviewer", "tutor"]]) test(`TP one role draft ${role}/${mode}`, () => {
   const d = roleFixture(role, mode), r = safe(run(d)); assert.equal(r.state, "prepared-draft"); assert.equal(r.identity.role, role);
   assert.deepEqual(r.selection.constraints.authorizationContext, d.request.authorizationContext);
+});
+test("TP external verifier is explicit, read-only in its contract and visible in its brief", () => {
+  const d = externalVerifierFixture(), r = safe(run(d));
+  assert.equal(r.state, "prepared-draft"); assert.deepEqual(r.identity, d.task.identity);
+  assert.equal(core.summarize(r).identity.purpose, "external-verifier");
+  assert.match(r.brief, /Verificador externo: rol reviewer/);
+  assert.match(r.brief, /No edites, crees ni borres archivos; no ejecutes comandos/);
+  assert.match(r.brief, /el sistema de ejecución debe aplicar solo lectura/);
+  d.task.deliveryInstructions = "Modifica README.md y ejecuta npm test.";
+  const changed = safe(run(d));
+  assert.equal(changed.state, "prepared-draft");
+  assert.doesNotMatch(changed.brief, /Modifica README\.md|ejecuta npm test/);
+});
+for (const kind of ["schema-version", "role", "mode"]) test("TP external verifier identity conflict " + kind, () => {
+  const d = externalVerifierFixture();
+  if (kind === "schema-version") d.task.schemaVersion = "1.0.0";
+  if (kind === "role") d.task.identity.role = d.request.role = "proposer";
+  if (kind === "mode") d.task.identity.mode = d.request.mode = "tutor";
+  assert.equal(safe(run(d)).state, "invalid");
+});
+for (const kind of ["modify", "actions", "checks", "forbidden-apply", "forbidden-propose"]) test("TP external verifier refuses writable scope " + kind, () => {
+  const d = externalVerifierFixture();
+  if (kind === "modify") d.task.scope.files[0].operation = "modify";
+  if (kind === "actions") d.request.authorizationContext.allowedActions.push("apply");
+  if (kind === "checks") d.task.checks.push({ command: "npm test", directory: "." });
+  if (kind === "forbidden-apply") d.task.projectRules.forbiddenActions = ["propose"];
+  if (kind === "forbidden-propose") d.task.projectRules.forbiddenActions = ["apply"];
+  assert.equal(safe(run(d)).state, "blocked");
+});
+test("TP external verifier references must all stay inside the inspected file list", () => {
+  const cases = [
+    d => { d.task.base.instructionRefs[0].locator = "docs/unlisted.md"; },
+    d => { d.task.contextRefs[0].locator = "docs/unlisted.md"; },
+    d => { d.task.previousDeliveries.push({ revision: "r01", locator: "docs/unlisted.md", sha256: "e".repeat(64) }); },
+    d => { d.task.proposalRef = { revision: "r01", locator: "docs/unlisted.md", sha256: "e".repeat(64) }; }
+  ];
+  for (const mutate of cases) { const d = externalVerifierFixture(); mutate(d); assert.equal(safe(run(d)).state, "blocked"); }
 });
 test("TP tutor cannot select executor or apply, and changed defaults are not inherited", () => {
   const d = fixture(); d.request.authorizationContext.allowedActions.push("apply"); assert.equal(run(d).state, "invalid");

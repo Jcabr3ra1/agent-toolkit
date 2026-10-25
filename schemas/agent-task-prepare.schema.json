@@ -27,6 +27,11 @@
         },
         "mode": {
           "$ref": "https://agent-toolkit.local/schemas/agent-model-selection.schema.json#/$defs/mode"
+        },
+        "purpose": {
+          "enum": [
+            "external-verifier"
+          ]
         }
       }
     },
@@ -152,7 +157,10 @@
           "const": "agent-task-brief"
         },
         "schemaVersion": {
-          "const": "1.0.0"
+          "enum": [
+            "1.0.0",
+            "1.1.0"
+          ]
         },
         "identity": {
           "$ref": "#/$defs/identity"
@@ -420,7 +428,37 @@
           "minLength": 1,
           "maxLength": 1000
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "identity": {
+                "type": "object",
+                "properties": {
+                  "purpose": {
+                    "const": "external-verifier"
+                  }
+                },
+                "required": [
+                  "purpose"
+                ]
+              }
+            },
+            "required": [
+              "identity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "schemaVersion": {
+                "const": "1.1.0"
+              }
+            }
+          }
+        }
+      ]
     },
     "input": {
       "type": "object",

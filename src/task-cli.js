@@ -40,7 +40,7 @@ function options(argv) {
 }
 function outputSummary(s, json) {
   if (json) return JSON.stringify(s, null, 2) + "\n";
-  return `agent-task prepare: ${s.state}\n` + (s.recommended ?
+  return `agent-task prepare: ${s.state}\n` + (s.identity?.purpose === "external-verifier" ? "Propósito: verificador externo (solo lectura declarada).\n" : "") + (s.recommended ?
     `Modelo solicitado: ${s.recommended.requestedModel}; esfuerzo: ${s.recommended.effort ?? "null (sin ajuste explícito)"}\n` : "Sin recomendación utilizable.\n") +
     `Motivos: ${s.reasons.join(", ")}\n` + (s.missing.length ? `Datos pendientes: ${s.missing.join(", ")}\n` : "") +
     "No ejecutado, enviado ni escrito. Permiso, base y modelo real no verificados.\n" +

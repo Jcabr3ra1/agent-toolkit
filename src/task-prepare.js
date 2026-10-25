@@ -46,7 +46,7 @@ const timestamp = v => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(v) && Numbe
   new Date(Date.parse(v)).toISOString() === v.replace(/Z$/, ".000Z");
 function semanticReasons(t, r) {
   const invalid = [], blocked = [], add = (list, code) => { if (!list.includes(code)) list.push(code); };
-  if (Object.keys(t.identity).some(k => t.identity[k] !== r[k])) add(invalid, "task-identity-conflict");
+  if (["projectId", "taskId", "revision", "role", "mode"].some(k => t.identity[k] !== r[k])) add(invalid, "task-identity-conflict");
   const root = t.base.repositoryRoot;
   if (!path.isAbsolute(root) || path.normalize(root) !== root || /[\x00-\x1f]/.test(root) || credentialReference(root)) add(invalid, "task-path-invalid");
   const checkPaths = (entries, key = "path") => {
@@ -72,6 +72,18 @@ function semanticReasons(t, r) {
   if (!t.projectRules.allowedModes.includes(t.identity.mode)) add(blocked, "task-mode-not-permitted");
   if (t.identity.mode === "tutor" && (!t.step || t.projectRules.activeWriter !== "user" || t.identity.role === "executor")) add(blocked, "task-tutor-authorship-conflict");
   if (t.identity.mode === "autonomous" && t.step !== null) add(invalid, "task-step-conflict");
+  if (t.identity.purpose === "external-verifier") {
+    const actions = r.authorizationContext?.allowedActions ?? [];
+    const listedPaths = new Set(t.scope.files.map(f => pathKey(f.path)));
+    const references = [...t.base.instructionRefs, ...t.contextRefs, ...t.previousDeliveries, ...(t.proposalRef ? [t.proposalRef] : [])];
+    const referencesListed = references.every(ref => taskRelativePath(ref.locator) && listedPaths.has(pathKey(ref.locator)));
+    if (t.identity.role !== "reviewer" || t.identity.mode !== "autonomous") add(invalid, "task-external-verifier-identity");
+    if (t.scope.files.some(f => f.operation !== "inspect") || !referencesListed || t.checks.length ||
+      actions.length !== 2 || !actions.includes("read") || !actions.includes("verify") ||
+      !t.projectRules.forbiddenActions.includes("apply") || !t.projectRules.forbiddenActions.includes("propose")) {
+      add(blocked, "task-external-verifier-scope");
+    }
+  }
   if (r.authorizationContext) {
     const a = r.authorizationContext;
     if (a.activeWriter !== t.projectRules.activeWriter) add(blocked, "task-writer-conflict");
@@ -88,6 +100,7 @@ const dataBlock = v => "```json\n" + JSON.stringify(v, null, 2).replace(/"(?:\\.
     c => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"))) + "\n```\n";
 function render(t, r, selection) {
   const section = (title, value) => `\n## ${title}\n\n${dataBlock(value)}`;
+  const externalVerifier = t.identity.purpose === "external-verifier";
   return "# Encargo — borrador pendiente de revisión\n\n" +
     "No enviado ni autorizado por esta herramienta. Datos declarados: revisar permiso directo, instrucciones y base antes de actuar. No cambiar de proveedor para evadir bloqueos.\n" +
     section("Identidad y estado", { ...t.identity, status: "draft", step: t.step }) +
@@ -100,9 +113,13 @@ function render(t, r, selection) {
       availabilityCurrentVerified: false, evaluationTimeDeclared: r.evaluationTime, decisionFileSha256: null }) +
     section("Historial y límites — no reiniciados", { history: r.history, previousDeliveries: t.previousDeliveries, proposalRef: t.proposalRef }) +
     section("Criterios y comprobaciones declaradas — no ejecutadas", { criteria: t.criteria, checks: t.checks }) +
-    section("Entrega solicitada", { instructions: t.deliveryInstructions, modeRule: t.identity.mode === "tutor" ?
-      "Un único paso; el usuario escribe y se revisa antes de avanzar. El tutor y Gemini no aplican código." :
-      "Propuesta, aplicación y revisión necesitan decisiones separadas y permiso directo para cada rol. Sin envío ni ejecución automática." });
+    section("Entrega solicitada", { instructions: externalVerifier ?
+      "Entrega únicamente hallazgos basados en los archivos enumerados. No edites, crees ni borres archivos; no ejecutes comandos. Si el cliente no puede imponer acceso de solo lectura, no ejecutes este encargo." : t.deliveryInstructions,
+      modeRule: externalVerifier ?
+        "Verificador externo: rol reviewer, modo autonomous, acciones limitadas a read y verify, archivos únicamente inspect. El borrador no impone controles al cliente receptor; el sistema de ejecución debe aplicar solo lectura." :
+        t.identity.mode === "tutor" ?
+          "Un único paso; el usuario escribe y se revisa antes de avanzar. El tutor y Gemini no aplican código." :
+          "Propuesta, aplicación y revisión necesitan decisiones separadas y permiso directo para cada rol. Sin envío ni ejecución automática." });
 }
 export function createTaskPreparer(taskSchema, baseSchema, preferenceSchema) {
   let s, b, p, validInput, validReport, validSummary, validSelection, select;
