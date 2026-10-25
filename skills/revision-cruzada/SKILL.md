@@ -19,9 +19,12 @@ ni apruebe cada encargo. Hay dos papeles: **iniciar** (agente principal) y
 
 ## Iniciar (agente principal)
 
-1. Busca una colaboración abierta con `get_collaboration` sin `taskId`. Si hay una
-   que corresponde a esta tarea, reutilízala; si hay varias, pregunta cuál.
-2. Si no existe, llama `start_collaboration` con objetivo, alcance, criterios,
+1. Busca colaboraciones abiertas con `get_collaboration` sin `taskId`. Reutiliza
+   solo una cuyo `primaryAgent` sea tu `agent` y con `autoReviews` mayor que 0;
+   si hay varias, pregunta cuál. Las que inició el otro agente no te sirven para
+   enviar: ignóralas y crea una nueva. Así el usuario puede cambiar de terminal
+   principal solo con ejecutar `iniciar` en la otra.
+2. Si no hay una válida, llama `start_collaboration` con objetivo, alcance, criterios,
    contexto inicial, `primaryAgent` = tu `agent` y `autoReviews` = 5, salvo que
    el usuario pida otro número (máximo 8). El usuario confirma una sola vez en el
    diálogo. Si responde `blocked` o `cancelled`, explícalo y ofrece el flujo con

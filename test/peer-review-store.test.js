@@ -264,3 +264,12 @@ test("automatic requests are limited to the primary agent and the confirmed quot
   const restarted = createPeerReviewStore({ root: f.storage });
   assert.equal((await restarted.getCollaboration(bound)).autoApprove.maxReviews, 2);
 });
+
+test("listed collaborations show who may send automatic requests", async () => {
+  const f = await fixture();
+  const auto = await f.store.startCollaboration({ projectRoot: f.projectRoot, project: "Auto", title: "Codex principal",
+    objective: "Revisar", primaryAgent: "codex", autoReviews: 3 });
+  const listed = Object.fromEntries((await f.store.listCollaborations({ projectRoot: f.projectRoot })).tasks.map(task => [task.taskId, task]));
+  assert.deepEqual({ primaryAgent: listed[f.task.id].primaryAgent, autoReviews: listed[f.task.id].autoReviews }, { primaryAgent: "claude", autoReviews: 0 });
+  assert.deepEqual({ primaryAgent: listed[auto.id].primaryAgent, autoReviews: listed[auto.id].autoReviews }, { primaryAgent: "codex", autoReviews: 3 });
+});

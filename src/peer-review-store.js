@@ -274,7 +274,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     for (const name of (await fs.readdir(directory)).filter(name => UUID.test(name.slice(0, -5)) && name.endsWith(".json"))) {
       const task = await read(directory, name.slice(0, -5));
       if (task.project.root === binding.root && sameIdentity(task.project, binding) && task.state === "open") {
-        tasks.push({ taskId: task.id, title: task.title, project: task.project.name, projectRoot: binding.root, revision: task.revision, updatedAt: task.updatedAt });
+        tasks.push({ taskId: task.id, title: task.title, project: task.project.name, projectRoot: binding.root, primaryAgent: task.primaryAgent,
+          autoReviews: task.autoApprove?.maxReviews ?? 0, revision: task.revision, updatedAt: task.updatedAt });
       }
     }
     return { tasks: tasks.sort((a, b) => a.taskId.localeCompare(b.taskId)) };
