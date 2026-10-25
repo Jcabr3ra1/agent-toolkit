@@ -3,9 +3,12 @@ import { spawn as nodeSpawn, spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 
 const MAX_PROMPT_BYTES = 48_000;
 const MAX_OUTPUT_BYTES = 32_000;
+const MAX_EVENT_STREAM_BYTES = 2_000_000;
+const MAX_EVENT_LINE_BYTES = 1_000_000;
 const MAX_STDERR_BYTES = 8_192;
 const RUN_TIMEOUT_MS = 180_000;
 const REQUIRED_CLAUDE_VERSION = [2, 1, 248];
@@ -162,7 +165,7 @@ function implementationPrompt({ task, plan, proposal, proposalSha256, projectWri
 function claudeArgs({ model, effort, stage }) {
   const common = [
     "--print",
-    "--output-format", "text",
+    "--output-format", "stream-json",
     "--no-session-persistence",
     "--restricted",
     "--strict-mcp-config"
@@ -252,14 +255,56 @@ function workspaceBlockReason(workspace, expected) {
   return null;
 }
 
-function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, timeoutMs = RUN_TIMEOUT_MS }) {
+function safeActivityValue(value, limit = 160) {
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/gu, " ").trim();
+  return normalized ? normalized.slice(0, limit) : null;
+}
+
+function safeActivityPath(value, cwd) {
+  const safe = safeActivityValue(value, 1_024);
+  if (!safe) return null;
+  const absolute = path.resolve(cwd, safe);
+  const relative = path.relative(cwd, absolute);
+  if (!relative || relative === ".") return ".";
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return "ruta fuera del proyecto";
+  return relative.split(path.sep)
+    .map(segment => segment.replace(/[^\p{L}\p{N}._@()+ -]/gu, "_"))
+    .join("/").slice(0, 240);
+}
+
+function toolActivity(event, cwd, projectWrite) {
+  if (event?.type !== "assistant" || !Array.isArray(event.message?.content)) return [];
+  const allowed = new Set(projectWrite ? ["Read", "Glob", "Grep", "Edit", "Write"] : ["Read", "Glob", "Grep"]);
+  const actions = [];
+  for (const block of event.message.content) {
+    if (block?.type !== "tool_use" || !allowed.has(block.name)) continue;
+    const input = block.input && typeof block.input === "object" ? block.input : {};
+    if (block.name === "Read" || block.name === "Edit" || block.name === "Write") {
+      const target = safeActivityPath(input.file_path ?? input.path, cwd);
+      if (target) actions.push(`Claude solicitó ${block.name === "Read" ? "leer" : block.name === "Edit" ? "editar" : "escribir"}: "${target}"`);
+    } else if (block.name === "Glob") {
+      actions.push("Claude solicitó buscar archivos por patrón.");
+    } else if (block.name === "Grep") {
+      const target = input.path ? safeActivityPath(input.path, cwd) : null;
+      actions.push(`Claude solicitó buscar texto${target ? ` en "${target}"` : " en el proyecto"}`);
+    }
+  }
+  return actions;
+}
+
+function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, timeoutMs = RUN_TIMEOUT_MS, onActivity = () => {}, projectWrite = false, signal }) {
   return new Promise((resolve, rejectPromise) => {
+    if (signal?.aborted) { rejectPromise(new Error("La llamada de Claude se canceló antes de iniciar.")); return; }
     let child;
     let settled = false;
     let failure = null;
     let outputBytes = 0;
     let errorBytes = 0;
-    const stdout = [];
+    let lineBuffer = "";
+    let finalAnswer = null;
+    let streamInvalid = false;
+    const decoder = new StringDecoder("utf8");
     let timeout;
     let killTimeout;
     const fail = error => {
@@ -280,10 +325,50 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
     } catch { rejectPromise(new Error("No se pudo iniciar Claude Code CLI.")); return; }
     timeout = setTimeout(() => fail(new Error("La invocación de Claude Code superó el límite de tiempo.")), timeoutMs);
     timeout.unref?.();
+    const report = message => {
+      try { onActivity(message); } catch {}
+    };
+    const onAbort = () => fail(new Error("La llamada de Claude se canceló a petición del usuario."));
+    signal?.addEventListener("abort", onAbort, { once: true });
+    const consumeLine = line => {
+      if (!line) return;
+      if (Buffer.byteLength(line, "utf8") > MAX_EVENT_LINE_BYTES) {
+        streamInvalid = true;
+        fail(new Error("El flujo de actividad de Claude superó el límite por mensaje."));
+        return;
+      }
+      let event;
+      try { event = JSON.parse(line); } catch {
+        streamInvalid = true;
+        fail(new Error("Claude Code devolvió un evento de actividad no válido."));
+        return;
+      }
+      for (const action of toolActivity(event, cwd, projectWrite)) report(action);
+      if (event?.type === "result") {
+        if (event.is_error === true || event.subtype !== "success" || typeof event.result !== "string") {
+          streamInvalid = true;
+          fail(new Error("Claude Code no terminó correctamente; no se guardó una entrega."));
+          return;
+        }
+        finalAnswer = event.result;
+        if (finalAnswer.length > MAX_OUTPUT_BYTES || finalAnswer.includes("\u0000")) {
+          streamInvalid = true;
+          fail(new Error("La respuesta de Claude Code no es válida o supera el límite permitido."));
+        }
+      }
+    };
     child.stdout.on("data", chunk => {
       outputBytes += chunk.length;
-      if (outputBytes > MAX_OUTPUT_BYTES) { fail(new Error("La respuesta de Claude Code superó el límite permitido.")); return; }
-      stdout.push(chunk);
+      if (outputBytes > MAX_EVENT_STREAM_BYTES) { fail(new Error("El flujo de Claude Code superó el límite permitido.")); return; }
+      lineBuffer += decoder.write(chunk);
+      let newline;
+      while ((newline = lineBuffer.indexOf("\n")) >= 0) {
+        const line = lineBuffer.slice(0, newline).replace(/\r$/u, "");
+        lineBuffer = lineBuffer.slice(newline + 1);
+        consumeLine(line);
+        if (failure) return;
+      }
+      if (Buffer.byteLength(lineBuffer, "utf8") > MAX_EVENT_LINE_BYTES) fail(new Error("El flujo de actividad de Claude superó el límite por mensaje."));
     });
     child.stderr.on("data", chunk => {
       errorBytes += chunk.length;
@@ -291,18 +376,24 @@ function runBounded({ executable, args, cwd, prompt, env, spawn = nodeSpawn, tim
     });
     child.stdin.on("error", () => fail(new Error("No se pudo entregar el encargo a Claude Code.")));
     child.on("error", () => fail(new Error("No se pudo iniciar Claude Code CLI.")));
-    child.on("close", (code, signal) => {
+    child.on("spawn", () => report("Claude Code inició el proceso autorizado."));
+    child.on("close", (code, closeSignal) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       clearTimeout(killTimeout);
+      signal?.removeEventListener("abort", onAbort);
       if (failure) { rejectPromise(failure); return; }
-      if (code !== 0 || signal) { rejectPromise(new Error("Claude Code no terminó correctamente; no se guardó una entrega.")); return; }
-      const answer = Buffer.concat(stdout).toString("utf8").trim();
-      if (!answer || answer.includes("\u0000") || answer.length > MAX_OUTPUT_BYTES) {
+      if (code !== 0 || closeSignal) { rejectPromise(new Error("Claude Code no terminó correctamente; no se guardó una entrega.")); return; }
+      lineBuffer += decoder.end();
+      if (lineBuffer.trim()) consumeLine(lineBuffer.trim());
+      const answer = finalAnswer?.trim();
+      if (failure) { rejectPromise(failure); return; }
+      if (streamInvalid || !answer || answer.includes("\u0000") || answer.length > MAX_OUTPUT_BYTES) {
         rejectPromise(new Error("Claude Code no devolvió una respuesta válida."));
         return;
       }
+      report("Claude terminó y Agent Toolkit está guardando la entrega.");
       resolve(answer);
     });
     child.stdin.end(prompt, "utf8");
@@ -395,6 +486,8 @@ export function createClaudeCodeRunner(dependencies = {}) {
         maxTurns: projectWrite ? 20 : 6,
         timeoutMs: RUN_TIMEOUT_MS,
         outputBytes: MAX_OUTPUT_BYTES,
+        eventStreamBytes: MAX_EVENT_STREAM_BYTES,
+        eventLineBytes: MAX_EVENT_LINE_BYTES,
         readOnly: !projectWrite,
         projectWrite,
         tools: projectWrite ? ["Read", "Glob", "Grep", "Edit", "Write"] : ["Read", "Glob", "Grep"],
@@ -414,7 +507,7 @@ export function createClaudeCodeRunner(dependencies = {}) {
     return prepare({ ...input, stage: "claude-implementation" });
   }
 
-  async function run(preview) {
+  async function run(preview, { onActivity = () => {}, signal } = {}) {
     if (!preview || preview.client !== "Claude Code CLI" || preview.canExecute !== true ||
         typeof preview.command?.executable !== "string" || !Array.isArray(preview.command.args) ||
         typeof preview.command.cwd !== "string" || typeof preview.command.stdin !== "string") reject("claude-preview-invalid");
@@ -439,7 +532,10 @@ export function createClaudeCodeRunner(dependencies = {}) {
       prompt: preview.command.stdin,
       env,
       spawn,
-      timeoutMs: RUN_TIMEOUT_MS
+      timeoutMs: RUN_TIMEOUT_MS,
+      onActivity,
+      projectWrite: preview.limits?.projectWrite === true,
+      signal
     });
     if (preview.stage !== "claude-implementation") return response;
     if (preview.limits?.projectWrite !== true) {

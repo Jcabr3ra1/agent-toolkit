@@ -177,6 +177,7 @@ test("Claude preview is read-only, uses the selected model and effort, and ignor
   assert.equal(preview.model, "sonnet");
   assert.equal(preview.effort, "high");
   assert.equal(preview.command.shell, false);
+  assert.equal(preview.command.args[preview.command.args.indexOf("--output-format") + 1], "stream-json");
   assert.ok(preview.command.args.includes("--restricted"));
   assert.ok(preview.command.args.includes("--permission-mode"));
   assert.ok(preview.command.args.includes("plan"));
@@ -206,6 +207,38 @@ test("Claude preview remains blocked when the CLI is not logged into Claude.ai",
   assert.equal(preview.canExecute, false);
   assert.match(preview.account, /no detecta una sesión iniciada/u);
   await assert.rejects(runner.run(preview), /no se pudo preparar/u);
+});
+
+test("Claude execution can be cancelled after starting", async () => {
+  const messages = [];
+  const controller = new AbortController();
+  const runner = createClaudeCodeRunner({
+    claudePath: process.execPath,
+    env: { HOME: home, PATH: process.env.PATH ?? "" },
+    home,
+    runSync: fakeSyncForClaude,
+    spawn: () => {
+      const child = new EventEmitter();
+      child.pid = 123;
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = signal => { setImmediate(() => child.emit("close", null, signal)); return true; };
+      setImmediate(() => child.emit("spawn"));
+      return child;
+    }
+  });
+  const preview = await runner.preview({ projectRoot, task, plan: JSON.stringify(plan), model: "sonnet", effort: "medium" });
+  const run = runner.run(preview, {
+    signal: controller.signal,
+    onActivity(message) {
+      messages.push(message);
+      if (message.includes("inició el proceso")) controller.abort();
+    }
+  });
+  await assert.rejects(run, /canceló a petición del usuario/u);
+  assert.ok(messages.includes("Claude Code inició el proceso autorizado."));
+  await runner.cleanup(preview);
 });
 
 test("Claude preflight retains the local USER needed to detect its existing session", async () => {

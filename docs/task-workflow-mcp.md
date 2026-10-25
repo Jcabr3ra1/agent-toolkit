@@ -66,8 +66,10 @@ cambios que aún no se aplicaron.
 2. Después de aprobarla, `run_codex_plan` ejecuta Codex con sandbox de solo
    lectura y guarda el plan estructurado.
 3. `preview_claude_proposal` usa el modelo y el esfuerzo recomendados por el
-   plan. Tras una aprobación separada, `run_claude_proposal` llama a Claude en
-   modo de lectura y guarda la propuesta.
+   plan. Tras una aprobación separada, `run_claude_proposal` inicia Claude en
+   modo de lectura y devuelve un identificador de ejecución. Llama
+   `wait_for_task_activity` para ver los hitos de la revisión y recibir la
+   propuesta guardada al terminar.
 4. Si la tarea habilitó `allowImplementation`, revisa la propuesta y prepara
    `preview_claude_implementation`. Esta vista previa muestra que la llamada
    puede editar archivos, su lista de herramientas, el repositorio, la rama y
@@ -75,11 +77,13 @@ cambios que aún no se aplicaron.
    `main`/`master` y con el árbol limpio. Vuelve a comprobar esa condición al
    ejecutar.
 5. Al aprobar esa vista previa, `run_claude_implementation` autoriza la huella
-   exacta de la propuesta y llama a Claude. La CLI recibe `Read`, `Glob`,
-   `Grep`, `Edit` y `Write`; no recibe Bash, red, MCP ni subagentes. El permiso
-   alcanza el repositorio completo, aunque el prompt limita el cambio a las
-   rutas `modify`/`create` del plan. El resultado informa los archivos que Git
-   detectó como cambiados; las pruebas no se ejecutan en esta etapa.
+   exacta de la propuesta e inicia Claude en segundo plano. La CLI recibe
+   `Read`, `Glob`, `Grep`, `Edit` y `Write`; no recibe Bash, red, MCP ni
+   subagentes. El permiso alcanza el repositorio completo, aunque el prompt
+   limita el cambio a las rutas `modify`/`create` del plan. Usa
+   `wait_for_task_activity` para ver las rutas de lectura o escritura que Claude
+   solicita. Al terminar, el resultado informa los archivos que Git detectó
+   como cambiados; las pruebas no se ejecutan en esta etapa.
 6. Si además se habilitó `allowFinalReview`, Agent Toolkit prepara
    `preview_codex_review` con el plan, la propuesta y la entrega guardada.
    Por defecto reutiliza el modelo y esfuerzo fijados en la vista previa de
@@ -90,6 +94,26 @@ cambios que aún no se aplicaron.
 Una tarea sin permisos optativos termina después de la propuesta. Cancelar una
 confirmación no inicia la CLI. Si el cliente MCP no ofrece confirmación
 interactiva, la ejecución queda bloqueada.
+
+## Ver la actividad de Claude
+
+Las llamadas a Claude corren como procesos separados; no escriben en la
+terminal interactiva de Claude que ya está abierta. `run_claude_proposal` y
+`run_claude_implementation` devuelven rápido con un `executionId`. Después,
+`wait_for_task_activity` muestra acciones concretas como la lectura de una ruta
+o la búsqueda de archivos, y puede volver a llamarse con `nextSequence` mientras
+el estado sea `starting` o `running`. Al terminar, devuelve la entrega guardada.
+Si quieres detenerla, llama `cancel_task_execution` y consulta después hasta que
+el estado indique `cancelled`. Cancelar una implementación no revierte cambios
+parciales: inspecciona la rama antes de reintentar.
+
+La actividad solo incluye nombres de herramientas y rutas relativas; no expone
+el contenido leído ni texto de razonamiento del modelo. Codex CLI no muestra
+actualmente las notificaciones MCP de progreso dentro de la llamada en curso,
+por lo que Agent Toolkit usa consultas de actividad separadas para que esas
+acciones aparezcan en el historial del chat. Si Codex no continúa consultando
+por sí mismo, pídele: “Sigue consultando `wait_for_task_activity` para esta
+ejecución y muéstrame cada acción hasta que termine”.
 
 ## Cuentas, llamadas y datos locales
 
@@ -109,10 +133,10 @@ interactiva, la ejecución queda bloqueada.
 ## Verificación
 
 Las pruebas del Toolkit usan CLIs ficticias para comprobar las puertas de
-autorización, el orden de etapas, la detección de cambios y el bloqueo de
-escrituras en repositorios no seguros. Una prueba con clientes ficticios no
-confirma que los modelos estén disponibles ni sustituye una demostración real
-de cada etapa. La primera demostración real cubrió Codex planificando y Claude
-devolviendo una propuesta de solo lectura. La implementación y la revisión final
-requieren una tarea nueva con permisos optativos habilitados y aprobación
-separada en cada vista previa.
+autorización, el orden de etapas, el registro visible de acciones, la detección
+de cambios y el bloqueo de escrituras en repositorios no seguros. Una prueba
+con clientes ficticios no confirma que los modelos estén disponibles ni
+sustituye una demostración real de cada etapa. La primera demostración real
+cubrió Codex planificando y Claude devolviendo una propuesta de solo lectura.
+La implementación y la revisión final requieren una tarea nueva con permisos
+optativos habilitados y aprobación separada en cada vista previa.

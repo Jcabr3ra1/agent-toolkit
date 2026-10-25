@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 
@@ -65,11 +66,117 @@ async function requestExecutionApproval(context, preview) {
 
 const PREVIEW_TTL_MS = 20 * 60 * 1000;
 const MAX_PENDING_PREVIEWS = 8;
+const MAX_EXECUTIONS = 32;
+const MAX_ACTIVITY_EVENTS = 40;
+const MAX_ACTIVITY_WAIT_MS = 15_000;
 const CLAUDE_EFFORT = z.enum(["low", "medium", "high", "xhigh", "max"]);
 const CODEX_EFFORT = z.enum(["minimal", "low", "medium", "high", "xhigh"]);
 
 function registerTools(server, store, codexRunner, claudeRunner) {
   const previews = new Map();
+  const executions = new Map();
+  const activeExecutionByTask = new Map();
+
+  function publishActivity(execution, message) {
+    const event = { sequence: ++execution.sequence, at: new Date().toISOString(), message };
+    execution.events.push(event);
+    if (execution.events.length > MAX_ACTIVITY_EVENTS) execution.events.shift();
+    for (const resume of execution.waiters) resume();
+    execution.waiters.clear();
+  }
+
+  function executionSnapshot(execution, afterSequence = 0) {
+    return {
+      taskId: execution.taskId,
+      executionId: execution.id,
+      stage: execution.stage,
+      state: execution.state,
+      events: execution.events.filter(event => event.sequence > afterSequence),
+      nextSequence: execution.sequence,
+      activityMayBeTruncated: afterSequence < (execution.events[0]?.sequence ?? 1) - 1
+    };
+  }
+
+  async function waitForActivity(execution, afterSequence, waitMs) {
+    if (execution.sequence > afterSequence || !["starting", "running", "cancelling"].includes(execution.state) || waitMs === 0) {
+      return executionSnapshot(execution, afterSequence);
+    }
+    await new Promise(resolve => {
+      let timer;
+      const resume = () => {
+        clearTimeout(timer);
+        execution.waiters.delete(resume);
+        resolve();
+      };
+      execution.waiters.add(resume);
+      timer = setTimeout(resume, waitMs);
+    });
+    return executionSnapshot(execution, afterSequence);
+  }
+
+  function beginClaudeExecution({ taskId, stage, pending }) {
+    const activeId = activeExecutionByTask.get(taskId);
+    const active = activeId ? executions.get(activeId) : null;
+    if (active && ["starting", "running", "cancelling"].includes(active.state)) {
+      throw new Error("Ya hay una llamada de Claude activa para esta tarea; consulta su actividad antes de iniciar otra.");
+    }
+    for (const execution of executions.values()) {
+      if (["completed", "failed"].includes(execution.state) && executions.size >= MAX_EXECUTIONS) executions.delete(execution.id);
+    }
+    if (executions.size >= MAX_EXECUTIONS) throw new Error("Hay demasiadas llamadas activas; espera a que terminen antes de iniciar otra.");
+
+    const execution = {
+      id: randomUUID(), taskId, stage, state: "starting", sequence: 0,
+      controller: new AbortController(),
+      events: [], waiters: new Set(), startedAt: new Date().toISOString(), outputKey: stage === "claude-proposal" ? "proposal" : "implementation"
+    };
+    executions.set(execution.id, execution);
+    activeExecutionByTask.set(taskId, execution.id);
+    publishActivity(execution, "Agent Toolkit autorizó la llamada y está preparando Claude Code.");
+
+    void (async () => {
+      try {
+        const resultValue = await pending.runner.run(pending.preview, {
+          signal: execution.controller.signal,
+          onActivity(message) {
+            if (execution.state === "starting") execution.state = "running";
+            publishActivity(execution, message);
+          }
+        });
+        const content = stage === "claude-proposal" ? resultValue : resultValue?.response;
+        if (typeof content !== "string" || !content.trim()) throw new Error("Claude no devolvió una entrega válida.");
+        const updated = await store.recordStageOutput({ taskId, stage, content });
+        execution.state = "completed";
+        execution.taskStatus = updated.status;
+        execution.currentStage = updated.currentStage;
+        execution.outputSha256 = updated.outputs[execution.outputKey]?.sha256 ?? null;
+        if (stage === "claude-implementation") {
+          execution.filesChanged = resultValue.filesChanged ?? false;
+          execution.changedFiles = resultValue.changedFiles ?? [];
+          execution.branch = resultValue.branch ?? null;
+          execution.baseCommit = resultValue.baseCommit ?? null;
+          execution.workspaceVerified = resultValue.workspaceVerified ?? false;
+          execution.checksExecuted = false;
+        } else {
+          execution.filesChanged = false;
+          execution.checksExecuted = false;
+        }
+        publishActivity(execution, "La respuesta de Claude quedó guardada en la tarea.");
+      } catch (error) {
+        execution.state = execution.controller.signal.aborted ? "cancelled" : "failed";
+        execution.error = execution.state === "cancelled"
+          ? "Se detuvo la llamada de Claude. Revisa el repositorio por si quedaron cambios parciales antes de volver a intentarlo."
+          : error instanceof Error ? error.message : "La llamada de Claude no pudo completarse.";
+        if (activeExecutionByTask.get(taskId) === execution.id) activeExecutionByTask.delete(taskId);
+        publishActivity(execution, `La llamada terminó sin guardar una entrega: ${execution.error}`);
+      } finally {
+        try { await pending.runner.cleanup?.(pending.preview); } catch {}
+        for (const resume of execution.waiters) resume();
+        execution.waiters.clear();
+      }
+    })();
+    return execution;
+  }
 
   async function prunePreviews() {
     const threshold = Date.now() - PREVIEW_TTL_MS;
@@ -122,6 +229,55 @@ function registerTools(server, store, codexRunner, claudeRunner) {
       taskId: z.string().uuid().optional()
     }).strict().refine(value => Boolean(value.project) !== Boolean(value.taskId), "Indica exactamente project o taskId.")
   }, args => invoke(() => store.getTask(args)));
+
+  server.registerTool("wait_for_task_activity", {
+    description: "Espera y devuelve los nuevos hitos visibles de una ejecución de Claude, sin mostrar contenido leído ni razonamiento privado. Si state es starting o running, vuelve a llamar esta herramienta con nextSequence como afterSequence para seguir mostrando actividad hasta que termine. Cada espera dura como máximo 15 segundos y no inicia otra llamada al modelo.",
+    inputSchema: z.object({
+      taskId: z.string().uuid(),
+      executionId: z.string().uuid(),
+      afterSequence: z.number().int().min(0).optional().default(0),
+      waitMs: z.number().int().min(0).max(MAX_ACTIVITY_WAIT_MS).optional().default(MAX_ACTIVITY_WAIT_MS)
+    }).strict()
+  }, args => invoke(async () => {
+    const execution = executions.get(args.executionId);
+    if (!execution || execution.taskId !== args.taskId) throw new Error("No se encontró una ejecución activa con esos identificadores.");
+    const snapshot = await waitForActivity(execution, args.afterSequence, args.waitMs);
+    if (["completed", "failed", "cancelled"].includes(snapshot.state)) {
+      const task = await store.getTask({ taskId: args.taskId });
+      const output = task.outputs[execution.outputKey];
+      return {
+        ...snapshot,
+        taskStatus: task.status,
+        currentStage: task.currentStage,
+        ...(output ? { output: output.content, outputSha256: output.sha256 } : {}),
+        ...(execution.error ? { error: execution.error } : {}),
+        ...(execution.filesChanged !== undefined ? {
+          filesChanged: execution.filesChanged,
+          changedFiles: execution.changedFiles ?? [],
+          branch: execution.branch ?? null,
+          baseCommit: execution.baseCommit ?? null,
+          workspaceVerified: execution.workspaceVerified ?? false,
+          checksExecuted: execution.checksExecuted ?? false
+        } : {})
+      };
+    }
+    return { ...snapshot, message: snapshot.events.length ? undefined : "Claude sigue trabajando; aún no reporta una acción nueva." };
+  }));
+
+  server.registerTool("cancel_task_execution", {
+    description: "Solicita detener una ejecución activa de Claude. No inicia otra llamada ni revierte cambios parciales; tras cancelarla, revisa el estado de los archivos antes de reintentar.",
+    inputSchema: z.object({ taskId: z.string().uuid(), executionId: z.string().uuid() }).strict()
+  }, args => invoke(async () => {
+    const execution = executions.get(args.executionId);
+    if (!execution || execution.taskId !== args.taskId) throw new Error("No se encontró una ejecución con esos identificadores.");
+    if (!["starting", "running"].includes(execution.state)) {
+      return { taskId: args.taskId, executionId: execution.id, state: execution.state, message: "La ejecución ya terminó." };
+    }
+    execution.state = "cancelling";
+    publishActivity(execution, "Se solicitó detener Claude Code; espera la confirmación de cierre del proceso.");
+    execution.controller.abort();
+    return { taskId: args.taskId, executionId: execution.id, state: execution.state, message: "Se solicitó la cancelación. Usa wait_for_task_activity para confirmar que el proceso terminó." };
+  }));
 
   server.registerTool("preview_codex_plan", {
     description: "Prepara, sin llamar al modelo, una vista previa exacta de Codex CLI para planificar en modo de solo lectura. El plan elegirá un modelo y esfuerzo de Claude entre las opciones permitidas. Muestra la cuenta/sesión detectada, el comando, la ruta del proyecto y el prompt. No llames a run_codex_plan hasta que el usuario haya aprobado directamente esta vista previa.",
@@ -192,7 +348,7 @@ function registerTools(server, store, codexRunner, claudeRunner) {
   }));
 
   server.registerTool("run_claude_proposal", {
-    description: "Ejecuta una vista previa vigente de Claude Code CLI después de una confirmación interactiva del usuario en el cliente MCP. El diálogo muestra comando, sesión, cuenta, modelo, esfuerzo y prompt. Si el cliente no presenta ese diálogo, la ejecución queda bloqueada. Claude recibe acceso de solo lectura; su respuesta vuelve a la tarea sin copiar y pegar. No repitas ni reintentes una ejecución fallida.",
+    description: "Después de confirmar interactivamente la vista previa, inicia Claude Code CLI en segundo plano y devuelve un executionId. No llama al modelo antes de la aprobación. Claude recibe solo lectura; usa wait_for_task_activity con ese id para mostrar acciones y recibir la respuesta guardada. Si el cliente no presenta la confirmación, la ejecución queda bloqueada. No repitas ni reintentes una ejecución fallida.",
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     inputSchema: z.object({
       previewId: z.string().regex(/^[a-f0-9]{32}$/u),
@@ -205,12 +361,22 @@ function registerTools(server, store, codexRunner, claudeRunner) {
       await pending.runner.cleanup?.(pending.preview);
       throw new Error("La tarea ya avanzó; prepara una nueva vista previa para la etapa activa.");
     }
+    let launched = false;
     try {
       await requestExecutionApproval(context, pending.preview);
-      const proposal = await pending.runner.run(pending.preview);
-      const updated = await store.recordStageOutput({ taskId: task.id, stage: "claude-proposal", content: proposal });
-      return { task: updated, proposal, modelAvailabilityVerified: false, filesChanged: false, checksExecuted: false };
-    } finally { await pending.runner.cleanup?.(pending.preview); }
+      const execution = beginClaudeExecution({ taskId: task.id, stage: "claude-proposal", pending });
+      launched = true;
+      return {
+        task,
+        executionId: execution.id,
+        state: execution.state,
+        message: "Claude Code inició en segundo plano. Usa wait_for_task_activity para ver sus acciones y recibir la entrega al terminar.",
+        model: pending.preview.model,
+        effort: pending.preview.effort
+      };
+    } finally {
+      if (!launched) await pending.runner.cleanup?.(pending.preview);
+    }
   }));
 
   server.registerTool("preview_claude_implementation", {
@@ -246,7 +412,7 @@ function registerTools(server, store, codexRunner, claudeRunner) {
   }));
 
   server.registerTool("run_claude_implementation", {
-    description: "Ejecuta una vista previa vigente de Claude Code CLI después de la confirmación interactiva del usuario. En modo tutor solo devuelve una solución; en modo autonomous puede escribir archivos y la autorización queda ligada a la huella exacta de la propuesta. La implementación autónoma no tiene shell, MCP ni red. Si el cliente MCP no presenta la confirmación, la ejecución queda bloqueada. No repitas ni reintentes una ejecución fallida.",
+    description: "Después de confirmar interactivamente la vista previa, inicia Claude Code CLI en segundo plano y devuelve un executionId. No llama al modelo antes de la aprobación. En modo tutor solo devuelve una solución; en modo autonomous puede escribir archivos y la autorización queda ligada a la huella exacta de la propuesta. Usa wait_for_task_activity para mostrar acciones y recibir la entrega guardada; cancel_task_execution la detiene a petición del usuario. La implementación autónoma no tiene shell, MCP ni red. Si el cliente MCP no presenta la confirmación, la ejecución queda bloqueada. No repitas ni reintentes una ejecución fallida.",
     annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     inputSchema: z.object({
       previewId: z.string().regex(/^[a-f0-9]{32}$/u),
@@ -265,23 +431,23 @@ function registerTools(server, store, codexRunner, claudeRunner) {
       await pending.runner.cleanup?.(pending.preview);
       throw new Error("La propuesta o la autorización cambió; prepara una nueva vista previa de la etapa pendiente.");
     }
+    let launched = false;
     try {
       await requestExecutionApproval(context, pending.preview);
       if (!tutorStage && awaitingApproval) await store.authorizeImplementation({ taskId: task.id, proposalSha256: pending.preview.proposalSha256 });
-      const implementation = await pending.runner.run(pending.preview);
-      if (!implementation || typeof implementation.response !== "string") throw new Error("Claude no devolvió una entrega válida; inspecciona el repositorio antes de decidir el siguiente paso.");
-      const updated = await store.recordStageOutput({ taskId: task.id, stage: "claude-implementation", content: implementation.response });
+      const execution = beginClaudeExecution({ taskId: task.id, stage: "claude-implementation", pending });
+      launched = true;
       return {
-        task: updated,
-        implementation: implementation.response,
-        filesChanged: implementation.filesChanged ?? false,
-        changedFiles: implementation.changedFiles ?? [],
-        branch: implementation.branch ?? null,
-        baseCommit: implementation.baseCommit ?? null,
-        workspaceVerified: implementation.workspaceVerified ?? false,
-        checksExecuted: false
+        task: !tutorStage && awaitingApproval ? await store.getTask({ taskId: task.id }) : task,
+        executionId: execution.id,
+        state: execution.state,
+        message: "Claude Code inició en segundo plano. Usa wait_for_task_activity para ver sus acciones y recibir la entrega al terminar.",
+        model: pending.preview.model,
+        effort: pending.preview.effort
       };
-    } finally { await pending.runner.cleanup?.(pending.preview); }
+    } finally {
+      if (!launched) await pending.runner.cleanup?.(pending.preview);
+    }
   }));
 
   server.registerTool("preview_codex_review", {
@@ -346,7 +512,7 @@ export function createTaskWorkflowMcp({
   const server = new McpServer({
     name: "agent-toolkit",
     version: "0.1.0",
-    instructions: "Agent Toolkit coordina Codex CLI y Claude Code CLI mediante vistas previas de un solo uso. Las tareas tutor usan Claude para devolver una solución sin editar. Las tareas autonomous solo habilitan la implementación de Claude y la revisión final de Codex si allowImplementation y allowFinalReview se activaron al crearla; ambos están desactivados por defecto. Codex planifica en modo de solo lectura y elige modelo/esfuerzo de Claude entre valores permitidos. Claude contrasta el plan en modo de solo lectura. Después de revisar su propuesta, el usuario puede autorizar por separado la implementación; esa llamada puede editar archivos únicamente en una rama de trabajo limpia, con herramientas Read, Glob, Grep, Edit y Write, sin shell, red ni MCP. Codex revisa el resultado en modo read-only. Antes de cada llamada, solicita aprobación interactiva y muestra comando, cuenta/sesión, modelo, esfuerzo, permisos y prompt. Si el cliente no ofrece confirmación, la llamada queda bloqueada. No inventes cuentas, disponibilidad, pruebas o resultados; nunca hagas commits ni pushes."
+    instructions: "Agent Toolkit coordina Codex CLI y Claude Code CLI mediante vistas previas de un solo uso. Las tareas tutor usan Claude para devolver una solución sin editar. Las tareas autonomous solo habilitan la implementación de Claude y la revisión final de Codex si allowImplementation y allowFinalReview se activaron al crearla; ambos están desactivados por defecto. Codex planifica en modo de solo lectura y elige modelo/esfuerzo de Claude entre valores permitidos. Claude contrasta el plan en modo de solo lectura. Después de revisar su propuesta, el usuario puede autorizar por separado la implementación; esa llamada puede editar archivos únicamente en una rama de trabajo limpia, con herramientas Read, Glob, Grep, Edit y Write, sin shell, red ni MCP. Codex revisa el resultado en modo read-only. Antes de cada llamada, solicita aprobación interactiva y muestra comando, cuenta/sesión, modelo, esfuerzo, permisos y prompt. Las llamadas a Claude devuelven un identificador y corren en segundo plano; después llama wait_for_task_activity para mostrar acciones sanitizadas hasta que termine. Si el usuario pide detener la ejecución, usa cancel_task_execution y luego confirma el cierre con wait_for_task_activity; si era una escritura, pídele inspeccionar posibles cambios parciales. Si el cliente no ofrece confirmación, la llamada queda bloqueada. No inventes cuentas, disponibilidad, pruebas o resultados; nunca hagas commits ni pushes."
   });
   registerTools(server, store, codexRunner, claudeRunner);
   return server;

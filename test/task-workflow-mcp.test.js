@@ -23,6 +23,22 @@ const taskInput = {
 
 after(() => fs.rmSync(root, { recursive: true, force: true }));
 
+async function waitForExecution(client, taskId, executionId) {
+  let afterSequence = 0;
+  const events = [];
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const call = await client.callTool({ name: "wait_for_task_activity", arguments: {
+      taskId, executionId, afterSequence, waitMs: 250
+    } });
+    assert.equal(call.isError, undefined, call.content?.[0]?.text);
+    const snapshot = JSON.parse(call.content[0].text);
+    events.push(...snapshot.events);
+    afterSequence = snapshot.nextSequence;
+    if (["completed", "failed", "cancelled"].includes(snapshot.state)) return { ...snapshot, events };
+  }
+  assert.fail("Claude execution did not finish in the test budget.");
+}
+
 function createStore(name) {
   return createTaskWorkflowStore({ root: path.join(root, name) });
 }
@@ -141,7 +157,9 @@ if [ "$1" = "--version" ]; then printf '%s\\n' '2.1.300'; exit 0; fi
 if [ "$1" = "auth" ] && [ "$2" = "status" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}'; exit 0; fi
 printf '%s\\n' invoked >> ${quote(claudeRuns)}
 cat >/dev/null
-printf '%s\\n' 'Propuesta de lectura: usar una grilla responsiva y conservar los datos actuales.'
+printf '%s\\n' ${quote(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: "docs/agent-team-handoffs.md" } }] } }))}
+printf '%s\\n' ${quote(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", content: "PRIVATE_SOURCE_TEXT_MUST_NOT_APPEAR" }] } }))}
+printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Propuesta de lectura: usar una grilla responsiva y conservar los datos actuales." }))}
 `, { mode: 0o700 });
 
   let approvalDecision = "cancel";
@@ -168,6 +186,7 @@ printf '%s\\n' 'Propuesta de lectura: usar una grilla responsiva y conservar los
   await client.connect(transport);
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map(tool => tool.name).sort(), [
+    "cancel_task_execution",
     "get_task",
     "preview_claude_implementation",
     "preview_claude_proposal",
@@ -177,7 +196,8 @@ printf '%s\\n' 'Propuesta de lectura: usar una grilla responsiva y conservar los
     "run_claude_proposal",
     "run_codex_plan",
     "run_codex_review",
-    "start_task"
+    "start_task",
+    "wait_for_task_activity"
   ]);
 
   const created = await client.callTool({ name: "start_task", arguments: {
@@ -258,9 +278,15 @@ printf '%s\\n' 'Propuesta de lectura: usar una grilla responsiva y conservar los
     confirmationCode: proposalPreview.confirmationCode
   } });
   assert.equal(proposedResult.isError, undefined);
-  const proposalResponse = JSON.parse(proposedResult.content[0].text);
-  assert.equal(proposalResponse.task.currentStage, "awaiting-authorization");
-  assert.match(proposalResponse.proposal, /grilla responsiva/u);
+  const proposalStarted = JSON.parse(proposedResult.content[0].text);
+  assert.ok(proposalStarted.executionId);
+  assert.match(proposalStarted.message, /segundo plano/u);
+  const proposalResponse = await waitForExecution(client, task.id, proposalStarted.executionId);
+  assert.equal(proposalResponse.state, "completed");
+  assert.equal(proposalResponse.currentStage, "awaiting-authorization");
+  assert.match(proposalResponse.output, /grilla responsiva/u);
+  assert.ok(proposalResponse.events.some(event => /Claude solicitó leer: "docs\/agent-team-handoffs\.md"/u.test(event.message)));
+  assert.doesNotMatch(JSON.stringify(proposalResponse.events), /PRIVATE_SOURCE_TEXT_MUST_NOT_APPEAR/u);
   assert.equal(fs.readFileSync(claudeRuns, "utf8").trim(), "invoked");
   assert.deepEqual(fs.readdirSync(projectRoot), []);
 
@@ -343,10 +369,12 @@ for arg in "$@"; do if [ "$arg" = 'acceptEdits' ]; then implementation=1; fi; do
 cat >/dev/null
 if [ "$implementation" = 1 ]; then
   printf '%s\\n' 'export const dashboardCard = "improved";' > ${quote(implementationPath)}
-  printf '%s\\n' 'Actualicé src/dashboard-card.js; no ejecuté pruebas.'
+  printf '%s\\n' ${quote(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Edit", input: { file_path: "src/dashboard-card.js" } }] } }))}
+  printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Actualicé src/dashboard-card.js; no ejecuté pruebas." }))}
   printf '%s\\n' implementation >> ${quote(claudeRuns)}
 else
-  printf '%s\\n' 'Propuesta: conservar el contrato y mejorar el contenido de la tarjeta.'
+  printf '%s\\n' ${quote(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: "src/dashboard-card.js" } }] } }))}
+  printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Propuesta: conservar el contrato y mejorar el contenido de la tarjeta." }))}
   printf '%s\\n' proposal >> ${quote(claudeRuns)}
 fi
 `, { mode: 0o700 });
@@ -399,8 +427,9 @@ fi
     previewId: proposalPreview.previewId, confirmationCode: proposalPreview.confirmationCode
   } });
   assert.equal(proposalCall.isError, undefined, proposalCall.content?.[0]?.text);
-  const proposalResult = JSON.parse(proposalCall.content[0].text);
-  assert.equal(proposalResult.task.currentStage, "awaiting-authorization");
+  const proposalStart = JSON.parse(proposalCall.content[0].text);
+  const proposalResult = await waitForExecution(client, task.id, proposalStart.executionId);
+  assert.equal(proposalResult.currentStage, "awaiting-authorization");
 
   const implementationPreviewCall = await client.callTool({ name: "preview_claude_implementation", arguments: {
     taskId: task.id, projectRoot
@@ -417,8 +446,9 @@ fi
     previewId: implementationPreview.previewId, confirmationCode: implementationPreview.confirmationCode
   } });
   assert.equal(implementationCall.isError, undefined, implementationCall.content?.[0]?.text);
-  const implementationResult = JSON.parse(implementationCall.content[0].text);
-  assert.equal(implementationResult.task.currentStage, "codex-review");
+  const implementationStart = JSON.parse(implementationCall.content[0].text);
+  const implementationResult = await waitForExecution(client, task.id, implementationStart.executionId);
+  assert.equal(implementationResult.currentStage, "codex-review");
   assert.equal(implementationResult.filesChanged, true);
   assert.deepEqual(implementationResult.changedFiles, ["src/dashboard-card.js"]);
   assert.equal(fs.readFileSync(implementationPath, "utf8"), 'export const dashboardCard = "improved";\n');
