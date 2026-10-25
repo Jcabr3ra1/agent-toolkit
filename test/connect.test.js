@@ -131,30 +131,16 @@ test("connect configura Claude con permisos explícitos", async (context) => {
   }
 });
 
-test("connect configura Gemini mediante JSON y allowlist", async (context) => {
+test("connect rechaza agentes distintos de Codex y Claude", async (context) => {
   const fixture = createFixture(context);
-  fs.mkdirSync(path.join(fixture.home, ".gemini/antigravity-cli"), {
-    recursive: true
-  });
 
-  const report = await connectMemory(
-    { targetPath: fixture.memory, agentId: "gemini", apply: true },
-    { homeDirectory: fixture.home }
+  await assert.rejects(
+    connectMemory(
+      { targetPath: fixture.memory, agentId: "gemini" },
+      { homeDirectory: fixture.home }
+    ),
+    (error) => error.details.includes("--agent debe ser codex o claude.")
   );
-
-  assert.equal(report.status, "connected");
-  const configPath = path.join(fixture.home, ".gemini/config/mcp_config.json");
-  const document = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  const server = document.mcpServers["demo-project-memory"];
-  assert.equal(server.command, "npx");
-  assert.deepEqual(server.includeTools, READ_TOOLS);
-  assert.equal(server.args.at(-1), fs.realpathSync(fixture.memory));
-
-  const second = await connectMemory(
-    { targetPath: fixture.memory, agentId: "gemini", apply: true },
-    { homeDirectory: fixture.home }
-  );
-  assert.equal(second.status, "unchanged");
 });
 
 test("un enlace de Skill diferente detiene toda la aplicación", async (context) => {
@@ -229,39 +215,6 @@ test("revierte la Skill y el MCP nuevo si falla la política", async (context) =
   assert.equal(
     fs.existsSync(path.join(fixture.home, ".agents/skills/demo-project")),
     false
-  );
-});
-
-test("Gemini migra un bloqueo abierto a una allowlist cerrada", async (context) => {
-  const fixture = createFixture(context);
-  const configPath = path.join(fixture.home, ".gemini/config/mcp_config.json");
-  fs.mkdirSync(path.dirname(configPath), { recursive: true });
-  fs.writeFileSync(
-    configPath,
-    `${JSON.stringify({
-      mcpServers: {
-        "demo-project-memory": {
-          command: "npx",
-          args: [
-            "-y",
-            "@modelcontextprotocol/server-filesystem",
-            fs.realpathSync(fixture.memory)
-          ],
-          disabledTools: [...WRITE_TOOLS]
-        }
-      }
-    })}\n`
-  );
-
-  const report = await connectMemory(
-    { targetPath: fixture.memory, agentId: "gemini" },
-    { homeDirectory: fixture.home }
-  );
-
-  assert.equal(report.status, "preview");
-  assert.equal(
-    report.components.find((item) => item.id === "policy").action,
-    "update"
   );
 });
 

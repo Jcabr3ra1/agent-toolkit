@@ -261,7 +261,7 @@ function createManifest(config) {
     },
     source,
     memory,
-    agents: ["codex", "claude", "gemini"].map((id) => ({
+    agents: ["codex", "claude"].map((id) => ({
       id,
       enabled: true,
       skillName: config.projectId

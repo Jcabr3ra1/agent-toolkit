@@ -37,7 +37,7 @@ clasifica tarea, riesgo y dificultad de forma explícita, como exige el selector
 ## TP-02. Resultado y exclusiones
 
 Una invocación prepara **un destinatario/rol y una revisión**, no un equipo
-entero o varios pasos en ejecución. El recorrido Claude propone → Gemini aplica
+entero o varios pasos en ejecución. El recorrido Claude propone → Claude aplica
 → Codex revisa necesita encargos/decisiones independientes, aunque compartan
 identidad de tarea y conserven su historial.
 
@@ -191,7 +191,7 @@ inventados como perfiles reales ni importar inventarios privados a ejemplos.
 
 | Modo/rol | Qué se puede preparar | Qué no concede |
 | --- | --- | --- |
-| Tutor | Un paso explicado con usuario escritor; coordinador/tutor/proponente/revisor según request | Escritura de Gemini o del proponente, salto de paso sin revisión |
+| Tutor | Un paso explicado con usuario escritor; coordinador/tutor/proponente/revisor según request | Escritura de un agente o del proponente, salto de paso sin revisión |
 | Autónomo, proponente | Una propuesta de cambios delimitada; escritor futuro identificado | Aplicar los cambios o seleccionar al ejecutor con la decisión del proponente |
 | Autónomo, ejecutor | Encargo draft vinculado a propuesta previa por revisión/huella | Certificar la propuesta, validar permiso humano o ejecutar automáticamente |
 | Revisor/coordinador | Revisión/preparación acotada, respetando modo y acciones declaradas | Otorgar permisos a otro agente o convertir declaraciones en pruebas |
@@ -338,7 +338,7 @@ no resetear el repositorio ni borrar trabajo ajeno o encargos privados.
 | CA-02 | Selector v2 reutilizado sin alterar política | Mismos perfiles/esfuerzos/hashes que llamada directa, regresión v1 intacta |
 | CA-03 | Familia/versiones/esfuerzo explicados sin default | Candidata reciente, ordinal desconocido, esfuerzo distinto, explicit choice |
 | CA-04 | Omisión/conflicto no produce encargo listo | needs-info/blocked/invalid sin borrador; recommended solo prepared-draft |
-| CA-05 | Autoría y acciones del proyecto conservadas | Tutor no apply/Gemini escritor; autónomo requiere alcance declarado compatible |
+| CA-05 | Autoría y acciones del proyecto conservadas | Tutor no apply ni agente escritor; autónomo requiere alcance declarado compatible |
 | CA-06 | Preparación no verifica permiso/base/modelo | Todos los flags de verificación false y observación unknown, incluso con hashes |
 | CA-07 | Historial no se reinicia al cambiar rol/revisión | Consumo/rondas previos conservados, referencias faltantes y techo bloqueados |
 | CA-08 | Privacidad y texto no gobiernan el preparador | Getters/proxies, duplicados, Unicode, patrones sensibles, escapes y campos ajenos |

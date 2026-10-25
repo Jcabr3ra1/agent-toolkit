@@ -39,7 +39,7 @@ Opciones de doctor:
   --strict           Devuelve error cuando existan advertencias.
 
 Opciones de connect:
-  --agent <agente>   Agente a conectar: codex, claude o gemini.
+  --agent <agente>   Agente a conectar: codex o claude.
   --manifest <ruta>  Selecciona un manifiesto concreto.
   --apply            Aplica el plan; sin esta opción solo previsualiza.
 

@@ -176,10 +176,6 @@ locales. Los siguientes resúmenes no son recetas de ejecución aprobadas.
 - Claude: `--bare` no usa login de suscripción; excluido de esta ruta sin API.
   No se ejecuta ni se pide una key como alternativa.
   [Modo programático y bare](https://code.claude.com/docs/en/headless).
-- Antigravity: documenta stdin, JSON/stream-json y timeout nativo; estos controles
-  no acreditan por sí solos exclusión de herramientas o techo de llamadas.
-  Solo modelos Gemini en esta ruta; no transferir flags de Gemini CLI oficial.
-  [Headless de Antigravity](https://www.antigravity.google/docs/cli/headless/).
 
 Recomendación, no selección aprobada: contrastar primero Claude Code por su rol
 de tutor/proponente. Si no satisface los gates, conservarlo manual; no cambiar

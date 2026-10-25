@@ -44,12 +44,10 @@ No se cambian las autorizaciones o límites al recomendar.
 
 La política enumera familias permitidas por ruta exacta de rol/proveedor/cliente.
 Un cliente capaz de ofrecer varios proveedores no autoriza utilizarlos todos.
-La configuración prevista del usuario separa el cliente de Codex, el de Claude
-y el cliente destinado a Gemini; en este último se permitirán exclusivamente
-familias Gemini del proveedor comprobado para ese cliente.
+La configuración prevista del usuario separa el cliente de Codex y el de Claude.
 
 Esta separación se declara en datos revisados, no con búsquedas de palabras
-como «Gemini» en etiquetas. Identificar el cliente y sus identificadores reales
+en etiquetas. Identificar el cliente y sus identificadores reales
 precede a activar su ruta; no se equipara una variante con el CLI oficial por
 su aspecto. Un identificador ambiguo sigue pendiente.
 

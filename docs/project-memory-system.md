@@ -2,7 +2,7 @@
 
 - Estado: contrato base v0.1
 - Alcance: arquitectura reutilizable
-- Plataformas iniciales: Codex, Claude Code y Gemini CLI
+- Plataformas: Codex y Claude Code
 
 ## Problema
 
@@ -53,8 +53,7 @@ Memoria privada del proyecto ◄──── Git privado
 Skill específica del proyecto
           │
           ├── Codex
-          ├── Claude Code
-          └── Gemini CLI
+          └── Claude Code
 
 Agent-Toolkit
 ├── Skills generales
@@ -106,8 +105,7 @@ Ejemplo:
   },
   "agents": [
     { "id": "codex", "enabled": true },
-    { "id": "claude", "enabled": true },
-    { "id": "gemini", "enabled": true }
+    { "id": "claude", "enabled": true }
   ],
   "security": {
     "mcpAccess": "read-only",
@@ -144,7 +142,7 @@ Las rutas declaradas no pueden ser absolutas, usar `..`, barras invertidas ni se
 2. Aplicar el plan explícitamente con `--apply` cuando no existan conflictos.
 3. Instalar el enlace simbólico hacia la Skill canónica de la memoria.
 4. Activar únicamente herramientas MCP de lectura mediante la política propia
-   de Codex, Claude Code o Gemini CLI.
+   de Codex o Claude Code.
 5. Reiniciar la sesión y probar listado, búsqueda y lectura de una nota conocida.
 
 ### 3. Consultar
@@ -208,8 +206,8 @@ La CLI evoluciona sin modificar este contrato y ofrece:
 
 - `project-memory init`: mostrar plan y crear una memoria de forma idempotente;
 - `project-memory doctor`: validar manifiesto, estructura, enlaces, Git y posibles secretos;
-- `project-memory connect`: preparar la integración segura de Codex, Claude
-  Code o Gemini CLI, con vista previa e idempotencia;
+- `project-memory connect`: preparar la integración segura de Codex o
+  Claude Code, con vista previa e idempotencia;
 - `project-memory status`: resumir salud, sincronización y conexiones en modo
   de solo lectura.
 
@@ -284,7 +282,7 @@ la evidencia y lo que no certifica. MCP y las conexiones siguen en solo lectura.
 2. **Plantilla canónica:** estructura genérica de bóveda y Skill de memoria.
 3. **Validador:** comando `doctor` con comprobaciones locales y salida accionable.
 4. **Generador:** comando `init` con vista previa e idempotencia.
-5. **Adaptadores:** Codex, Claude Code y Gemini CLI. Implementado en la CLI.
+5. **Adaptadores:** Codex y Claude Code. Implementado en la CLI.
 6. **Automatización:** impacto documental por eventos estables y respaldo programado.
 7. **Índice avanzado:** búsqueda semántica local únicamente cuando el volumen lo justifique.
 

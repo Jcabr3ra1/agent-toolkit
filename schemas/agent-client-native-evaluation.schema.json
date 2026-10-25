@@ -13,15 +13,14 @@
       "type": "object", "additionalProperties": false,
       "required": ["provider", "client", "variant", "clientVersion"],
       "properties": {
-        "provider": { "enum": ["openai", "anthropic", "google"] },
-        "client": { "enum": ["codex-cli", "claude-code", "antigravity-cli"] },
-        "variant": { "enum": ["codex-native", "claude-native", "antigravity-native"] },
+        "provider": { "enum": ["openai", "anthropic"] },
+        "client": { "enum": ["codex-cli", "claude-code"] },
+        "variant": { "enum": ["codex-native", "claude-native"] },
         "clientVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[a-z0-9.-]+)?$", "maxLength": 64 }
       },
       "oneOf": [
         { "properties": { "provider": { "const": "openai" }, "client": { "const": "codex-cli" }, "variant": { "const": "codex-native" } } },
-        { "properties": { "provider": { "const": "anthropic" }, "client": { "const": "claude-code" }, "variant": { "const": "claude-native" } } },
-        { "properties": { "provider": { "const": "google" }, "client": { "const": "antigravity-cli" }, "variant": { "const": "antigravity-native" } } }
+        { "properties": { "provider": { "const": "anthropic" }, "client": { "const": "claude-code" }, "variant": { "const": "claude-native" } } }
       ]
     },
     "binding": {

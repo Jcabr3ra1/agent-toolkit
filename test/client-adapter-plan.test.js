@@ -23,8 +23,7 @@ const CONTROLS = ["no-tools", "no-subagents", "no-mcp", "no-hooks", "no-personal
 const NOW = "2026-10-02T14:00:00Z";
 const ROUTES = [
   ["openai", "codex-cli", "codex-native"],
-  ["anthropic", "claude-code", "claude-native"],
-  ["google", "antigravity-cli", "antigravity-native"]
+  ["anthropic", "claude-code", "claude-native"]
 ];
 const renew = (d) => { d.decision = select(d.selection); return d; };
 const get = (d, field) => field.split(".").reduce((v, key) => v[key], d);
@@ -44,7 +43,7 @@ function fixture(route = ROUTES[0], role = "tutor", mode = "tutor") {
     ? ["read", "apply", "verify"] : ["read", "explain", "propose", "verify"];
   if (role === "executor") selection.request.authorizationContext.activeWriter = "authorized-executor";
   selection.catalog.profiles.forEach((p, i) => {
-    Object.assign(p, { provider, client, requestedModel: `${provider === "google" ? "gemini-" : ""}demo-model-${i}` });
+    Object.assign(p, { provider, client, requestedModel: `demo-model-${i}` });
     p.declaredCapabilities.tools = []; p.verifiedCapabilities.tools = [];
     p.evaluations.forEach((e) => Object.assign(e, { role, category }));
   });
@@ -142,21 +141,17 @@ for (const key of ["request", "catalog", "policy"]) {
 }
 
 for (const [label, change, code] of [
-  ["ruta", (d) => { d.adapter.provider = "google"; }, "adapter-route-mismatch"],
-  ["variante", (d) => { d.adapter.variant = "antigravity-native"; }, "adapter-route-mismatch"],
+  ["ruta", (d) => { d.adapter.provider = "anthropic"; }, "adapter-route-mismatch"],
+  ["variante", (d) => { d.adapter.variant = "claude-native"; }, "adapter-route-mismatch"],
   ["versión", (d) => { d.adapter.clientVersion = "0.0.1-demo"; }, "client-version-not-admitted"],
   ["pendiente", (d) => { d.registry.records[0].status = "pending"; }, "client-controls-not-evaluated"],
   ["retirado", (d) => { d.registry.records[0].status = "disabled"; }, "client-controls-not-evaluated"],
   ["modelo", (d) => { d.registry.records[0].supportedModels = ["other-model"]; }, "client-model-not-admitted"],
   ["esfuerzo", (d) => { d.registry.records[0].efforts = ["deep"]; }, "client-effort-not-admitted"],
-  ["rol", (d) => { d.registry.records[0].roles = ["reviewer"]; }, "client-role-not-admitted"],
-  ["Google con Claude", (d) => {
-    d.selection.catalog.profiles.forEach((p) => { p.requestedModel = `claude-${p.profileId}`; });
-    d.registry.records[0].supportedModels = d.selection.catalog.profiles.map((p) => p.requestedModel); renew(d);
-  }, "non-google-model-route"]
+  ["rol", (d) => { d.registry.records[0].roles = ["reviewer"]; }, "client-role-not-admitted"]
 ]) {
   test(`CA-A03: bloquea ${label} sin cambiar de cliente ni esfuerzo`, () => {
-    const d = fixture(label === "Google con Claude" ? ROUTES[2] : ROUTES[0]); change(d);
+    const d = fixture(ROUTES[0]); change(d);
     const r = plan(d); assert.equal(r.state, "blocked"); assert.ok(r.reasons.includes(code)); assert.equal(r.intent, null);
   });
 }
@@ -170,7 +165,7 @@ for (const control of CONTROLS) for (const location of ["environment", "registry
 test("CA-A03: registro contradictorio o futuro es inválido", () => {
   for (const change of [
     (d) => d.registry.records.push({ ...structuredClone(d.registry.records[0]), recordId: "duplicate-route" }),
-    (d) => { d.registry.records[0].provider = "google"; },
+    (d) => { d.registry.records[0].provider = "anthropic"; },
     (d) => { d.registry.records[0].evaluatedAt = "2026-10-02T14:00:01Z"; }
   ]) { const d = fixture(); change(d); assert.equal(plan(d).state, "invalid"); }
 });

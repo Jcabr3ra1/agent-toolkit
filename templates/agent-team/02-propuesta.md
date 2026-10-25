@@ -87,7 +87,7 @@ Completar esta sección solo en `tutor`; el apartado autónomo queda «No aplica
 
 Esperar a que el usuario escriba. «Listo» solicita revisión del código real,
 no declara el paso correcto. No entregar ni implementar el paso siguiente hasta
-verificar el actual. Gemini no aplica esta propuesta.
+verificar el actual. Ningún agente aplica esta propuesta.
 
 ## Autónomo: cambios propuestos
 

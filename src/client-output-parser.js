@@ -7,8 +7,7 @@ import { copyInertJson, copyBytes, decode, parseEventJson, ParseFailure, fail } 
 const OUTPUT_ID = "https://agent-toolkit.local/schemas/agent-client-output.schema.json";
 const FORMAT_ROUTES = {
   "codex-jsonl-text-v1": ["openai", "codex-cli", "codex-native"],
-  "claude-jsonl-text-v1": ["anthropic", "claude-code", "claude-native"],
-  "antigravity-jsonl-text-v1": ["google", "antigravity-cli", "antigravity-native"]
+  "claude-jsonl-text-v1": ["anthropic", "claude-code", "claude-native"]
 };
 const emptyObservation = () => ({ value: null, verification: "unknown", match: "unknown", source: null, scope: null });
 const emptyUsage = () => Object.fromEntries(["inputTokens", "outputTokens", "cacheReadTokens", "reasoningTokens", "totalTokens"].map(k => [k, null]));
@@ -103,7 +102,7 @@ export function createClientOutputParser(baseSchema, preferenceSchema, adapterSc
 function createStream(format, report, limits) {
   let initialized = false; let terminal = false; let session = null; let final = null;
   let turnStarted = false; let assistantId = null; let assistantText = null;
-  const items = new Map(); const steps = new Map(); let lastStep = -1; let userSteps = 0;
+  const items = new Map();
 
   const bindSession = (id) => {
     if (typeof id !== "string" || !id || id.length > 256) fail("invalid-native-session");
@@ -119,8 +118,7 @@ function createStream(format, report, limits) {
   function consume(e) {
     if (terminal) fail("event-after-terminal");
     if (format === "codex-jsonl-text-v1") codex(e);
-    else if (format === "claude-jsonl-text-v1") claude(e);
-    else antigravity(e);
+    else claude(e);
   }
   function codex(e) {
     if (e.type === "thread.started") { fields(e, ["type", "thread_id"]); init(); bindSession(e.thread_id); return; }
@@ -222,55 +220,9 @@ function createStream(format, report, limits) {
       if (e.stop_reason !== undefined && e.stop_reason !== null && e.stop_reason !== "end_turn") block("result-not-finished");
     }
   }
-  function antigravity(e) {
-    if (e.event === "init") {
-      fields(e, ["event", "conversation_id", "init"]); init(); bindSession(e.conversation_id);
-      const p = object(e.init); fields(p, ["cwd", "tools", "permission_mode", "model", "agent"]);
-      emptyNativeArray(p, "tools", true); if (p.agent !== undefined) block("custom-agent-forbidden");
-      if (p.permission_mode === "always-proceed") block("native-permission-bypass"); configure(p); return;
-    }
-    ready();
-    if (e.event === "step_update") {
-      fields(e, ["event", "step_update"]); const s = object(e.step_update);
-      if (s.tool_info !== undefined || s.tool_name !== undefined || s.subagent_info !== undefined) block("tool-or-subagent-output-forbidden");
-      fields(s, ["conversation_id", "step_index", "state", "step_type", "text_delta", "duration_seconds", "usage"]);
-      bindSession(s.conversation_id);
-      if (!["user_input", "agent_response", "checkpoint"].includes(s.step_type)) block("unknown-native-step");
-      if (!["ACTIVE", "DONE"].includes(s.state)) block("unknown-native-step-state");
-      const index = integer(s.step_index); if (index < lastStep) fail("native-step-order-conflict");
-      const prior = steps.get(index);
-      if (prior?.done || (prior && prior.type !== s.step_type)) fail("duplicate-or-conflicting-step");
-      if (index > lastStep && [...steps.values()].some(p => !p.done)) fail("native-step-interleaving");
-      if (!prior && s.step_type === "user_input" && ++userSteps > limits.maxTurns) block("multiple-native-turns");
-      const state = prior ?? { type: s.step_type, done: false, text: "" };
-      if (s.text_delta !== undefined) {
-        if (s.step_type !== "agent_response" || typeof s.text_delta !== "string") fail("invalid-native-delta");
-        state.text += s.text_delta; if (Buffer.byteLength(state.text) > limits.maxOutputBytes) fail("response-byte-limit");
-      }
-      if (s.duration_seconds !== undefined) seconds(s.duration_seconds);
-      if (s.usage !== undefined) validateUsage(s.usage, "antigravity");
-      state.done = s.state === "DONE"; steps.set(index, state); lastStep = index; return;
-    }
-    if (e.event !== "result") block("unknown-native-event");
-    fields(e, ["event", "result"]); const r = object(e.result);
-    fields(r, ["conversation_id", "status", "response", "error", "duration_seconds", "num_turns", "usage"]);
-    bindSession(r.conversation_id); turns(r.num_turns, limits);
-    const states = { SUCCESS: "completed", ERROR: "failed", CANCELED: "canceled", INTERRUPTED: "interrupted", INVALID: "failed", WAITING: "waiting", RUNNING: "running" };
-    if (typeof r.status !== "string" || !Object.hasOwn(states, r.status)) block("unknown-native-terminal");
-    ending(states[r.status]);
-    if (r.duration_seconds !== undefined) report.durationSeconds = seconds(r.duration_seconds);
-    terminalUsage(report, r.usage, "antigravity");
-    if (r.status === "SUCCESS") {
-      if (r.error !== undefined && r.error !== null) block("contradictory-terminal");
-      if (typeof r.response !== "string") fail("missing-native-text"); final = r.response;
-      const responseSteps = [...steps.values()].filter(s => s.type === "agent_response");
-      if (responseSteps.length > 1) block("multiple-final-messages");
-      if (responseSteps.length && responseSteps[0].text !== final) block("native-final-text-conflict");
-    }
-  }
   return {
     consume, get terminal() { return terminal; }, get final() { return final; },
-    settled() { return [...items.values(), ...steps.values()].every(s => s.done); }
+    settled() { return [...items.values()].every(s => s.done); }
   };
 }
 
@@ -283,7 +235,6 @@ function emptyNativeArray(e, key, required) {
   if (e[key].length) block("native-tools-or-customizations-present");
 }
 function nonnegative(v) { if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 86_400_000) fail("invalid-native-number"); return v; }
-function seconds(v) { nonnegative(v); if (v > 86_400) fail("invalid-native-number"); return v; }
 function integer(v) { if (!Number.isSafeInteger(v) || v < 0) fail("invalid-native-counter"); return v; }
 function turns(v, limits) { integer(v); if (v < 1 || v > limits.maxTurns) block("native-turn-count-exceeded"); }
 function observe(target, value, requested, source, scope) {
@@ -295,8 +246,7 @@ function validateUsage(usage, client) {
   object(usage);
   const allowed = {
     codex: ["input_tokens", "output_tokens", "cached_input_tokens", "reasoning_output_tokens"],
-    claude: ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "service_tier", "inference_geo", "server_tool_use", "iterations", "speed"],
-    antigravity: ["input_tokens", "output_tokens", "thinking_tokens", "cache_read_tokens", "total_tokens"]
+    claude: ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens", "service_tier", "inference_geo", "server_tool_use", "iterations", "speed"]
   }[client];
   fields(usage, allowed);
   for (const [k, v] of Object.entries(usage)) {
@@ -310,7 +260,7 @@ function terminalUsage(report, value, client) {
   if (value === undefined || value === null) return;
   const usage = validateUsage(value, client);
   const map = { inputTokens: "input_tokens", outputTokens: "output_tokens",
-    cacheReadTokens: client === "codex" ? "cached_input_tokens" : client === "claude" ? "cache_read_input_tokens" : "cache_read_tokens",
+    cacheReadTokens: client === "codex" ? "cached_input_tokens" : "cache_read_input_tokens",
     reasoningTokens: client === "codex" ? "reasoning_output_tokens" : "thinking_tokens", totalTokens: "total_tokens" };
   for (const [out, key] of Object.entries(map)) report.usage[out] = usage[key] ?? null;
   report.usageScope = "terminal-native-report";

@@ -28,22 +28,19 @@
         "provider": {
           "enum": [
             "openai",
-            "anthropic",
-            "google"
+            "anthropic"
           ]
         },
         "client": {
           "enum": [
             "codex-cli",
-            "claude-code",
-            "antigravity-cli"
+            "claude-code"
           ]
         },
         "variant": {
           "enum": [
             "codex-native",
-            "claude-native",
-            "antigravity-native"
+            "claude-native"
           ]
         },
         "clientVersion": {
@@ -94,22 +91,19 @@
         "provider": {
           "enum": [
             "openai",
-            "anthropic",
-            "google"
+            "anthropic"
           ]
         },
         "client": {
           "enum": [
             "codex-cli",
-            "claude-code",
-            "antigravity-cli"
+            "claude-code"
           ]
         },
         "variant": {
           "enum": [
             "codex-native",
-            "claude-native",
-            "antigravity-native"
+            "claude-native"
           ]
         },
         "clientVersion": {

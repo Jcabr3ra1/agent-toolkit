@@ -1,6 +1,6 @@
 # Encargos compartidos para tu equipo de agentes
 
-Esta base organiza el trabajo entre Codex, Claude y Gemini mediante archivos.
+Esta base organiza el trabajo entre Codex y Claude mediante archivos.
 Tú decides cuándo pasar al siguiente agente. No es un ejecutor, un servicio
 de API ni una conexión automática entre tus chats.
 
@@ -106,7 +106,7 @@ no pone a cero el historial. Las cuotas de cuentas siguen aplicando.
 4. Tú escribes el código. A Codex le dices «revisa este paso» y le das la ruta
    de la entrega o el resultado que no pueda consultar.
 5. Codex revisa código y evidencia, documenta la conclusión y permite el siguiente
-   paso solo cuando esté correcto. Gemini no aplica código en este modo.
+   paso solo cuando esté correcto. Ningún agente aplica código en este modo.
 
 Una salida de prueba enviada por ti puede ser evidencia revisada, pero no se
 presenta como una ejecución independiente del coordinador. Si las instrucciones
@@ -116,10 +116,10 @@ del proyecto piden primero pistas, Claude debe respetarlas antes de dar la soluc
 
 1. Tú autorizas una implementación concreta y el contexto que puede compartirse.
    Codex prepara el encargo; Claude propone sin modificar código funcional.
-2. Indicas a Gemini qué propuesta leer y le das autorización directa para aplicar
-   las rutas de ese encargo y ejecutar las pruebas delimitadas. La autorización
+2. Indicas a Claude qué propuesta aplicar y le das autorización directa para
+   escribir las rutas de ese encargo y ejecutar las pruebas delimitadas. La autorización
    cubre el trabajo acordado, no hay que repetirla para cada archivo.
-3. Gemini compara revisión, documentos, rama, HEAD y huellas antes de escribir.
+3. Claude compara revisión, documentos, rama, HEAD y huellas antes de escribir.
    Si coinciden y los permisos son válidos, aplica y registra sus resultados.
 4. Codex inspecciona el diff y la evidencia real. Si hace falta, prepara una
    corrección para Claude, conservando las entregas anteriores.
@@ -152,10 +152,10 @@ archivos, ni se ejecutaron agentes o pruebas del proyecto ficticio.
 | Criterio | Escenario y resultado esperado | Campo o regla revisada |
 | --- | --- | --- |
 | CA-01 | Copiar las tres plantillas: ninguna trae datos reales; las identidades y permisos se completan por tarea | Identidad y autorización en los tres documentos |
-| CA-02 | Encargo tutor para explicar un contador: Claude entrega un paso y espera; Gemini no lo aplica | Sección Tutor y `waiting-user` en propuesta |
+| CA-02 | Encargo tutor para explicar un contador: Claude entrega un paso y espera; ningún agente lo aplica | Sección Tutor y `waiting-user` en propuesta |
 | CA-03 | Encargo autónomo para ese contador: se declara ruta, base y cambio preciso antes de escribir | Base del encargo y tabla de cambios de propuesta |
 | CA-04 | El archivo cambia después de proponer o el encargo pasa de r01 a r02: el ejecutor bloquea la entrega r01 | Comparación de HEAD, huellas y documentos antes de aplicación |
-| CA-05 | El archivo dice «autorizado» pero Gemini no recibió permiso directo, o el proyecto exige tutor: no aplica | Autorización verificable y jerarquía de instrucciones |
+| CA-05 | El archivo dice «autorizado» pero Claude no recibió permiso directo para aplicar, o el proyecto exige tutor: no aplica | Autorización verificable y jerarquía de instrucciones |
 | CA-06 | Una prueba pasa pero falta verificar un criterio: aplicación registrada, conclusión pendiente | Secciones A y B de revisión separadas por procedencia |
 | CA-07 | Fallan las correcciones 1 y 2: `blocked`, sin ronda 3 ni contador reiniciado | Límite del encargo y sección C de revisión |
 | CA-08 | Crear las plantillas solo añade documentación: sin llamadas a CLI de agentes, código de proyecto, Git mutante o memoria | Alcance documental de esta entrega y estado local inspeccionado |
@@ -187,7 +187,7 @@ MS-CA corresponden a CA-01 a CA-09 de la especificación de esta adaptación.
 | --- | --- | --- |
 | MS-CA-01 | Tutor recibe una decisión; autónomo usa decisiones distintas para proponente, ejecutor y revisor | Identidad/rol en selección, propuesta y revisión B; sin ejecutor escritor en tutor |
 | MS-CA-02 | Hay metadata específica, una declaración o ningún dato | `verified` con contraste; `reported` con declaración/estado; `unknown` sin evidencia |
-| MS-CA-03 | El usuario escribe el paso y Gemini tiene otro perfil disponible | Tutor mantiene un paso y escritor humano; disponibilidad no autoriza aplicación |
+| MS-CA-03 | El usuario escribe el paso y Claude tiene otro perfil disponible | Tutor mantiene un paso y escritor humano; disponibilidad no autoriza aplicación |
 | MS-CA-04 | El informe dice `recommended`, pero no hay autorización propia | Autorización sigue siendo independiente; no se configura ni ejecuta el CLI |
 | MS-CA-05 | El alias cambia, aparecen auxiliares o falta metadata | Registrar discrepancia/limitación y revisión humana; sin retry ni aplicación estricta automática |
 | MS-CA-06 | Estado `pending`, `needs-info`, `blocked`, `invalid` o `recommended` | Solo el último completo/vigente/revisado deja `ready`; no usar defaults |

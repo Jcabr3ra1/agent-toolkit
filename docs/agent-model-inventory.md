@@ -23,8 +23,7 @@ un inventario activo de los clientes ni modelos de la cuenta del usuario.
 
 No existe un comando de inventario en Agent-Toolkit ni un adaptador que pueda
 certificar el modelo de una respuesta. No se comprobaron en esta etapa versiones,
-menús o acceso de los CLI instalados. La variante de Gemini mostrada anteriormente
-debe identificarse: no se supone equivalente al Gemini CLI estándar.
+menús o acceso de los CLI instalados.
 
 Faltan inventario privado, evaluación autorizada por rol y política real para
 probar una recomendación aplicable. No basta copiar nombres de una página pública.
@@ -198,9 +197,6 @@ Consultadas el 2026-10-02; no certifican los clientes o cuentas locales.
 - Claude documenta alias y menú; confirmar selección puede persistir un default:
   [configuración de modelos](https://code.claude.com/docs/en/model-config).
   También documenta opciones con consumo adicional y comportamiento de fallback.
-- Gemini CLI documenta selección manual/automática y que la elección principal
-  no sustituye el modelo de subagentes: [selección de modelos](https://geminicli.com/docs/cli/model/).
-  Eso no prueba equivalencia de un wrapper o variante instalada.
 
 No se fijan versiones ni esfuerzos reales basándose solo en estas páginas.
 La documentación deberá revalidarse al recoger el inventario del cliente real.

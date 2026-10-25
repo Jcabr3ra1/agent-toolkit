@@ -16,7 +16,7 @@ el código de AVISENS ni la memoria de Obsidian.
 
 ## Problema y objetivo
 
-El usuario quiere coordinar Codex, Claude y Gemini sin copiar conversaciones
+El usuario quiere coordinar Codex y Claude sin copiar conversaciones
 completas ni contratar consumo adicional por API. Necesita conservar la opción
 de aprender escribiendo el código y la de delegar una implementación delimitada.
 
@@ -48,7 +48,7 @@ etapa, condicionada a las cuentas, versiones y permisos reales.
 | --- | --- | --- |
 | Coordinación y revisión | Codex | Encargo acotado, criterios y revisión con evidencia |
 | Diseño de implementación o tutoría | Claude | Un paso explicado o una propuesta precisa de cambios |
-| Aplicación y comprobaciones | Gemini | Cambios aplicados dentro del permiso y resultados de pruebas |
+| Aplicación y comprobaciones | Claude | Cambios aplicados dentro del permiso y resultados de pruebas |
 | Autoría en tutor y decisiones de alcance | Usuario | Código del paso y autorizaciones necesarias |
 
 Son roles configurables, no una clasificación permanente de calidad por marca.
@@ -68,16 +68,16 @@ En `tutor`:
    pendiente. Claude puede preparar la corrección del mismo paso.
 5. Solo un paso verificado habilita el siguiente.
 
-Gemini no aplica código en tutor. Puede realizar un diagnóstico no mutante
-permitido si se le encarga expresamente. Las instrucciones del proyecto mandan
+Ningún agente aplica código en tutor. Claude puede realizar un diagnóstico no
+mutante permitido si se le encarga expresamente. Las instrucciones del proyecto mandan
 sobre cualquier plantilla; si restringen la entrega de soluciones, se respetan.
 
 En `autonomous`:
 
 1. Codex prepara el encargo autorizado y los criterios de aceptación.
 2. Claude inspecciona la versión indicada y propone cambios sobre rutas exactas.
-3. Gemini verifica vigencia y permisos, aplica la propuesta y ejecuta las
-   comprobaciones acordadas.
+3. Con autorización directa, Claude verifica vigencia y permisos, aplica la
+   propuesta aprobada y ejecuta las comprobaciones acordadas.
 4. Codex revisa el diff y la evidencia, y devuelve una corrección delimitada o
    una conclusión de revisión.
 
@@ -99,7 +99,7 @@ conversaciones completas como contrato ni se modifica una entrega anterior para
 ocultar un fallo: una corrección crea una revisión nueva.
 
 La plantilla de revisión separa evidencia del ejecutor y conclusión
-del revisor en secciones distintas. Gemini registra su resultado; Codex lo
+del revisor en secciones distintas. Claude registra su resultado; Codex lo
 contrasta sin convertir una afirmación de éxito en prueba independiente.
 
 Un lector no vigila estos archivos automáticamente. En esta base el usuario
@@ -122,7 +122,7 @@ ambas cosas antes de aplicar; el revisor inspecciona el diff real después.
   propuesta basada en el estado real. No aplicar con aproximación o fuerza.
 - La propuesta contiene diffs precisos o bloques completos inequívocos, indicando
   adición, reemplazo y destino; una instrucción vaga no es una entrega aplicable.
-- Un solo escritor funcional por tarea. Claude propone; Gemini aplica en autónomo;
+- Un solo escritor funcional por tarea. Claude propone y aplica en autónomo;
   el usuario escribe en tutor. No editar simultáneamente desde varios agentes.
 
 El contrato original exige estas comprobaciones al receptor; los archivos por
@@ -199,7 +199,7 @@ pruebas y documentación del proyecto siguen siendo la fuente principal de verda
 - CA-01: Las tres plantillas distinguen proyecto, tarea, modo, revisión y permisos,
   sin datos específicos de AVISENS o rutas personales prellenadas.
 - CA-02: Un encargo tutor produce un solo paso explicado y queda en espera del
-  usuario; ningún documento instruye a Gemini a aplicar ese paso.
+  usuario; ningún documento instruye a un agente a aplicar ese paso.
 - CA-03: Un encargo autónomo identifica archivos y base; la propuesta permite
   conocer exactamente qué se pretende cambiar antes de tocar el código.
 - CA-04: Cambiar HEAD, huella de archivo o revisión obliga a renovar la propuesta;

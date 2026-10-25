@@ -21,7 +21,7 @@ const admit = createClientRuntimeAdmission(...schemas); const transition = creat
 const valid = validators(...schemas);
 const BASE = Object.fromEntries(["request", "catalog", "policy"].map(name => [name, read(`../examples/model-selection/${name}.preference.example.json`)]));
 const NOW = "2026-10-02T14:00:00Z"; const LATER = "2026-10-02T14:00:01Z"; const EXPIRES = "2026-10-02T15:00:00Z";
-const ROUTES = [["openai", "codex-cli", "codex-native"], ["anthropic", "claude-code", "claude-native"], ["google", "antigravity-cli", "antigravity-native"]];
+const ROUTES = [["openai", "codex-cli", "codex-native"], ["anthropic", "claude-code", "claude-native"]];
 const temporal = () => ({ checkedAt: NOW, expiresAt: EXPIRES, evidenceRef: "demo-evidence" });
 const assessment = () => ({ ...temporal(), status: "locally-tested", source: "installation-test" });
 const get = (v, path) => path.split(".").reduce((v, k) => v[k], v);
@@ -34,7 +34,7 @@ function fixture(route = ROUTES[0]) {
   const [provider, client, variant] = route; const selection = structuredClone(BASE);
   Object.assign(selection.request, { provider, client }); selection.request.requirements.tools = [];
   selection.catalog.profiles.forEach((p, i) => {
-    Object.assign(p, { provider, client, requestedModel: `${provider === "google" ? "gemini-" : ""}demo-model-${i}` });
+    Object.assign(p, { provider, client, requestedModel: `demo-model-${i}` });
     p.declaredCapabilities.tools = []; p.verifiedCapabilities.tools = [];
   });
   selection.policy.routes.forEach(r => { Object.assign(r, { provider, client }); });

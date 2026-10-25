@@ -45,7 +45,7 @@ Guardar el historial sin perder ni duplicar presupuesto y probar la supervisión
 con scripts ficticios, controlados y sin conexión a IA. Ante incertidumbre,
 conservar evidencia y bloquear, sin conceder otro intento.
 
-Fuera de alcance: Codex/Claude/Antigravity reales, autenticación, red, API keys,
+Fuera de alcance: Codex/Claude reales, autenticación, red, API keys,
 cuentas, créditos, inferencia, configuración global, Obsidian, código de proyectos,
 Git, daemon, tareas programadas, comandos arbitrarios y almacenamiento de prompts
 o transcripts. Tampoco incluye recuperación automática de bloqueos, compactación,
