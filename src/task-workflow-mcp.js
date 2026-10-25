@@ -5,6 +5,8 @@ import { z } from "zod/v4";
 import { createClaudeCodeRunner } from "./claude-code-runner.js";
 import { createCodexCliRunner } from "./codex-cli-runner.js";
 import { createTaskWorkflowStore } from "./task-workflow-store.js";
+import { createPeerReviewStore } from "./peer-review-store.js";
+import { registerPeerReviewTools, PEER_REVIEW_INSTRUCTIONS } from "./peer-review-mcp.js";
 
 const TASK_INPUT = z.object({
   title: z.string().trim().min(1).max(180),
@@ -528,13 +530,15 @@ function registerTools(server, store, codexRunner, claudeRunner) {
 export function createTaskWorkflowMcp({
   store = createTaskWorkflowStore(),
   codexRunner = createCodexCliRunner(),
-  claudeRunner = createClaudeCodeRunner()
+  claudeRunner = createClaudeCodeRunner(),
+  peerStore = createPeerReviewStore()
 } = {}) {
   const server = new McpServer({
     name: "agent-toolkit",
     version: "0.1.0",
-    instructions: "Agent Toolkit coordina Codex CLI y Claude Code CLI mediante vistas previas de un solo uso. Las tareas tutor usan Claude para devolver una solución sin editar. Las tareas autonomous solo habilitan la implementación de Claude y la revisión final de Codex si allowImplementation y allowFinalReview se activaron al crearla; ambos están desactivados por defecto. Codex planifica en modo de solo lectura y elige modelo/esfuerzo de Claude entre valores permitidos. Claude contrasta el plan en modo de solo lectura. Después de revisar su propuesta, el usuario puede autorizar por separado la implementación; esa llamada puede editar archivos únicamente en una rama de trabajo limpia, con herramientas Read, Glob, Grep, Edit y Write, sin shell, red ni MCP. Codex revisa el resultado en modo read-only. Antes de cada llamada, solicita aprobación interactiva y muestra comando, cuenta/sesión, modelo, esfuerzo, permisos y prompt. Las llamadas a Claude devuelven un identificador y corren en segundo plano; después llama wait_for_task_activity para mostrar acciones sanitizadas hasta que termine. Si el usuario pide detener la ejecución, usa cancel_task_execution y luego confirma el cierre con wait_for_task_activity; si era una escritura, pídele inspeccionar posibles cambios parciales. Si el cliente no ofrece confirmación, la llamada queda bloqueada. No inventes cuentas, disponibilidad, pruebas o resultados; nunca hagas commits ni pushes."
+    instructions: PEER_REVIEW_INSTRUCTIONS + " " + "Agent Toolkit coordina Codex CLI y Claude Code CLI mediante vistas previas de un solo uso. Las tareas tutor usan Claude para devolver una solución sin editar. Las tareas autonomous solo habilitan la implementación de Claude y la revisión final de Codex si allowImplementation y allowFinalReview se activaron al crearla; ambos están desactivados por defecto. Codex planifica en modo de solo lectura y elige modelo/esfuerzo de Claude entre valores permitidos. Claude contrasta el plan en modo de solo lectura. Después de revisar su propuesta, el usuario puede autorizar por separado la implementación; esa llamada puede editar archivos únicamente en una rama de trabajo limpia, con herramientas Read, Glob, Grep, Edit y Write, sin shell, red ni MCP. Codex revisa el resultado en modo read-only. Antes de cada llamada, solicita aprobación interactiva y muestra comando, cuenta/sesión, modelo, esfuerzo, permisos y prompt. Las llamadas a Claude devuelven un identificador y corren en segundo plano; después llama wait_for_task_activity para mostrar acciones sanitizadas hasta que termine. Si el usuario pide detener la ejecución, usa cancel_task_execution y luego confirma el cierre con wait_for_task_activity; si era una escritura, pídele inspeccionar posibles cambios parciales. Si el cliente no ofrece confirmación, la llamada queda bloqueada. No inventes cuentas, disponibilidad, pruebas o resultados; nunca hagas commits ni pushes."
   });
   registerTools(server, store, codexRunner, claudeRunner);
+  registerPeerReviewTools(server, peerStore);
   return server;
 }

@@ -5,6 +5,15 @@ entrega en una tarea compartida. Los clientes no mantienen una conversación
 abierta entre sí: Agent Toolkit prepara cada etapa, presenta su vista previa y
 espera la confirmación del usuario antes de llamar al cliente.
 
+## Revisiones desde sesiones ya abiertas
+
+Para empezar con Claude o con Codex y pedir revisiones intermedias del otro,
+consulta [Revisión cruzada entre sesiones](peer-review-workflow.md). Sus
+herramientas `start_collaboration`, `preview_peer_review` y
+`wait_for_peer_handoff` comparten encargos entre las sesiones existentes y no
+inician CLIs. El recorrido secuencial descrito aquí usa tareas `start_task` y
+procesos separados; ambos modos pueden usarse de forma independiente.
+
 ## Requisitos
 
 - Node.js 20 o posterior.

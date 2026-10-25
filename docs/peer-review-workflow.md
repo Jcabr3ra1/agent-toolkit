@@ -1,0 +1,177 @@
+# Revisión cruzada entre sesiones de Claude y Codex
+
+Este modo conecta las sesiones que ya tienes abiertas en tus terminales. Puedes
+empezar con cualquiera, publicar el contexto de una tarea y pedir una revisión
+del otro sin copiar sus respuestas entre ventanas. Los encargos y los informes
+se comparten mediante el MCP local de Agent Toolkit.
+
+El MCP no inicia una CLI, no llama a una API y no despierta ventanas inactivas.
+El trabajo lo realiza el agente receptor en su sesión visible, cuando atiende
+su bandeja. Cada encargo requiere una vista previa nueva y aprobación humana.
+Las sesiones siguen consumiendo sus modelos según la configuración de cada
+cliente; el intercambio no hace gratuitas esas sesiones ni verifica sus cuotas.
+
+## Conectar ambos clientes una vez
+
+Usa el mismo checkout de Agent Toolkit y el mismo directorio de tareas en ambos
+clientes. Sustituye `/ruta/Agent-Toolkit` por su ruta absoluta. Esa instalación
+puede atender distintos proyectos; no se copia Agent Toolkit dentro de ellos.
+
+Si ya registraste el servidor en un cliente, reutiliza su conexión en lugar de
+añadir otra con el mismo nombre. Estos comandos registran el servidor que falte:
+
+```sh
+codex mcp add agent-toolkit -- node /ruta/Agent-Toolkit/bin/agent-toolkit-mcp.js
+claude mcp add --scope user --transport stdio agent-toolkit -- node /ruta/Agent-Toolkit/bin/agent-toolkit-mcp.js
+```
+
+Reinicia o reconecta los clientes para cargar las herramientas nuevas y comprueba
+que ambos ofrecen `start_collaboration` y `wait_for_peer_handoff`. No hace falta
+iniciar una llamada a otro modelo para comprobar el registro.
+
+Por defecto ambos usan `~/.agent-toolkit/workflows/peers/`. Si configuras
+`AGENT_TOOLKIT_WORKFLOW_DIR`, debe tener el mismo valor en los dos servidores.
+Por ejemplo, al registrarlos se puede añadir `--env
+AGENT_TOOLKIT_WORKFLOW_DIR=/ruta/privada/workflows` en Codex y `--env
+AGENT_TOOLKIT_WORKFLOW_DIR=/ruta/privada/workflows` en Claude, antes de `--`.
+Usa un directorio propio; la carpeta `peers` y sus registros deben ser privados.
+Configurar otra raíz de almacenamiento crea una bandeja independiente.
+
+Los clientes deben admitir confirmación interactiva MCP para enviar encargos.
+Si no la ofrecen o el usuario cancela, el encargo no llega al receptor. La
+capacidad concreta de tus dos terminales requiere una comprobación real; las
+pruebas automatizadas usan clientes MCP simulados.
+
+## Empezar mañana en otro proyecto
+
+Abre Claude y Codex en el mismo repositorio. En la sesión que llevará el trabajo,
+puedes pedir:
+
+> Usa Agent Toolkit para crear una colaboración de este repositorio. Yo trabajaré
+> contigo como agente principal. Publica el objetivo, alcance y contexto; pide
+> revisión al otro agente cuando te lo indique. Muéstrame cada encargo completo
+> y espera mi aprobación antes de enviarlo.
+
+El agente llama `start_collaboration` con `projectRoot`, `project`, `title`,
+`objective`, `primaryAgent` (`claude` o `codex`) y el contexto inicial. El MCP
+devuelve un `taskId`. La etiqueta `project` no sustituye la ruta: cada operación
+comprueba la raíz real y la identidad del directorio.
+
+En la otra terminal pide:
+
+> Usa Agent Toolkit para consultar las colaboraciones abiertas en este
+> repositorio con get_collaboration. Si hay varias, muéstramelas para elegir.
+> Atiende la tarea seleccionada con wait_for_peer_handoff. Reclama únicamente
+> encargos dirigidos a ti, revisa los archivos aprobados sin editar ni ejecutar
+> pruebas, muestra tus acciones aquí y entrega tu informe con submit_peer_review.
+> No envíes otro encargo ni apruebes nada por tu cuenta.
+
+`get_collaboration` sin `taskId` lista las tareas abiertas de esa raíz. Con
+`taskId` devuelve el contexto, los encargos y los informes. Así puedes localizar
+la tarea desde la otra sesión sin copiar su contenido. No se elige una tarea
+automáticamente cuando hay varias.
+
+Las esperas duran hasta 15 segundos. Cada espera solo lee la bandeja. El agente
+puede continuar esperando si le pediste expresamente atenderla; no hay un bucle
+de modelos iniciado por el servidor. Puedes indicar un tiempo de atención o
+interrumpir la sesión. Una terminal abierta pero que no está atendiendo no
+recibe el encargo en su conversación hasta que lo consulte.
+
+## Del cambio al informe
+
+1. El principal publica un contexto completo actualizado con
+   `publish_peer_context`, indicando `expectedRevision`. Debe incluir decisiones,
+   cambios, límites y comprobaciones realmente realizadas. La publicación
+   sustituye el contexto actual y mantiene un historial limitado; no es un append.
+2. Prepara `preview_peer_review`: `from`, `to`, solicitud y lista explícita de
+   archivos relativos. Puedes usar Claude → Codex o Codex → Claude en cualquier
+   momento; no se exige una planificación previa de Codex.
+3. La vista previa muestra el prompt completo, la versión del contexto, las rutas
+   y las huellas. Prepararla no envía el encargo. El principal muestra todo al
+   usuario, espera aprobación directa y llama `approve_peer_review` con su
+   `previewId` y código. El cliente presenta además una confirmación interactiva.
+4. El receptor recibe el encargo aprobado mediante `wait_for_peer_handoff` y lo
+   reclama con `claim_peer_review`, indicando su rol. La reclamación comprueba
+   de nuevo los archivos y solo puede ganarla una sesión. Devuelve un
+   `claimToken`; consérvalo para la entrega y no lo publiques en el informe.
+5. El receptor inspecciona los archivos desde su terminal y entrega hallazgos,
+   evidencia y límites con `submit_peer_review`. No se atribuye pruebas que no
+   hizo. El MCP verifica el comprobante y las huellas antes de guardar el informe.
+6. El principal consulta `get_collaboration`, o espera el resultado con
+   `wait_for_peer_handoff` indicando `reviewId`. Recupera el informe y comprueba
+   su vigencia antes de aplicar correcciones. Puede publicar otro contexto y
+   solicitar una revisión nueva, con otra aprobación.
+
+Los roles se pueden intercambiar: `primaryAgent` documenta quién empezó y no
+bloquea la dirección siguiente. Se admite un encargo pendiente o reclamado por
+tarea, para no duplicar revisiones del mismo punto de trabajo.
+
+## Qué significan las huellas y los estados
+
+- `pending`: encargo aprobado disponible en la bandeja.
+- `claimed`: una sesión lo reclamó y conserva su comprobante de entrega.
+- `completed`: se guardó un informe para el contexto y los archivos revisados.
+- `stale`: cambió el contexto o los archivos; hay que preparar otro encargo.
+- `cancelled`: el encargo se canceló o la colaboración se cerró.
+
+Las huellas cubren el contenido de los archivos enumerados, incluyendo archivos
+ausentes, y la raíz vinculada a la tarea. No incluyen archivos fuera de esa
+lista, el estado Git completo, dependencias ni evidencia de ejecución de pruebas.
+Añade explícitamente los archivos que el revisor necesite inspeccionar. Se
+rechazan directorios, recorridos fuera del proyecto, carpetas privadas, enlaces
+simbólicos, enlaces duros y archivos demasiado grandes.
+
+Si los archivos cambian antes de enviar, la aprobación falla. Si cambian antes
+de reclamar o al entregar, el encargo queda `stale` y no se guarda el informe
+como una revisión válida. Publicar contexto nuevo invalida los encargos activos
+de la versión anterior. Si cambian después de un informe ya guardado,
+`get_collaboration` conserva el historial y devuelve `current: false`,
+`filesCurrent: false` o `contextCurrent: false`. Un resultado de espera es una
+notificación; consulta `get_collaboration` para comprobar su vigencia actual.
+
+Una reclamación no se reasigna automáticamente si cierras su terminal. Cancela
+ese encargo y prepara uno nuevo con aprobación. `cancel_peer_review` evita una
+entrega posterior pero no puede interrumpir la sesión nativa. Si sigue
+trabajando, detén esa sesión desde su terminal. `close_collaboration` cancela
+sus encargos activos y conserva los informes para consulta.
+
+## Permisos, almacenamiento y límites
+
+Este es un intercambio local entre clientes de confianza del mismo usuario.
+Los roles y autores son declarados: no acreditan qué modelo o identidad produjo
+un informe. El MCP no cambia los permisos de las sesiones abiertas. El encargo
+solicita lectura, pero no crea un sandbox ni impide técnicamente que una sesión
+con permisos de escritura los use. Configura los permisos del revisor en su
+cliente. El flujo [de CLIs aisladas](task-workflow-mcp.md) sigue disponible.
+
+Los registros guardan contexto, prompts aprobados, huellas e informes que los
+agentes entregan explícitamente, no conversaciones completas, razonamiento
+privado ni diagnósticos brutos de CLIs. No envíes credenciales o información
+ajena al alcance. Los archivos se escriben de forma atómica con permisos `0600`
+en un directorio `0700`, y las operaciones usan bloqueos compartidos entre
+procesos para evitar reclamaciones o entregas duplicadas.
+Si un proceso cae mientras mantiene un bloqueo, el MCP no lo elimina por edad
+ni asume que es seguro repetir la operación. El historial sigue siendo legible;
+para recuperar el trabajo puedes crear otra colaboración. La limpieza manual
+del bloqueo exige comprobar primero que ningún proceso siga usando esa tarea.
+
+Cada vista previa es de un solo uso, vence a los 20 minutos y se aprueba en la
+misma conexión MCP que la preparó. Una reconexión descarta las vistas previas,
+pero conserva tareas, encargos aprobados e informes. Se guardan hasta 16
+revisiones y 16 versiones de contexto por colaboración. El contexto admite
+8 000 bytes, el informe 16 000, el prompt 32 000, hasta 64 archivos de 2 MB cada
+uno y 8 MB por captura. Al alcanzar el límite de revisiones, crea otra tarea.
+
+## Criterios y verificación
+
+El modo debe permitir ambas direcciones, compartir datos entre procesos MCP
+distintos y después de reabrirlos, bloquear envíos sin aprobación o fuera del
+proyecto, aceptar una sola reclamación y detectar entregas desactualizadas.
+No debe invocar modelos ni modificar archivos del proyecto por sí mismo.
+
+Las pruebas incluyen dos clientes y dos procesos MCP reales, con CLIs ficticias
+que registran cualquier intento de invocación. Comprueban el intercambio completo
+en ambos sentidos, las aprobaciones, el guardado, el aislamiento y que las CLIs
+no se ejecutan. También cubren cancelación, expiración, concurrencia y cambios
+durante la revisión. No sustituyen una demostración con sesiones reales de
+Claude y Codex; esa demostración necesita conexión y autorización del usuario.
