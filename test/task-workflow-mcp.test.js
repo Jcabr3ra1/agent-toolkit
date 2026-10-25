@@ -225,17 +225,27 @@ printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_e
   await client.connect(transport);
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map(tool => tool.name).sort(), [
+    "approve_peer_review",
+    "cancel_peer_review",
     "cancel_task_execution",
+    "claim_peer_review",
+    "close_collaboration",
+    "get_collaboration",
     "get_task",
     "preview_claude_implementation",
     "preview_claude_proposal",
     "preview_codex_plan",
     "preview_codex_review",
+    "preview_peer_review",
+    "publish_peer_context",
     "run_claude_implementation",
     "run_claude_proposal",
     "run_codex_plan",
     "run_codex_review",
+    "start_collaboration",
     "start_task",
+    "submit_peer_review",
+    "wait_for_peer_handoff",
     "wait_for_task_activity"
   ]);
 

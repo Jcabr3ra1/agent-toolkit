@@ -68,6 +68,13 @@ verdad: las notas explican el contexto, no lo sustituyen.
   controles de solo lectura; la llamada solo ocurre al ejecutar el comando
   `run` mostrado después de revisar la cuenta, el modelo y el alcance. La identidad
   exacta de cuenta, plan y cuota no se consultan.
+- **Pedir revisiones entre sesiones abiertas de Claude y Codex**: crea una
+  colaboración ligada al repositorio, comparte contexto y envía encargos en
+  cualquiera de los dos sentidos con vista previa y aprobación. El receptor
+  atiende la bandeja desde su propia terminal y devuelve un informe que conserva
+  las huellas de los archivos revisados. El MCP no inicia modelos ni despierta
+  sesiones inactivas; las dos sesiones deben estar conectadas y atender la tarea.
+  Consulta [Revisión cruzada entre sesiones](docs/peer-review-workflow.md).
 - **Pasar un plan entre Codex y Claude Code desde MCP**: el servidor local
   `agent-toolkit-mcp` prepara llamadas de Codex CLI y Claude Code CLI con vistas
   previas y confirmación interactiva del cliente MCP. Codex planifica; Claude
