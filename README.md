@@ -57,6 +57,10 @@ verdad: las notas explican el contexto, no lo sustituyen.
   entregas tú. La sugerencia usa datos revisados que tú proporcionas; no
   comprueba cuentas, disponibilidad actual ni qué modelo responderá. No envía
   el encargo ni arranca otros asistentes.
+- **Coordinar una tarea desde una pantalla local**: prepara traspasos manuales
+  entre Codex, Claude Code y Codex para planificar, proponer, implementar y
+  revisar. No conecta sus cuentas ni llama a los agentes; tú copias cada
+  encargo y pegas cada respuesta.
 - **Comprobar una entrega contra lo revisado**: detecta diferencias en los
   archivos que indicas, antes o después del trabajo. No revisa archivos fuera
   de esa lista ni sustituye la revisión de calidad.
@@ -134,6 +138,7 @@ una automatización real. No se creó una etiqueta o release por llamarla beta.
 | Aplicar notas revisadas con autorización y verificaciones | Disponible en la beta privada; texto y plan revisados por separado |
 | Integrar el ciclo completo con una automatización | Pendiente |
 | Preparar borradores de encargo tutor o autónomo | Disponible en la beta privada; entrega manual |
+| Coordinar tareas visualmente entre Codex y Claude Code | Disponible localmente; traspasos manuales, sin llamadas a proveedores |
 | Comprobar archivos de una entrega contra lo revisado | Disponible en la beta privada; solo archivos indicados |
 | Preparar un encargo de verificador externo | Disponible localmente; perfil declarado, sin invocación de clientes |
 | Empezar con ayudas y un encargo ficticio | Guía disponible y comprobada localmente |
@@ -160,6 +165,8 @@ resuelvan una necesidad comprobada, no como requisitos para empezar.
   aprobado, escritura limitada y tratamiento de resultados parciales.
 - [Preparación de encargos](docs/agent-task-prepare.md): borrador revisable,
   límites y ejemplo ficticio.
+- [Flujo visual de tareas](docs/task-workflow-ui.md): cómo iniciar la app local
+  y completar el recorrido manual Codex → Claude Code → Codex.
 - [Comprobación de entregas](docs/agent-task-verify.md): comparación de los archivos
   indicados, sin aprobación automática ni ejecución de agentes.
 - [Verificador externo](docs/agent-task-external-verifier.md): encargo `reviewer`,

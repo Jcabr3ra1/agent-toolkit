@@ -1,0 +1,387 @@
+---
+import "../styles/task-app.css";
+
+const stages = [
+  { name: "Plan de OpenAI", agent: "Codex", description: "Tú pegas el encargo y traes el plan." },
+  { name: "Propuesta de Claude Code", agent: "Claude Code", description: "Contrasta el plan con el proyecto." },
+  { name: "Cambios de Claude", agent: "Claude Code", description: "Escribe el paso o aplica lo autorizado." },
+  { name: "Revisión de OpenAI", agent: "Codex", description: "Revisa cambios y evidencia." }
+];
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f6f4ef" />
+    <meta name="description" content="Coordina tareas entre agentes con traspasos manuales y revisión por etapas." />
+    <title>Agent Toolkit · Flujo de trabajo</title>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="rail" aria-label="Información de Agent Toolkit">
+        <a class="brand" href="#inicio" aria-label="Agent Toolkit, inicio">
+          <span class="brand-mark" aria-hidden="true">A</span>
+          <span><strong>Agent Toolkit</strong><small>Espacio de trabajo</small></span>
+        </a>
+        <div class="rail-card">
+          <span class="eyebrow">FLUJO ACTUAL</span>
+          <p>Dos agentes.<br />Cuatro etapas.</p>
+          <span class="rail-line" aria-hidden="true"></span>
+          <small>Codex → Claude Code → Codex</small>
+        </div>
+        <div class="rail-note">
+          <span class="rail-icon" aria-hidden="true">↗</span>
+          <p>Los agentes no se conectan entre sí. Tú decides qué copiar, qué pegar y cuándo avanzar.</p>
+        </div>
+        <div class="rail-footer">
+          <span class="privacy-dot" aria-hidden="true"></span>
+          <span>Estado guardado en este navegador</span>
+        </div>
+      </aside>
+
+      <main id="inicio" class="main-content">
+        <header class="topbar">
+          <div class="breadcrumb"><span>Agent Toolkit</span><span aria-hidden="true">/</span><strong>Flujo manual</strong></div>
+          <div class="top-actions">
+            <button id="export-button" class="button button-quiet" type="button" hidden>Exportar tarea</button>
+            <button id="clear-button" class="button button-quiet" type="button" hidden>Borrar tarea</button>
+          </div>
+        </header>
+
+        <section class="welcome" aria-labelledby="page-title">
+          <div>
+            <span class="eyebrow">COORDINACIÓN MANUAL</span>
+            <h1 id="page-title">Lleva una tarea<br class="desktop-break" /> de idea a revisión.</h1>
+            <p class="welcome-copy">Prepara cada encargo, revisa la respuesta y luego decide si la compartes con el siguiente agente.</p>
+          </div>
+          <div class="welcome-stamp" aria-hidden="true"><span>01</span><span>·</span><span>04</span><small>ETAPAS</small></div>
+        </section>
+
+        <section id="task-form-panel" class="panel form-panel" aria-labelledby="form-title">
+          <div class="panel-heading">
+            <div><span class="step-tag">ANTES DE EMPEZAR</span><h2 id="form-title">Cuéntanos qué quieres hacer</h2></div>
+            <span class="form-index">01 <span>/</span> 04</span>
+          </div>
+          <form id="task-form">
+            <div class="form-grid">
+              <label class="field field-wide">
+                <span>Nombre de la tarea</span>
+                <input name="title" maxlength="180" value="Crear una landing sencilla" required autocomplete="off" />
+              </label>
+              <label class="field field-wide">
+                <span>Proyecto o ruta del repositorio</span>
+                <input name="project" maxlength="240" placeholder="Por ejemplo: sitio-web o /ruta/al/proyecto" required autocomplete="off" />
+                <small>Agent Toolkit no abre ni inspecciona esta ruta; se la indicará al agente cuando copies el encargo.</small>
+              </label>
+              <label class="field field-wide">
+                <span>¿Qué resultado buscas?</span>
+                <textarea name="objective" maxlength="4000" rows="3" required>Crear una landing page sencilla, clara y adaptable a móvil para presentar el proyecto.</textarea>
+              </label>
+              <label class="field">
+                <span>Modo de trabajo</span>
+                <select name="mode">
+                  <option value="tutor" selected>Tutor · me guía y yo escribo</option>
+                  <option value="autonomous">Autónomo · agente implementa con permiso</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Archivos o límites conocidos</span>
+                <textarea name="scope" maxlength="4000" rows="3" placeholder="Si no los conoces, deja que el plan proponga rutas exactas."></textarea>
+              </label>
+              <label class="field">
+                <span>¿Cómo sabrás que quedó bien?</span>
+                <textarea name="acceptance" maxlength="4000" rows="3" required>Se entiende qué ofrece el proyecto, se ve bien en móvil y los enlaces principales funcionan.</textarea>
+              </label>
+              <label class="field">
+                <span>Comprobaciones que quieres pedir</span>
+                <textarea name="checks" maxlength="2000" rows="3" placeholder="Opcional: por ejemplo, ejecutar las pruebas del proyecto."></textarea>
+              </label>
+            </div>
+            <div class="flow-explainer" aria-label="Cómo se genera cada entrega">
+              <div class="flow-step"><span>01 · AGENT TOOLKIT</span><strong>Arma el encargo</strong><p>Une esta plantilla con los datos del formulario. No usa inteligencia artificial.</p></div>
+              <span class="flow-arrow" aria-hidden="true">→</span>
+              <div class="flow-step"><span>02 · TU CLIENTE</span><strong>OpenAI genera el plan</strong><p>Lo pegas en Codex abierto en el proyecto; responde la sesión de OpenAI que tengas allí.</p></div>
+              <span class="flow-arrow" aria-hidden="true">→</span>
+              <div class="flow-step"><span>03 · DE VUELTA AQUÍ</span><strong>Tú pegas la respuesta</strong><p>Agent Toolkit la incluye en el siguiente encargo cuando decidas avanzar.</p></div>
+            </div>
+            <div class="notice notice-warm">
+              <span class="notice-icon" aria-hidden="true">i</span>
+              <p><strong>La app no accede a tu cuenta ni hace llamadas.</strong> No inicia sesión ni verifica qué cuenta está abierta. La recomendación de modelo y esfuerzo sigue disponible en <code>agent-task prepare</code> con perfiles aprobados; esta pantalla no inventa perfiles.</p>
+            </div>
+            <div class="form-footer">
+              <span class="form-hint"><span class="required-dot">*</span> Campos necesarios para preparar el primer encargo</span>
+              <button class="button button-primary" type="submit">Preparar encargo para Codex <span aria-hidden="true">→</span></button>
+            </div>
+          </form>
+        </section>
+
+        <section id="workflow-panel" class="workflow" hidden aria-labelledby="stage-title">
+          <nav class="stepper" aria-label="Progreso de la tarea">
+            {stages.map((stage, index) => (
+              <div class="stepper-item" data-step={index} aria-current={index === 0 ? "step" : undefined}>
+                <span class="stepper-number">0{index + 1}</span>
+                <span class="stepper-copy"><strong>{stage.agent}</strong><small>{stage.description}</small></span>
+                <span class="stepper-check" aria-hidden="true">✓</span>
+              </div>
+            ))}
+          </nav>
+
+          <article class="panel stage-panel">
+            <div class="panel-heading stage-heading">
+              <div><span id="stage-kicker" class="step-tag">ETAPA 01 · OPENAI</span><h2 id="stage-title">Plan de OpenAI</h2><p id="stage-description" class="stage-description"></p></div>
+              <span id="stage-state" class="state-pill"><span></span> Borrador</span>
+            </div>
+            <div id="stage-empty" class="stage-empty">
+              <div class="empty-icon" aria-hidden="true">✳</div>
+              <div><h3 id="prompt-callout-title">Prepara el primer encargo</h3><p id="prompt-callout-copy">Agent Toolkit convertirá tu objetivo en un texto listo para copiar a OpenAI.</p></div>
+              <button id="prepare-button" class="button button-primary" type="button">Preparar encargo <span aria-hidden="true">→</span></button>
+            </div>
+            <div id="authorization-panel" class="authorization-panel" hidden>
+              <label class="authorization-option"><input id="apply-authorization" type="checkbox" /><span><strong>He revisado la propuesta de Claude y autorizo a Claude Code a aplicar solo esos cambios</strong><small>Esta autorización es para la tarea descrita. No permite crear commits, publicar ni ampliar el alcance.</small></span></label>
+              <p id="authorization-note" class="authorization-note"></p>
+            </div>
+            <div id="prompt-panel" class="prompt-panel" hidden>
+              <div class="prompt-toolbar"><div><span class="eyebrow">ENCARGO ARMADO LOCALMENTE</span><p id="prompt-destination">Pégalo en el agente indicado para recibir su respuesta.</p></div><button id="copy-button" class="button button-copy" type="button"><span aria-hidden="true">▢</span> Copiar encargo</button></div>
+              <pre id="prompt-text" class="prompt-text" tabindex="0"></pre>
+              <label class="field response-field">
+                <span id="response-label">Pega aquí la respuesta del agente</span>
+                <textarea id="response-input" rows="7" maxlength="24000" placeholder="La respuesta se conserva solo en este navegador. No pegues contraseñas, tokens ni secretos."></textarea>
+              </label>
+              <div class="response-footer"><span id="response-count" class="form-hint">0 caracteres</span><button id="continue-button" class="button button-primary" type="button" disabled>Guardar y preparar siguiente etapa <span aria-hidden="true">→</span></button></div>
+            </div>
+            <div id="completion-panel" class="completion-panel" hidden>
+              <span class="completion-mark" aria-hidden="true">✓</span><div><h3>Revisión final recibida</h3><p>La tarea queda cerrada en este navegador. La conclusión depende de la evidencia que revisó OpenAI.</p></div>
+            </div>
+          </article>
+          <p class="workflow-footnote"><span class="privacy-dot" aria-hidden="true"></span> Tus respuestas se guardan localmente en este navegador. No se envían a Agent Toolkit.</p>
+        </section>
+
+        <div id="status-message" class="status-message" role="status" aria-live="polite"></div>
+        <footer class="page-footer"><span>Agent Toolkit</span><span>Traspasos bajo tu control</span></footer>
+      </main>
+    </div>
+
+    <script>
+      const STORAGE_KEY = "agent-toolkit.manual-workflow.v1";
+      const stages = [
+        { id: "openai-plan", agent: "Codex", title: "Plan de OpenAI (Codex)", description: "Pega el encargo en Codex con AVISENS-Project abierto; trae aquí la respuesta con el plan.", response: "Pega aquí la respuesta de OpenAI (el plan)" },
+        { id: "claude-proposal", agent: "Claude Code", title: "Propuesta de Claude Code", description: "Claude Code contrasta el plan con el proyecto y propone un paso o cambios precisos.", response: "Pega aquí la propuesta de Claude Code" },
+        { id: "claude-implementation", agent: "Claude Code", title: "Cambios de Claude Code", description: "Claude Code entrega el código en tutor o aplica la propuesta que autorizaste en autónomo.", response: "Pega aquí el resultado y las comprobaciones de Claude Code" },
+        { id: "openai-review", agent: "Codex", title: "Revisión de OpenAI (Codex)", description: "Codex contrasta el diff y la evidencia contra los criterios acordados.", response: "Pega aquí la revisión final de OpenAI" }
+      ];
+      const defaultTask = { title: "Crear una landing sencilla", project: "", mode: "tutor", objective: "Crear una landing page sencilla, clara y adaptable a móvil para presentar el proyecto.", scope: "", acceptance: "Se entiende qué ofrece el proyecto, se ve bien en móvil y los enlaces principales funcionan.", checks: "" };
+      const emptyResponses = { plan: "", proposal: "", implementation: "", review: "" };
+      let state = loadState();
+      const formPanel = document.querySelector("#task-form-panel");
+      const workflowPanel = document.querySelector("#workflow-panel");
+      const form = document.querySelector("#task-form");
+      const promptPanel = document.querySelector("#prompt-panel");
+      const promptText = document.querySelector("#prompt-text");
+      const responseInput = document.querySelector("#response-input");
+      const statusMessage = document.querySelector("#status-message");
+      const authPanel = document.querySelector("#authorization-panel");
+      const authCheckbox = document.querySelector("#apply-authorization");
+      let saveTimer;
+
+      function loadState() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+          if (saved && saved.version === 1 && saved.task && Number.isInteger(saved.stageIndex)) {
+            return { version: 1, task: { ...defaultTask, ...saved.task }, responses: { ...emptyResponses, ...saved.responses }, stageIndex: Math.min(3, Math.max(0, saved.stageIndex)), prompt: saved.prompt ?? "", applyAuthorized: saved.applyAuthorized === true, completed: saved.completed === true };
+          }
+        } catch { /* Corrupt local state starts a clean task. */ }
+        return null;
+      }
+
+      function saveState() {
+        if (!state) return;
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch {
+          statusMessage.textContent = "No se pudo guardar el progreso en este navegador. Exporta la tarea para conservarla.";
+        }
+      }
+
+      function announce(message) {
+        statusMessage.textContent = message;
+        window.clearTimeout(saveTimer);
+        saveTimer = window.setTimeout(() => { if (statusMessage.textContent === message) statusMessage.textContent = ""; }, 4200);
+      }
+
+      function taskFromForm() {
+        return Object.fromEntries(new FormData(form).entries());
+      }
+
+      function responseKey(index) {
+        return ["plan", "proposal", "implementation", "review"][index];
+      }
+
+      function syncForm() {
+        if (!state) return;
+        for (const [key, value] of Object.entries(state.task)) {
+          if (form.elements.namedItem(key)) form.elements.namedItem(key).value = value;
+        }
+      }
+
+      function render() {
+        const active = Boolean(state);
+        formPanel.hidden = active;
+        workflowPanel.hidden = !active;
+        document.querySelector("#export-button").hidden = !active;
+        document.querySelector("#clear-button").hidden = !active;
+        if (!active) return;
+        syncForm();
+        const current = stages[state.stageIndex];
+        document.querySelectorAll(".stepper-item").forEach((item, index) => {
+          item.classList.toggle("is-current", index === state.stageIndex && !state.completed);
+          item.classList.toggle("is-done", index < state.stageIndex || state.completed);
+          if (index === state.stageIndex) item.setAttribute("aria-current", "step"); else item.removeAttribute("aria-current");
+        });
+        document.querySelector("#stage-kicker").textContent = `ETAPA 0${state.stageIndex + 1} · ${current.agent.toUpperCase()}`;
+        document.querySelector("#stage-title").textContent = current.title;
+        document.querySelector("#stage-description").textContent = current.description;
+        document.querySelector("#response-label").textContent = current.response;
+        const destinations = [
+          "Este texto aún no es el plan. Pégalo en Codex con AVISENS-Project abierto; allí se genera la respuesta.",
+          "Este texto aún no es la propuesta. Pégalo en Claude Code; allí se genera la respuesta.",
+          state.task.mode === "tutor"
+            ? "Claude te dará el código y el paso explicado para que tú lo escribas."
+            : state.applyAuthorized
+              ? "Claude Code podrá aplicar solo los cambios de la propuesta que autorizaste."
+              : "Sin autorización, Claude solo podrá explicar el plan de aplicación; no editará.",
+          "Este texto aún no es la revisión. Pégalo en Codex con el proyecto abierto; allí se genera la respuesta final."
+        ];
+        document.querySelector("#prompt-destination").textContent = destinations[state.stageIndex];
+        const isClaudeImplementation = current.id === "claude-implementation";
+        authPanel.hidden = !isClaudeImplementation || state.task.mode !== "autonomous";
+        authCheckbox.checked = state.applyAuthorized;
+        document.querySelector("#authorization-note").textContent = state.applyAuthorized
+          ? "Autorización registrada para esta tarea. El prompt seguirá prohibiendo commits y publicación."
+          : "Sin esta autorización, Claude recibirá un encargo sin permiso para editar.";
+        document.querySelector("#stage-empty").hidden = Boolean(state.prompt) || state.completed;
+        promptPanel.hidden = !state.prompt || state.completed;
+        document.querySelector("#completion-panel").hidden = !state.completed;
+        document.querySelector("#stage-state").innerHTML = state.completed ? "<span></span> Cerrada" : state.prompt ? "<span></span> Lista para copiar" : "<span></span> Borrador";
+        promptText.textContent = state.prompt;
+        responseInput.value = state.responses[responseKey(state.stageIndex)] ?? "";
+        document.querySelector("#response-count").textContent = `${responseInput.value.length.toLocaleString("es-CO")} caracteres`;
+        document.querySelector("#continue-button").disabled = responseInput.value.trim().length === 0;
+        document.querySelector("#continue-button").textContent = state.stageIndex === 3 ? "Cerrar tarea ✓" : "Guardar y preparar siguiente etapa →";
+        document.querySelector("#prompt-callout-title").textContent = state.stageIndex === 2 && state.task.mode === "autonomous" ? "Revisa antes de autorizar" : `Prepara el encargo para ${current.agent}`;
+        document.querySelector("#prompt-callout-copy").textContent = state.stageIndex === 0
+          ? "Agent Toolkit solo prepara el encargo. OpenAI generará el plan cuando lo pegues en el cliente con la cuenta que elijas."
+          : state.stageIndex === 2 && state.task.mode === "autonomous"
+          ? "Lee la propuesta de Claude. Puedes pedirle un análisis sin escritura o autorizar que aplique exactamente esos cambios."
+          : state.stageIndex === 2
+          ? "Claude te dará el código de un paso para que tú lo escribas y compruebes."
+          : `Agent Toolkit preparará un texto listo para copiar a ${current.agent}.`;
+      }
+
+      async function preparePrompt() {
+        if (!state) return;
+        if (state.stageIndex === 2 && state.task.mode === "autonomous") state.applyAuthorized = authCheckbox.checked;
+        const button = document.querySelector("#prepare-button");
+        button.disabled = true;
+        button.textContent = "Preparando…";
+        try {
+          const result = await fetch("/api/prepare", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ stage: stages[state.stageIndex].id, task: state.task, responses: state.responses, applyAuthorized: state.applyAuthorized })
+          });
+          const data = await result.json();
+          if (!result.ok) throw new Error(data.error ?? "No se pudo preparar el encargo.");
+          state.prompt = data.prompt;
+          saveState();
+          render();
+          announce(`Encargo preparado para ${stages[state.stageIndex].agent}.`);
+        } catch (error) {
+          announce(error.message === "Failed to fetch" ? "No se pudo conectar con la app local. Comprueba que siga abierta." : "No se pudo preparar el encargo. Revisa los campos y vuelve a intentarlo.");
+        } finally {
+          button.disabled = false;
+          button.innerHTML = "Preparar encargo <span aria-hidden=\"true\">→</span>";
+        }
+      }
+
+      function exportTask() {
+        if (!state) return;
+        const lines = [`# ${state.task.title}`, "", `Proyecto: ${state.task.project}`, `Modo: ${state.task.mode}`, `Objetivo: ${state.task.objective}`, `Alcance: ${state.task.scope || "Por definir"}`, `Criterios: ${state.task.acceptance}`, `Comprobaciones: ${state.task.checks || "Por definir"}`, ""];
+        stages.forEach((stage, index) => {
+          lines.push(`## ${stage.title}`, "", `Encargo preparado: ${index <= state.stageIndex ? "sí" : "pendiente"}`, "", state.responses[responseKey(index)] || "Sin respuesta pegada.", "");
+        });
+        const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `${state.task.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "tarea"}.md`;
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        announce("La tarea se exportó como archivo Markdown.");
+      }
+
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        state = { version: 1, task: taskFromForm(), responses: { ...emptyResponses }, stageIndex: 0, prompt: "", applyAuthorized: false, completed: false };
+        saveState();
+        render();
+        document.querySelector("#workflow-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      document.querySelector("#prepare-button").addEventListener("click", preparePrompt);
+      document.querySelector("#copy-button").addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(state.prompt); announce("Encargo copiado. Pégalo en el agente indicado."); }
+        catch {
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(promptText);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          promptText.focus();
+          announce("No se pudo copiar automáticamente. El texto está seleccionado; cópialo desde el teclado.");
+        }
+      });
+      responseInput.addEventListener("input", () => {
+        if (!state) return;
+        state.responses[responseKey(state.stageIndex)] = responseInput.value;
+        document.querySelector("#response-count").textContent = `${responseInput.value.length.toLocaleString("es-CO")} caracteres`;
+        document.querySelector("#continue-button").disabled = responseInput.value.trim().length === 0;
+        saveState();
+      });
+      authCheckbox.addEventListener("change", () => {
+        if (!state) return;
+        state.applyAuthorized = authCheckbox.checked;
+        state.prompt = "";
+        saveState();
+        render();
+        announce(state.applyAuthorized ? "Autorización registrada para esta tarea. Claude recibirá ese alcance." : "Autorización retirada. Claude recibirá un encargo sin permiso para editar.");
+      });
+      document.querySelector("#continue-button").addEventListener("click", () => {
+        if (!state || !responseInput.value.trim()) return;
+        state.responses[responseKey(state.stageIndex)] = responseInput.value.trim();
+        if (state.stageIndex === 3) state.completed = true;
+        else { state.stageIndex += 1; state.prompt = ""; state.applyAuthorized = false; }
+        saveState();
+        render();
+        announce(state.completed ? "Tarea cerrada en este navegador." : `Respuesta guardada. Sigue ${stages[state.stageIndex].agent}.`);
+        document.querySelector(".stage-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      document.querySelector("#clear-button").addEventListener("click", () => {
+        if (!window.confirm("¿Borrar la tarea y sus respuestas de este navegador? Esta acción no se puede deshacer.")) return;
+        localStorage.removeItem(STORAGE_KEY);
+        state = null;
+        statusMessage.textContent = "La tarea y sus respuestas se borraron de este navegador.";
+        render();
+        form.elements.namedItem("title").value = defaultTask.title;
+        form.elements.namedItem("project").value = "";
+        form.elements.namedItem("mode").value = defaultTask.mode;
+        form.elements.namedItem("objective").value = defaultTask.objective;
+        form.elements.namedItem("scope").value = defaultTask.scope;
+        form.elements.namedItem("acceptance").value = defaultTask.acceptance;
+        form.elements.namedItem("checks").value = defaultTask.checks;
+      });
+      document.querySelector("#export-button").addEventListener("click", exportTask);
+      render();
+    </script>
+  </body>
+</html>
