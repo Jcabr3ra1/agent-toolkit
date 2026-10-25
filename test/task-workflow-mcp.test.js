@@ -23,6 +23,28 @@ const taskInput = {
 
 after(() => fs.rmSync(root, { recursive: true, force: true }));
 
+// Match the real CLI dependency so a malformed invocation cannot save a proposal.
+const claudeStreamJsonGuard = `
+print_mode=0
+stream_json=0
+verbose=0
+next_format=0
+for arg in "$@"; do
+  if [ "$next_format" = 1 ]; then
+    if [ "$arg" = 'stream-json' ]; then stream_json=1; fi
+    next_format=0
+    continue
+  fi
+  if [ "$arg" = '--print' ]; then print_mode=1; fi
+  if [ "$arg" = '--verbose' ]; then verbose=1; fi
+  if [ "$arg" = '--output-format' ]; then next_format=1; fi
+done
+if [ "$print_mode" = 1 ] && [ "$stream_json" = 1 ] && [ "$verbose" = 0 ]; then
+  printf '%s\\n' 'Error: When using --print, --output-format=stream-json requires --verbose' >&2
+  exit 1
+fi
+`;
+
 async function waitForExecution(client, taskId, executionId) {
   let afterSequence = 0;
   const events = [];
@@ -156,6 +178,7 @@ exit 1
   fs.writeFileSync(claudeFixture, `#!/bin/sh
 if [ "$1" = "--version" ]; then printf '%s\\n' '2.1.300'; exit 0; fi
 if [ "$1" = "auth" ] && [ "$2" = "status" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}'; exit 0; fi
+${claudeStreamJsonGuard}
 printf '%s\\n' invoked >> ${quote(claudeRuns)}
 cat >/dev/null
 if [ -f ${quote(claudeFailureFlag)} ]; then
@@ -170,6 +193,13 @@ printf '%s\\n' ${quote(JSON.stringify({ type: "assistant", message: { content: [
 printf '%s\\n' ${quote(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", content: "PRIVATE_SOURCE_TEXT_MUST_NOT_APPEAR" }] } }))}
 printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Propuesta de lectura: usar una grilla responsiva y conservar los datos actuales." }))}
 `, { mode: 0o700 });
+
+  const incompatibleCall = spawnSync(claudeFixture, ["--print", "--output-format", "stream-json"], {
+    encoding: "utf8", input: "Fixture-only argument validation.", timeout: 5_000
+  });
+  assert.equal(incompatibleCall.status, 1);
+  assert.match(incompatibleCall.stderr, /stream-json requires --verbose/u);
+  assert.equal(fs.existsSync(claudeRuns), false);
 
   let approvalDecision = "cancel";
   const approvalPrompts = [];
@@ -429,6 +459,7 @@ exit 1
   fs.writeFileSync(claudeFixture, `#!/bin/sh
 if [ "$1" = "--version" ]; then printf '%s\\n' '2.1.300'; exit 0; fi
 if [ "$1" = "auth" ] && [ "$2" = "status" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}'; exit 0; fi
+${claudeStreamJsonGuard}
 implementation=0
 for arg in "$@"; do if [ "$arg" = 'acceptEdits' ]; then implementation=1; fi; done
 cat >/dev/null
