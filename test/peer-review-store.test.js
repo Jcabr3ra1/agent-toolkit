@@ -236,3 +236,61 @@ test("the total snapshot and review count stay bounded", async () => {
   }
   await assert.rejects(f.prepare(), { code: "peer-limit" });
 });
+
+test("automatic requests are limited to the primary agent and the confirmed quota", async () => {
+  const f = await fixture();
+  const input = { ...f.bound, from: "claude", to: "codex", message: "Revisa el contrato.", paths: ["src/app.js"] };
+  await assert.rejects(f.store.requestReview(input), { code: "peer-auto" });
+  await assert.rejects(f.store.startCollaboration({ projectRoot: f.projectRoot, project: "Auto", title: "Auto",
+    objective: "Revisar", primaryAgent: "claude", autoReviews: PEER_LIMITS.autoReviews + 1 }), { code: "peer-input" });
+  const task = await f.store.startCollaboration({ projectRoot: f.projectRoot, project: "Auto", title: "Auto",
+    objective: "Revisar sin aprobar cada encargo", primaryAgent: "claude", autoReviews: 2 });
+  assert.deepEqual({ from: task.autoApprove.from, maxReviews: task.autoApprove.maxReviews }, { from: "claude", maxReviews: 2 });
+  const bound = { taskId: task.id, projectRoot: f.projectRoot };
+  const auto = { ...input, ...bound };
+  const first = await f.store.requestReview(auto);
+  assert.equal(first.state, "pending");
+  assert.equal(first.approval.automatic, true);
+  assert.equal(first.approval.previewId, undefined);
+  await assert.rejects(f.store.requestReview(auto), { code: "peer-active" });
+  const claim = await f.store.claimReview({ ...bound, reviewId: first.id, agent: "codex" });
+  await f.store.submitReview({ ...bound, reviewId: first.id, agent: "codex", claimToken: claim.claimToken, content: "Sin hallazgos." });
+  await assert.rejects(f.store.requestReview({ ...auto, from: "codex", to: "claude" }), { code: "peer-auto" });
+  const second = await f.store.requestReview(auto);
+  await f.store.cancelReview({ ...bound, reviewId: second.id });
+  await assert.rejects(f.store.requestReview(auto), { code: "peer-auto" });
+  const manual = await f.store.dispatchReview(await f.store.prepareReview(auto), { previewId: "a".repeat(32) });
+  assert.equal(manual.approval.automatic, undefined);
+  const restarted = createPeerReviewStore({ root: f.storage });
+  assert.equal((await restarted.getCollaboration(bound)).autoApprove.maxReviews, 2);
+});
+
+test("listed collaborations show who may send automatic requests", async () => {
+  const f = await fixture();
+  const auto = await f.store.startCollaboration({ projectRoot: f.projectRoot, project: "Auto", title: "Codex principal",
+    objective: "Revisar", primaryAgent: "codex", autoReviews: 3 });
+  const listed = Object.fromEntries((await f.store.listCollaborations({ projectRoot: f.projectRoot })).tasks.map(task => [task.taskId, task]));
+  assert.deepEqual({ primaryAgent: listed[f.task.id].primaryAgent, autoReviews: listed[f.task.id].autoReviews }, { primaryAgent: "claude", autoReviews: 0 });
+  assert.deepEqual({ primaryAgent: listed[auto.id].primaryAgent, autoReviews: listed[auto.id].autoReviews }, { primaryAgent: "codex", autoReviews: 3 });
+});
+
+test("reviewer recommendations are validated per agent and travel inside the approved prompt", async () => {
+  const f = await fixture();
+  const reviewer = { model: "gpt-5-codex", effort: "high", reason: "Cambio de concurrencia con riesgo de carreras." };
+  for (const bad of [{ ...reviewer, effort: "max" }, { ...reviewer, model: "modelo con espacios" }, { ...reviewer, reason: "" }, { model: "x", effort: "low" }]) {
+    await assert.rejects(f.prepare({ reviewer: bad }), { code: "peer-input" });
+  }
+  await assert.rejects(f.prepare({ from: "codex", to: "claude", reviewer: { ...reviewer, model: "opus", effort: "minimal" } }), { code: "peer-input" });
+  const plain = await f.prepare();
+  assert.equal(plain.reviewer, null);
+  assert.doesNotMatch(plain.prompt, /Configuración recomendada/u);
+  const preview = await f.prepare({ reviewer });
+  assert.deepEqual(preview.reviewer, reviewer);
+  assert.match(preview.prompt, /Configuración recomendada para codex \(declarada, no verificada\): modelo gpt-5-codex, esfuerzo high/u);
+  assert.notEqual(preview.promptSha256, plain.promptSha256);
+  await assert.rejects(f.store.dispatchReview({ ...preview, reviewer: { ...reviewer, effort: "low" } }, { previewId: "a".repeat(32) }), { code: "peer-revision" });
+  const request = await f.store.dispatchReview(preview, { previewId: "a".repeat(32) });
+  assert.deepEqual(request.reviewer, reviewer);
+  const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "codex" });
+  assert.equal(claim.review.reviewer.model, "gpt-5-codex");
+});

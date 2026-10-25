@@ -7,7 +7,9 @@ se comparten mediante el MCP local de Agent Toolkit.
 
 El MCP no inicia una CLI, no llama a una API y no despierta ventanas inactivas.
 El trabajo lo realiza el agente receptor en su sesión visible, cuando atiende
-su bandeja. Cada encargo requiere una vista previa nueva y aprobación humana.
+su bandeja. Cada encargo requiere una vista previa nueva y aprobación humana,
+salvo en el [modo automático](#modo-automático), que se autoriza una vez por
+colaboración.
 Las sesiones siguen consumiendo sus modelos según la configuración de cada
 cliente; el intercambio no hace gratuitas esas sesiones ni verifica sus cuotas.
 
@@ -71,11 +73,59 @@ En la otra terminal pide:
 la tarea desde la otra sesión sin copiar su contenido. No se elige una tarea
 automáticamente cuando hay varias.
 
-Las esperas duran hasta 15 segundos. Cada espera solo lee la bandeja. El agente
+Las esperas duran 15 segundos por defecto y hasta 60 con `waitMs`. Sin `taskId`,
+`wait_for_peer_handoff` atiende todas las colaboraciones abiertas de esa raíz y
+devuelve el `taskId` del encargo recibido. Cada espera solo lee la bandeja. El agente
 puede continuar esperando si le pediste expresamente atenderla; no hay un bucle
 de modelos iniciado por el servidor. Puedes indicar un tiempo de atención o
 interrumpir la sesión. Una terminal abierta pero que no está atendiendo no
 recibe el encargo en su conversación hasta que lo consulte.
+
+## Modo automático
+
+Para no aprobar cada encargo, crea la colaboración con `autoReviews` (de 1 a 8).
+El cliente pide una sola confirmación interactiva; después el agente principal
+envía encargos con `request_peer_review`, sin vista previa, hasta ese cupo. Los
+encargos cancelados o desactualizados también consumen cupo.
+
+- Solo `primaryAgent` envía automáticamente. El revisor no puede responder con
+  otro encargo automático, lo que evita cadenas entre agentes.
+- Sigue habiendo un único encargo activo por tarea y las mismas huellas,
+  reclamaciones y comprobaciones de vigencia.
+- Al agotar el cupo, `request_peer_review` falla y el flujo con
+  `preview_peer_review` y aprobación manual sigue disponible.
+- Sin confirmación interactiva o si el usuario la rechaza, la colaboración no se
+  crea.
+
+## Modelo y esfuerzo recomendados
+
+`preview_peer_review` y `request_peer_review` aceptan `reviewer` con `model`,
+`effort` y `reason`: la configuración que el principal recomienda para el
+revisor y por qué. Los esfuerzos admitidos dependen del revisor: `low` a `max`
+para Claude y `minimal` a `xhigh` para Codex. La recomendación forma parte del
+prompt aprobado y de su huella, se muestra en el diálogo de confirmación y se
+guarda con el encargo.
+
+Es una recomendación declarada. El MCP no cambia el modelo de una sesión
+abierta: el usuario lo cambia con `/model` en la terminal del revisor antes de
+aprobar. El revisor compara la recomendación con su modelo y, si no coincide,
+no reclama el encargo y avisa. El esfuerzo real de la sesión no se verifica.
+
+## Uso diario con la skill
+
+La skill `skills/revision-cruzada` reduce el uso diario a un comando por
+terminal y aprueba cada encargo por separado, con la recomendación delante;
+solo usa `autoReviews` si el usuario lo pide. Instálala en `~/.claude/skills/`
+y `~/.codex/skills/`:
+
+> En la sesión principal: `/revision-cruzada iniciar` (Claude) o
+> `$revision-cruzada iniciar` (Codex), y describe la tarea.
+>
+> En la otra terminal: `/revision-cruzada atender` o `$revision-cruzada atender`.
+
+El revisor espera en bloques de 60 segundos. Cada bloque es un turno de su
+modelo, por lo que mantener una bandeja atendida consume cuota aunque no lleguen
+encargos; la skill se detiene tras 60 minutos sin actividad.
 
 ## Del cambio al informe
 

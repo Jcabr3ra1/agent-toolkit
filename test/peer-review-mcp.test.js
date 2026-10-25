@@ -104,6 +104,22 @@ test("the preview cache is bounded and approval displays the complete exact prom
   assert.equal(dispatched.review.approval.previewId, latest.previewId);
 });
 
+test("approval shows the recommended reviewer model and effort before sending", async () => {
+  const f = await harness();
+  const reviewer = { model: "gpt-5-codex", effort: "xhigh", reason: "Revisión de seguridad." };
+  const preview = decode(await f.call("preview_peer_review", { ...f.bound, from: "claude", to: "codex", message: "Revisa answer.", paths: ["app.js"], reviewer }));
+  assert.deepEqual(preview.reviewer, reviewer);
+  let shown;
+  const sent = decode(await f.call("approve_peer_review", { previewId: preview.previewId, confirmationCode: preview.confirmationCode }, {
+    mcpReq: { elicitInput: async request => { shown = request.message; return { action: "accept", content: { decision: "approve" } }; } }
+  }));
+  assert.match(shown, /Recomendado para codex: modelo gpt-5-codex, esfuerzo xhigh\. Revisión de seguridad\./u);
+  assert.match(shown, /cambia el modelo en la terminal del revisor antes de aprobar/u);
+  assert.deepEqual(sent.review.reviewer, reviewer);
+  assert.equal((await f.call("preview_peer_review", { ...f.bound, from: "claude", to: "codex", message: "x", paths: ["app.js"],
+    reviewer: { ...reviewer, effort: "extreme" } }).catch(() => ({ isError: true }))).isError, true);
+});
+
 test("two stdio MCP processes exchange visible-session handoffs both ways without invoking a CLI", async t => {
   const f = await project();
   const workflowRoot = path.join(f.directory, "workflows");
@@ -179,4 +195,34 @@ test("two stdio MCP processes exchange visible-session handoffs both ways withou
   assert.equal(await fs.readFile(path.join(f.projectRoot, "app.js"), "utf8"), original);
   await assert.rejects(fs.access(called));
   assert.deepEqual(diagnostics, []);
+});
+
+test("automatic collaborations need one confirmation and the inbox finds requests without a taskId", async () => {
+  const f = await harness();
+  const auto = { ...input, projectRoot: f.projectRoot, title: "Revisión automática", autoReviews: 2 };
+  const blocked = decode(await f.call("start_collaboration", auto));
+  assert.deepEqual({ state: blocked.state, created: blocked.created }, { state: "blocked", created: false });
+  let shown;
+  const declined = decode(await f.call("start_collaboration", auto, { mcpReq: { elicitInput: async request => {
+    shown = request.message;
+    return { action: "decline" };
+  } } }));
+  assert.equal(declined.created, false);
+  assert.match(shown, /claude envíe a codex hasta 2 encargos/u);
+  assert.deepEqual((await f.store.listCollaborations({ projectRoot: f.projectRoot })).tasks.map(task => task.taskId), [f.task.id]);
+  const task = decode(await f.call("start_collaboration", auto, f.approveContext));
+  assert.equal(task.autoApprove.maxReviews, 2);
+  const bound = { taskId: task.id, projectRoot: f.projectRoot };
+  const request = { ...bound, from: "claude", to: "codex", message: "Revisa answer.", paths: ["app.js"] };
+  assert.equal((await f.call("request_peer_review", { ...request, taskId: f.task.id })).isError, true);
+  const idle = decode(await f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", waitMs: 0 }));
+  assert.deepEqual({ review: idle.review, timedOut: idle.timedOut }, { review: null, timedOut: true });
+  const waiting = f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", waitMs: 2_000 });
+  const sent = decode(await f.call("request_peer_review", request));
+  assert.deepEqual({ sent: sent.sent, automatic: sent.automatic, startsModel: sent.startsModel }, { sent: true, automatic: true, startsModel: false });
+  const received = decode(await waiting);
+  assert.equal(received.taskId, task.id);
+  assert.equal(received.review.id, sent.review.id);
+  assert.equal((await f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", reviewId: sent.review.id })).isError, true);
+  assert.equal((await f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", waitMs: 60_001 }).catch(() => ({ isError: true }))).isError, true);
 });

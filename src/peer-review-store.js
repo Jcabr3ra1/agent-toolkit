@@ -5,12 +5,14 @@ import path from "node:path";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 export const PEER_LIMITS = Object.freeze({ contextBytes: 8_000, reportBytes: 16_000, promptBytes: 32_000,
-  paths: 64, fileBytes: 2_000_000, snapshotBytes: 8_000_000, reviews: 16, history: 16, recordBytes: 1_000_000 });
+  paths: 64, fileBytes: 2_000_000, snapshotBytes: 8_000_000, reviews: 16, history: 16, recordBytes: 1_000_000, autoReviews: 8 });
 const AGENTS = new Set(["claude", "codex"]);
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
 const PRIVATE = new Set([".git", ".ssh", ".aws", ".codex", ".claude", ".agents"]);
 const ACTIVE = new Set(["pending", "claimed"]);
+const EFFORTS = { claude: ["low", "medium", "high", "xhigh", "max"], codex: ["minimal", "low", "medium", "high", "xhigh"] };
+const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/u;
 const MESSAGES = {
   input: "Los datos de colaboración no son válidos o superan los límites.",
   project: "La raíz del proyecto no es válida, cambió o no coincide con la tarea.",
@@ -23,6 +25,7 @@ const MESSAGES = {
   active: "Ya hay una revisión pendiente o en curso; consúltala o cancela ese encargo.",
   limit: "La colaboración alcanzó su límite de revisiones; crea una tarea nueva.",
   claim: "El encargo no está disponible para esa sesión o el comprobante no coincide.",
+  auto: "Esta colaboración no admite un envío automático de ese agente o agotó su cupo; usa preview_peer_review y la aprobación del usuario.",
   files: "No se pudo obtener una huella estable de los archivos indicados. Usa archivos regulares dentro del proyecto."
 };
 
@@ -109,13 +112,25 @@ async function snapshot(binding, paths) {
   } catch (error) { if (error instanceof PeerReviewError) throw error; fail("files"); }
 }
 
+function validAutoApprove(value) {
+  return Boolean(value) && AGENTS.has(value.from) && Number.isInteger(value.maxReviews) &&
+    value.maxReviews >= 1 && value.maxReviews <= PEER_LIMITS.autoReviews;
+}
+
 function publicTask(task) {
   const copy = structuredClone(task);
   for (const request of copy.reviews) delete request.claimHash;
   return copy;
 }
 
-function reviewPrompt(task, from, to, message, files) {
+function reviewerSetup(to, reviewer) {
+  if (reviewer === undefined) return null;
+  if (!reviewer || typeof reviewer.model !== "string" || !MODEL.test(reviewer.model) ||
+      !EFFORTS[to].includes(reviewer.effort) || !text(reviewer.reason, 500)) fail("input");
+  return { model: reviewer.model, effort: reviewer.effort, reason: reviewer.reason.trim() };
+}
+
+function reviewPrompt(task, from, to, message, files, reviewer) {
   const prompt = [
     `Encargo de revisión entre sesiones: ${from} solicita revisión a ${to}.`,
     "Este encargo fue preparado para una sesión interactiva existente. No inicia otro modelo ni cambia sus permisos.",
@@ -127,8 +142,10 @@ function reviewPrompt(task, from, to, message, files) {
     `Título: ${task.title}`, `Objetivo:\n${task.objective}`, `Alcance:\n${task.scope}`,
     `Criterios:\n${task.acceptance}`, `Versión del contexto: ${task.revision}`,
     `Contexto compartido (autor declarado: ${task.context.author}):\n${task.context.content}`,
-    `Solicitud:\n${message}`, `Archivos autorizados para inspección:\n${files.map(file => file.path).join("\n")}`
-  ].join("\n\n");
+    `Solicitud:\n${message}`, `Archivos autorizados para inspección:\n${files.map(file => file.path).join("\n")}`,
+    reviewer ? `Configuración recomendada para ${to} (declarada, no verificada): modelo ${reviewer.model}, esfuerzo ${reviewer.effort}.\n` +
+      `Motivo: ${reviewer.reason}\nSi tu sesión usa otro modelo, no reclames el encargo: avisa al usuario para que lo cambie.` : ""
+  ].filter(Boolean).join("\n\n");
   if (!text(prompt, PEER_LIMITS.promptBytes)) fail("input");
   return prompt;
 }
@@ -166,7 +183,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
       if (record.schemaVersion !== 1 || record.kind !== "peer-review" || record.id !== id || !record.project?.root ||
           !Number.isInteger(record.revision) || record.revision < 1 || !record.context ||
           !["open", "closed"].includes(record.state) || !Array.isArray(record.history) || record.history.length > PEER_LIMITS.history ||
-          !Array.isArray(record.reviews) || record.reviews.length > PEER_LIMITS.reviews) fail("storage");
+          !Array.isArray(record.reviews) || record.reviews.length > PEER_LIMITS.reviews ||
+          (record.autoApprove !== undefined && !validAutoApprove(record.autoApprove))) fail("storage");
       return record;
     } catch (error) {
       if (error instanceof PeerReviewError) throw error;
@@ -227,6 +245,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     if (!text(input.title, 180) || !text(input.project, 240) || !text(input.objective, 4_000) ||
         !text(input.scope ?? "", 4_000, false) || !text(input.acceptance ?? "", 4_000, false) ||
         !text(input.context ?? "", PEER_LIMITS.contextBytes, false) || !AGENTS.has(input.primaryAgent)) fail("input");
+    const autoReviews = input.autoReviews ?? 0;
+    if (!Number.isInteger(autoReviews) || autoReviews < 0 || autoReviews > PEER_LIMITS.autoReviews) fail("input");
     const binding = await project(input.projectRoot);
     const at = stamp();
     const context = { author: input.primaryAgent, content: input.context ?? "", at };
@@ -234,6 +254,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
       project: { name: input.project.trim(), ...binding }, title: input.title.trim(), objective: input.objective.trim(),
       scope: input.scope ?? "", acceptance: input.acceptance ?? "", primaryAgent: input.primaryAgent,
       state: "open", revision: 1, context, history: [{ revision: 1, ...context }], reviews: [], createdAt: at, updatedAt: at };
+    // Only the primary agent may send without per-request approval, so the reviewer cannot bounce work back unattended.
+    if (autoReviews) task.autoApprove = { from: input.primaryAgent, maxReviews: autoReviews, approvedAt: at };
     await write(await storage(), task);
     return publicTask(task);
   }
@@ -263,7 +285,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     for (const name of (await fs.readdir(directory)).filter(name => UUID.test(name.slice(0, -5)) && name.endsWith(".json"))) {
       const task = await read(directory, name.slice(0, -5));
       if (task.project.root === binding.root && sameIdentity(task.project, binding) && task.state === "open") {
-        tasks.push({ taskId: task.id, title: task.title, project: task.project.name, projectRoot: binding.root, revision: task.revision, updatedAt: task.updatedAt });
+        tasks.push({ taskId: task.id, title: task.title, project: task.project.name, projectRoot: binding.root, primaryAgent: task.primaryAgent,
+          autoReviews: task.autoApprove?.maxReviews ?? 0, revision: task.revision, updatedAt: task.updatedAt });
       }
     }
     return { tasks: tasks.sort((a, b) => a.taskId.localeCompare(b.taskId)) };
@@ -282,36 +305,44 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     });
   }
 
-  async function prepareReview({ taskId, projectRoot, from, to, message, paths }) {
+  async function prepareReview({ taskId, projectRoot, from, to, message, paths, reviewer: requested }) {
     if (!AGENTS.has(from) || !AGENTS.has(to) || from === to || !text(message, 4_000)) fail("input");
+    const reviewer = reviewerSetup(to, requested);
     const task = await bound(await storage(), taskId, projectRoot);
     requireOpen(task);
     if (task.reviews.some(review => ACTIVE.has(review.state))) fail("active");
     if (task.reviews.length >= PEER_LIMITS.reviews) fail("limit");
     const files = await snapshot(task.project, paths);
-    const prompt = reviewPrompt(task, from, to, message, files.files);
-    return { taskId, projectRoot: task.project.root, title: task.title, from, to, message, contextRevision: task.revision,
+    const prompt = reviewPrompt(task, from, to, message, files.files, reviewer);
+    return { taskId, projectRoot: task.project.root, title: task.title, from, to, message, reviewer, contextRevision: task.revision,
       snapshot: files, prompt, promptSha256: hash(prompt), promptBytes: Buffer.byteLength(prompt),
       sessionIdentityVerified: false, modelAvailabilityVerified: false,
       limits: { readOnlyRequested: true, enforcedSandbox: false, startsModel: false, checksRequested: false } };
   }
 
-  async function dispatchReview(prepared, { previewId }) {
+  async function dispatchReview(prepared, { previewId, automatic = false }) {
     return transaction(prepared.taskId, prepared.projectRoot, async task => {
       requireOpen(task);
+      if (automatic && (task.autoApprove?.from !== prepared.from ||
+          task.reviews.filter(review => review.approval.automatic).length >= task.autoApprove.maxReviews)) fail("auto");
       if (task.revision !== prepared.contextRevision) fail("revision");
       if (task.reviews.some(review => ACTIVE.has(review.state))) fail("active");
       if (task.reviews.length >= PEER_LIMITS.reviews) fail("limit");
       const current = await snapshot(task.project, prepared.snapshot.files.map(file => file.path));
       if (current.sha256 !== prepared.snapshot.sha256) fail("stale");
-      const prompt = reviewPrompt(task, prepared.from, prepared.to, prepared.message, current.files);
+      const prompt = reviewPrompt(task, prepared.from, prepared.to, prepared.message, current.files, prepared.reviewer);
       if (hash(prompt) !== prepared.promptSha256) fail("revision");
-      const review = { id: randomUUID(), from: prepared.from, to: prepared.to, state: "pending", message: prepared.message,
+      const review = { id: randomUUID(), from: prepared.from, to: prepared.to, state: "pending", message: prepared.message, reviewer: prepared.reviewer,
         contextRevision: task.revision, snapshot: current, prompt, promptSha256: prepared.promptSha256,
-        approval: { previewId, approvedAt: stamp() }, review: null, createdAt: stamp() };
+        approval: automatic ? { automatic: true, approvedAt: stamp() } : { previewId, approvedAt: stamp() },
+        review: null, createdAt: stamp() };
       task.reviews.push(review);
       return structuredClone(review);
     });
+  }
+
+  async function requestReview(input) {
+    return dispatchReview(await prepareReview(input), { automatic: true });
   }
 
   async function claimReview({ taskId, projectRoot, reviewId, agent }) {
@@ -372,5 +403,5 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
   }
 
   return Object.freeze({ startCollaboration, getCollaboration, listCollaborations, publishContext, prepareReview,
-    dispatchReview, claimReview, submitReview, cancelReview, closeCollaboration });
+    dispatchReview, requestReview, claimReview, submitReview, cancelReview, closeCollaboration });
 }
