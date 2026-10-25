@@ -166,7 +166,9 @@ localTest("TP real local bin uses only fictitious inputs and preserves memory CL
   const result = await new Promise((resolve, reject) => execFile(process.execPath, [bin, ...f.argv, "--json"], { timeout: 10000 }, (e, stdout, stderr) => e ? reject(e) : resolve({ stdout, stderr })));
   assert.equal(JSON.parse(result.stdout).state, "prepared-draft"); assert.equal(result.stderr, "");
   const pkg = read("../package.json"), lock = read("../package-lock.json"); assert.equal(pkg.bin["project-memory"], "./bin/project-memory.js"); assert.equal(pkg.bin["agent-task"], "./bin/agent-task.js");
-  assert.equal(lock.packages[""].bin["agent-task"], "bin/agent-task.js"); assert.deepEqual(pkg.dependencies, { ajv: "^8.17.1" });
+  assert.equal(lock.packages[""].bin["agent-task"], "bin/agent-task.js"); assert.deepEqual(pkg.dependencies, {
+    "@modelcontextprotocol/server": "^2.4.0", ajv: "^8.17.1", zod: "^4.6.7"
+  });
 });
 localTest("TP EPIPE in owned Node bin exits with redacted error rather than uncaught stack", async t => {
   const f = await fixture(t);
