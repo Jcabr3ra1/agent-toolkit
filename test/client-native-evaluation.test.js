@@ -16,7 +16,7 @@ const schema = JSON.parse(fs.readFileSync(new URL("../schemas/agent-client-nativ
 const POLICY = { maxEvidenceAgeSeconds: 3600, revokedEvidenceRefs: [] };
 const evaluate = createClientNativeEvaluator(schema, POLICY);
 const NOW = "2026-10-04T14:00:00Z"; const EXPIRY = "2026-10-04T15:00:00Z";
-const ROUTES = [["openai", "codex-cli", "codex-native"], ["anthropic", "claude-code", "claude-native"], ["google", "antigravity-cli", "antigravity-native"]];
+const ROUTES = [["openai", "codex-cli", "codex-native"], ["anthropic", "claude-code", "claude-native"]];
 const ajv = new Ajv2020({ strict: true }); ajv.addFormat("date-time", true); ajv.addSchema(schema);
 const validReport = ajv.compile({ $ref: `${schema.$id}#/$defs/report` });
 
@@ -189,7 +189,7 @@ for (const policy of [null, {}, { ...POLICY, maxEvidenceAgeSeconds: "3600" }, { 
   test(`NE-01: política inválida ${JSON.stringify(policy).slice(0, 100)}`, () => { assert.throws(() => createClientNativeEvaluator(schema, policy)); });
 }
 for (const [path, value] of [["schemaVersion", "2.0.0"], ["now", "2026-02-30T14:00:00Z"], ["now", "2026-10-04T14:00:00.001Z"],
-  ["binding.platform", "other"], ["binding.client.provider", "google"], ["binding.client.clientVersion", "latest"],
+  ["binding.platform", "other"], ["binding.client.provider", "anthropic"], ["binding.client.clientVersion", "latest"],
   ["binding.artifactSha256", "A".repeat(64)], ["accounting.maxCallsPerStart", 0], ["accounting.maxCallsPerStart", 1.5],
   ["accounting.maxCallsPerStart", 1000001], ["accounting.maxCallsPerStart", "2"], ["controls.0.controlId", "tools-please"],
   ["effects.0.effectId", "secret-io"], ["observations", ["arbitrary-error"]], ["observations", ["internal-calls-unknown", "internal-calls-unknown"]]]) {

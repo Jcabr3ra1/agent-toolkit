@@ -112,7 +112,7 @@ reabrir un registro inconcluso, pedir conciliación y no confiar solo en PID o e
 El protocolo fixture puede registrar `fixtureModelCalls: 0` porque sus programas
 no llaman IA. El informe del perfil mantiene `actualModelCalls: null`,
 `internalCallCeiling: null` y `remoteCancellationVerified: false`; jamás exportar
-el cero sintético como historial de Claude/Gemini/Codex. S2 no implementa una
+el cero sintético como historial de Claude/Codex. S2 no implementa una
 operación para desbloquear, borrar intentos o conceder nuevos cupos.
 
 ## SL-04. Supervisor incremental

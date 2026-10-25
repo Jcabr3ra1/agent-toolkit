@@ -40,9 +40,6 @@ const ADAPTERS = Object.freeze({
   },
   claude: {
     skillDirectory: ".claude/skills"
-  },
-  gemini: {
-    skillDirectory: ".gemini/antigravity-cli/skills"
   }
 });
 
@@ -95,7 +92,7 @@ function loadConfig(options, context) {
     errors.push("No se encontró project-memory.json.");
   }
   if (!ADAPTERS[agentId]) {
-    errors.push("--agent debe ser codex, claude o gemini.");
+    errors.push("--agent debe ser codex o claude.");
   }
   if (errors.length > 0) {
     throw new ConnectionError(errors);
@@ -226,10 +223,7 @@ function inspectConnection(config, runner) {
   if (config.agentId === "codex") {
     return inspectCodex(config, runner);
   }
-  if (config.agentId === "claude") {
-    return inspectClaude(config, runner);
-  }
-  return inspectGemini(config);
+  return inspectClaude(config, runner);
 }
 
 function inspectCodex(config, runner) {
@@ -368,59 +362,6 @@ function inspectClaude(config, runner) {
   };
 }
 
-function inspectGemini(config) {
-  const configPath = resolveGeminiConfigPath(config.homeDirectory);
-  const document = fs.existsSync(configPath)
-    ? readJson(configPath, "configuración de Gemini")
-    : {};
-  const server = document.mcpServers?.[config.mcpName];
-  const matches = server && objectMatchesFilesystemServer(server, config);
-  const mcp = !server
-    ? component("mcp", "create", "Registrar el MCP personal en Gemini.")
-    : matches
-      ? component("mcp", "unchanged", "Gemini ya usa esta bóveda.")
-      : component("mcp", "conflict", "Gemini tiene un MCP homónimo diferente.");
-  const safePolicy =
-    server &&
-    hasEvery(server.includeTools, READ_TOOLS) &&
-    !hasAny(server.includeTools, WRITE_TOOLS);
-  const policy = component(
-    "policy",
-    !server ? "create" : safePolicy ? "unchanged" : "update",
-    safePolicy
-      ? "Gemini ya impide las herramientas de escritura del MCP."
-      : "Crear la lista blanca de lectura de Gemini."
-  );
-  mcp.path = configPath;
-  policy.path = configPath;
-  if (
-    (mcp.action !== "unchanged" || policy.action !== "unchanged") &&
-    pathEntryExists(configPath) &&
-    fs.lstatSync(configPath).isSymbolicLink()
-  ) {
-    policy.action = "conflict";
-    policy.message = "La configuración de Gemini es un enlace simbólico y no se reemplazará.";
-  }
-
-  return {
-    components: [mcp, policy],
-    apply() {
-      if (mcp.action === "unchanged" && policy.action === "unchanged") {
-        return;
-      }
-      const next = structuredClone(document);
-      next.mcpServers ??= {};
-      next.mcpServers[config.mcpName] = {
-        ...(next.mcpServers[config.mcpName] ?? {}),
-        command: "npx",
-        args: ["-y", FILESYSTEM_SPEC, config.vaultPath],
-        includeTools: [...READ_TOOLS]
-      };
-      writeJsonAtomic(configPath, next);
-    }
-  };
-}
-
 function unavailableCommand(command) {
   return {
     components: [
@@ -502,17 +443,6 @@ function updateCodexPolicy(configPath, mcpName) {
   writeTextAtomic(configPath, nextContent);
 }
 
-function resolveGeminiConfigPath(homeDirectory) {
-  const antigravityPath = path.join(homeDirectory, ".gemini/config/mcp_config.json");
-  if (
-    fs.existsSync(antigravityPath) ||
-    fs.existsSync(path.join(homeDirectory, ".gemini/antigravity-cli"))
-  ) {
-    return antigravityPath;
-  }
-  return path.join(homeDirectory, ".gemini/settings.json");
-}
-
 function outputMatchesFilesystemServer(output, config) {
   const commandMatch = output.match(/^\s*Command:\s*(.+)$/im) ??
     output.match(/^\s*command:\s*(.+)$/im);
@@ -522,14 +452,6 @@ function outputMatchesFilesystemServer(output, config) {
     return false;
   }
   return argsMatchFilesystem(argsMatch[1].trim(), config.vaultPath);
-}
-
-function objectMatchesFilesystemServer(server, config) {
-  return (
-    server.command === "npx" &&
-    Array.isArray(server.args) &&
-    argsMatchFilesystem(server.args, config.vaultPath)
-  );
 }
 
 function argsMatchFilesystem(args, vaultPath) {

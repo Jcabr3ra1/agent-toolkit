@@ -77,7 +77,7 @@ No evadir un bloqueo usando otro proveedor o desactivando protecciones.
 
 Completar un bloque independiente por cada participante realmente encargado.
 La decisión del tutor/proponente no selecciona al ejecutor ni al revisor. En
-tutor no se crea un encargo de escritura para Gemini. No rellenar modelos reales
+tutor no se crea un encargo de escritura para un agente. No rellenar modelos reales
 o límites por defecto ni copiar inventarios privados a esta plantilla genérica.
 
 ### Decisión: [destinatario y rol del paso]
@@ -142,7 +142,7 @@ obsoleta no se solucionan cambiando de modelo. La cuota fallida bloquea el enví
 
 En `tutor`: devolver en `02-propuesta.md` un único paso, con objetivo, ubicación,
 código explicado y comprobación; indicar `waiting-user`. No aplicar cambios.
-Gemini no escribe por el usuario. Respetar cualquier restricción pedagógica
+Ningún agente escribe por el usuario. Respetar cualquier restricción pedagógica
 adicional del proyecto.
 
 En `autonomous`: devolver en `02-propuesta.md` cambios precisos sobre la base

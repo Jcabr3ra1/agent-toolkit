@@ -31,7 +31,6 @@ Formatos locales acotados:
 | --- | --- |
 | `codex-jsonl-text-v1` | Inicio de thread, un turno, mensajes/razonamiento y terminal del turno |
 | `claude-jsonl-text-v1` | `system/init`, respuestas de texto/razonamiento sin herramientas y `result` |
-| `antigravity-jsonl-text-v1` | `init`, pasos de usuario/respuesta/checkpoint y `result` |
 
 Son subconjuntos estrictos, no parsers universales del protocolo. Claude no
 admite todavía `stream_event` de mensajes parciales. Eventos desconocidos,
@@ -57,9 +56,8 @@ ejecución autorizada o modelo verificado. Siempre hay revisión pendiente,
 
 ## Texto, metadata y privacidad
 
-Se devuelve una única respuesta final. Los deltas Antigravity se concatenan una
-sola vez y se contrastan con el resultado final. Los snapshots Codex no se suman
-como deltas. Texto repetido, respuestas contradictorias o pasos incompletos no
+Se devuelve una única respuesta final, contrastada con el resultado terminal.
+Los snapshots Codex no se suman como deltas. Texto repetido, respuestas contradictorias o pasos incompletos no
 se normalizan fingiendo que fueron correctos.
 
 La configuración de inicio se registra como reportada. El modelo de un mensaje
@@ -87,9 +85,6 @@ sensible y requiere revisión antes de persistirlo o publicarlo.
   [Modo programático](https://code.claude.com/docs/en/headless),
   [tipos del Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript),
   [semántica de resultados](https://code.claude.com/docs/en/agent-sdk/python).
-- Antigravity documenta `init`, `step_update`, `result`, deltas textuales y
-  contadores acumulados. Sus estados de espera o ejecución no son éxito.
-  [Modo headless](https://www.antigravity.google/docs/cli/headless/).
 
 Consulta: 2026-10-03. La documentación explica formas y semánticas generales;
 no garantiza el subconjunto exacto de una versión local. Evaluar esa

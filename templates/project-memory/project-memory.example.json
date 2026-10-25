@@ -36,11 +36,6 @@
       "id": "claude",
       "enabled": true,
       "skillName": "project-id"
-    },
-    {
-      "id": "gemini",
-      "enabled": true,
-      "skillName": "project-id"
     }
   ],
   "security": {

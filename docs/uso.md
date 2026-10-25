@@ -134,7 +134,6 @@ Este repositorio es la fuente canónica. Sus componentes se instalan mediante en
 
 - Skills para Codex: `~/.agents/skills/`.
 - Skills para Claude Code: `~/.claude/skills/`.
-- Skills para Gemini CLI: `~/.gemini/antigravity-cli/skills/`.
 - Agentes para Codex: `~/.codex/agents/`.
 - Agentes para Claude Code: `~/.claude/agents/`.
 
@@ -190,7 +189,6 @@ solo lectura de una plataforma concreta:
 ```bash
 project-memory connect /ruta/a/proyecto-memory --agent codex
 project-memory connect /ruta/a/proyecto-memory --agent claude
-project-memory connect /ruta/a/proyecto-memory --agent gemini
 ```
 
 La vista previa no modifica el equipo. Después de revisarla, `--apply` crea

@@ -81,7 +81,7 @@ de contratos, arquitectura o concurrencia no se reducen a copiar texto.
 
 Si falta una decisión relevante, devolver `needs-info` con los datos concretos
 que faltan. No elegir el perfil mayor a ciegas. Una tarea marcada tutor no tiene
-un escritor Gemini; una selección no convierte ese paso en autónomo.
+un agente escritor; una selección no convierte ese paso en autónomo.
 
 ## RF-02. Catálogo actualizable y política independiente
 
@@ -289,13 +289,8 @@ pruebas de nuestras versiones locales ni de acceso a modelos en las cuentas.
 - Claude documenta selección de modelos/alias, conservación de modelos en
   sesiones y metadata `modelUsage`: [configuración de modelos](https://code.claude.com/docs/en/model-config).
   Un alias o identificador solicitado no certifica la respuesta real.
-- Gemini documenta [configuración de modelos](https://geminicli.com/docs/reference/configuration/)
-  y [salida no interactiva](https://geminicli.com/docs/cli/headless/).
-  La variante local debe identificarse antes de asumir equivalencia con ese CLI.
 
-La ruta de referencia breve de Gemini no pudo recuperarse en esta consulta;
-se usaron las páginas oficiales de configuración y ejecución, sin inventar
-opciones de la variante local. No se cambian modelos ni se ejecutan inferencias
+No se cambian modelos ni se ejecutan inferencias
 para resolver estas dudas durante la especificación.
 
 ## Riesgos, alternativas y reversión

@@ -118,7 +118,7 @@ function render(t, r, selection) {
       modeRule: externalVerifier ?
         "Verificador externo: rol reviewer, modo autonomous, acciones limitadas a read y verify, archivos únicamente inspect. El borrador no impone controles al cliente receptor; el sistema de ejecución debe aplicar solo lectura." :
         t.identity.mode === "tutor" ?
-          "Un único paso; el usuario escribe y se revisa antes de avanzar. El tutor y Gemini no aplican código." :
+          "Un único paso; el usuario escribe y se revisa antes de avanzar. El tutor no aplica código." :
           "Propuesta, aplicación y revisión necesitan decisiones separadas y permiso directo para cada rol. Sin envío ni ejecución automática." });
 }
 export function createTaskPreparer(taskSchema, baseSchema, preferenceSchema) {

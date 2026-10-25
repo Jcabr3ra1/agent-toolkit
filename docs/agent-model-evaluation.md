@@ -83,9 +83,7 @@ La revisión privada debe resolver para cada ejecución:
   suficiente de estado y efectos. Si un cliente no permite el aislamiento,
   mantenerlo pendiente; no desactivar permisos ni inventar flags.
 
-La ruta destinada a Gemini admite exclusivamente modelos Gemini identificados
-para su cliente. Otros proveedores ofrecidos en ese menú quedan excluidos.
-Los tres proveedores conservan datos y ejecuciones independientes.
+Los dos proveedores conservan datos y ejecuciones independientes.
 
 ### RF-E02. Presupuesto y parada
 
@@ -234,8 +232,6 @@ Fuentes oficiales consultadas el 2026-10-02; no demuestran disponibilidad privad
 - [OpenAI: planes y consumo](https://learn.chatgpt.com/docs/pricing).
 - [Claude: versiones, esfuerzo y límites](https://code.claude.com/docs/en/model-config).
 - [Claude: opciones de ejecución](https://code.claude.com/docs/en/cli-reference).
-- [Antigravity: autenticación](https://www.antigravity.google/docs/cli/install/).
-- [Antigravity: ejecución no interactiva](https://www.antigravity.google/docs/cli/headless/).
 
 Documentación pública, ayuda local y declaraciones de cuenta se contrastan,
 no se sustituyen unas por otras. Un esfuerzo explícito puede estar limitado por

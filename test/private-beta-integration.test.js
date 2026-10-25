@@ -184,8 +184,8 @@ test("R1.2 integrates a canonical fictitious memory and seven fail-closed cases"
       assert.deepEqual(args, ["mcp", "get", manifest.memory.mcpServerName]);
       counts.simulatedMcp++; return { status: 1, stdout: "", stderr: "" };
     } });
-    assert.equal(status.status, "warning"); assert.equal(status.agents.length, 3);
-    assert.equal(status.summary.pendingAgents, 3);
+    assert.equal(status.status, "warning"); assert.equal(status.agents.length, 2);
+    assert.equal(status.summary.pendingAgents, 2);
     assert.deepEqual(snapshot(root), beforeRead); passedSteps.push("doctor-status");
 
     const beforeInspect = snapshot(root), plan = await planMemorySync({ targetPath: vault }, context);

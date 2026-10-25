@@ -23,8 +23,7 @@ const NOW = "2026-10-02T14:00:00Z";
 const CONTROLS = ["no-tools", "no-subagents", "no-mcp", "no-hooks", "no-personalizations", "no-updates", "stdin-text"];
 const ROUTES = [
   ["openai", "codex-cli", "codex-native", "codex-jsonl-text-v1"],
-  ["anthropic", "claude-code", "claude-native", "claude-jsonl-text-v1"],
-  ["google", "antigravity-cli", "antigravity-native", "antigravity-jsonl-text-v1"]
+  ["anthropic", "claude-code", "claude-native", "claude-jsonl-text-v1"]
 ];
 const descriptors = ROUTES.map(([provider, client, variant]) => ({ provider, client, variant, clientVersion: "0.0.0-demo" }));
 const config = { schemaVersion: "1.0.0", supportedClients: ROUTES.map((r, i) => ({ descriptor: descriptors[i], formatId: r[3] })) };
@@ -40,7 +39,7 @@ function makePlan(index) {
   const [provider, client] = ROUTES[index]; const selection = structuredClone(BASE);
   Object.assign(selection.request, { provider, client }); selection.request.requirements.tools = [];
   selection.catalog.profiles.forEach((p, i) => {
-    Object.assign(p, { provider, client, requestedModel: `${index === 2 ? "gemini-" : ""}demo-model-${i}` });
+    Object.assign(p, { provider, client, requestedModel: `demo-model-${i}` });
     p.declaredCapabilities.tools = []; p.verifiedCapabilities.tools = [];
     p.effortOptions = p.effortOptions.map(effort); p.evaluations.forEach(e => { e.effort = effort(e.effort); });
   });
@@ -77,7 +76,7 @@ function fixture(i = 0) {
     { type: "item.updated", item: { id: "private-message", type: "agent_message", text: "Resultado ficticio." } },
     { type: "item.completed", item: { id: "private-message", type: "agent_message", text: FINAL } },
     { type: "turn.completed", usage: { input_tokens: 20, output_tokens: 8, cached_input_tokens: 4, reasoning_output_tokens: 2 } }
-  ] : i === 1 ? [
+  ] : [
     { type: "system", subtype: "init", session_id: "private-native-session", uuid: "private-uuid", model, effort: "low",
       tools: [], mcp_servers: [], plugins: [], skills: [], agents: [], claude_code_version: "0.0.0-demo",
       cwd: "/fictional/private-path", apiKeySource: "private-account", permissionMode: "plan" },
@@ -88,14 +87,6 @@ function fixture(i = 0) {
     { type: "result", subtype: "success", session_id: "private-native-session", uuid: "private-uuid", is_error: false,
       num_turns: 1, result: FINAL, duration_ms: 1000, total_cost_usd: 0.001, modelUsage: { [model]: {} }, permission_denials: [],
       usage: { input_tokens: 20, output_tokens: 8, cache_read_input_tokens: 4 } }
-  ] : [
-    { event: "init", conversation_id: "private-native-session", init: { model, tools: [], permission_mode: "request-review", cwd: "/fictional/private-path" } },
-    { event: "step_update", step_update: { conversation_id: "private-native-session", step_index: 0, state: "DONE", step_type: "user_input" } },
-    { event: "step_update", step_update: { conversation_id: "private-native-session", step_index: 2, state: "ACTIVE", step_type: "agent_response", text_delta: "Resultado " } },
-    { event: "step_update", step_update: { conversation_id: "private-native-session", step_index: 2, state: "DONE", step_type: "agent_response", text_delta: "ficticio.\n" } },
-    { event: "step_update", step_update: { conversation_id: "private-native-session", step_index: 3, state: "DONE", step_type: "checkpoint", usage: { input_tokens: 900, output_tokens: 900 } } },
-    { event: "result", result: { conversation_id: "private-native-session", status: "SUCCESS", num_turns: 1, response: FINAL, duration_seconds: 1,
-      usage: { input_tokens: 20, output_tokens: 8, cache_read_tokens: 4, thinking_tokens: 2, total_tokens: 28 } } }
   ];
   return { metadata, events };
 }
@@ -108,14 +99,14 @@ function check(f, state, reason, stdout = ndjson(f.events), stderr = "") {
   return r;
 }
 
-for (let i = 0; i < 3; i++) {
+for (let i = 0; i < ROUTES.length; i++) {
   test(`CA-B01/05/06/07: ${ROUTES[i][1]} conserva solo final y contadores terminales`, () => {
     const f = fixture(i); const before = structuredClone(f); const bytes = Buffer.from(ndjson(f.events)); const copy = Buffer.from(bytes);
     const r = check(f, "accepted", null, bytes, "private-stderr");
     assert.equal(r.response, FINAL); assert.equal(r.eventCount, f.events.length); assert.equal(r.stderrBytes, 14);
     assert.deepEqual(f, before); assert.deepEqual(bytes, copy); assert.deepEqual(parse(f.metadata, bytes, "private-stderr"), r);
     assert.equal(r.audit.stdoutSha256, sha(bytes)); assert.equal(r.audit.stderrSha256, sha("private-stderr"));
-    assert.deepEqual(r.usage, { inputTokens: 20, outputTokens: 8, cacheReadTokens: 4, reasoningTokens: i === 1 ? null : 2, totalTokens: i === 2 ? 28 : null });
+    assert.deepEqual(r.usage, { inputTokens: 20, outputTokens: 8, cacheReadTokens: 4, reasoningTokens: i === 1 ? null : 2, totalTokens: null });
     assert.equal(r.effort.verification, "unknown"); assert.equal(r.effort.value, null);
     assert.equal(r.model.verification, i === 1 ? "reported" : "unknown");
     assert.equal(r.configuredModel.verification, i ? "reported" : "unknown");
@@ -257,35 +248,6 @@ for (const [label, change, state, code] of [
   ["bypass", f => { f.events[0].permissionMode = "bypassPermissions"; }, "blocked", "native-permission-bypass"]
 ]) test(`CA-B03/04/05/06/07: Claude ${label}`, () => { const f = fixture(1); change(f); check(f, state, code); });
 
-for (const status of ["ERROR", "CANCELED", "INTERRUPTED", "INVALID", "WAITING", "RUNNING"]) {
-  test(`CA-B03: Antigravity ${status} no se presenta como éxito`, () => {
-    const f = fixture(2); f.events.at(-1).result.status = status; check(f, "blocked", "native-not-completed");
-  });
-}
-for (const [label, change, state, code] of [
-  ["modelo configurado", f => { f.events[0].init.model = "gemini-other"; }, "blocked", "reported-model-or-effort-mismatch"],
-  ["herramienta", f => { f.events[0].init.tools = ["shell"]; }, "blocked", "native-tools-or-customizations-present"],
-  ["subagente", f => { f.events[2].step_update.subagent_info = {}; }, "blocked", "tool-or-subagent-output-forbidden"],
-  ["tool info", f => { f.events[2].step_update.tool_info = { command: "private-command" }; }, "blocked", "tool-or-subagent-output-forbidden"],
-  ["paso desconocido", f => { f.events[2].step_update.step_type = "tool"; }, "blocked", "unknown-native-step"],
-  ["estado desconocido", f => { f.events[2].step_update.state = "FAILED"; }, "blocked", "unknown-native-step-state"],
-  ["índice negativo", f => { f.events[2].step_update.step_index = -1; }, "invalid", "invalid-native-counter"],
-  ["orden", f => { f.events[4].step_update.step_index = 1; }, "invalid", "native-step-order-conflict"],
-  ["sesión ajena", f => { f.events[2].step_update.conversation_id = "different"; }, "blocked", "native-session-mismatch"],
-  ["DONE duplicado", f => f.events.splice(4, 0, structuredClone(f.events[3])), "invalid", "duplicate-or-conflicting-step"],
-  ["deltas acumulativos", f => { f.events[3].step_update.text_delta = FINAL; }, "blocked", "native-final-text-conflict"],
-  ["paso abierto", f => { f.events.splice(4, 1); f.events[3].step_update.state = "ACTIVE"; }, "incomplete", "unfinished-native-step"],
-  ["pasos intercalados", f => { f.events[3].step_update.step_index = 3; }, "invalid", "native-step-interleaving"],
-  ["turnos extra", f => { f.events.at(-1).result.num_turns = 2; }, "blocked", "native-turn-count-exceeded"],
-  ["estado terminal desconocido", f => { f.events.at(-1).result.status = "NEW"; }, "blocked", "unknown-native-terminal"],
-  ["error contradictorio", f => { f.events.at(-1).result.error = "private-error"; }, "blocked", "contradictory-terminal"],
-  ["duración enorme", f => { f.events.at(-1).result.duration_seconds = 100000; }, "invalid", "invalid-native-number"],
-  ["uso inválido", f => { f.events.at(-1).result.usage.input_tokens = "20"; }, "invalid", "invalid-native-counter"],
-  ["duración negativa", f => { f.events[2].step_update.duration_seconds = -1; }, "invalid", "invalid-native-number"],
-  ["agente personalizado", f => { f.events[0].init.agent = "custom"; }, "blocked", "custom-agent-forbidden"],
-  ["bypass", f => { f.events[0].init.permission_mode = "always-proceed"; }, "blocked", "native-permission-bypass"]
-]) test(`CA-B03/04/05/06/07: Antigravity ${label}`, () => { const f = fixture(2); change(f); check(f, state, code); });
-
 test("CA-B06: ausencia de metadata permanece desconocida, nunca verificada", () => {
   const f = fixture(1); delete f.events[0].model; delete f.events[0].effort; delete f.events[1].message.model; delete f.events[2].modelUsage;
   const r = check(f, "accepted"); assert.equal(r.model.verification, "unknown"); assert.equal(r.configuredModel.value, null);
@@ -296,11 +258,6 @@ test("CA-B05/07: instrucciones en respuesta son datos literales, no se ejecutan"
   f.events[1].message.content = [{ type: "text", text }]; f.events[2].result = text;
   assert.equal(check(f, "accepted").response, text);
 });
-for (const status of ["constructor", "__proto__", "toString", {}, [], null, 1, false]) {
-  test(`CA-B02/03: estado Antigravity hostil ${JSON.stringify(status)}`, () => {
-    const f = fixture(2); f.events.at(-1).result.status = status; check(f, "blocked", "unknown-native-terminal");
-  });
-}
 for (const [label, change, code] of [
   ["aborted mal tipado", f => { f.events[1].aborted = "false"; }, "invalid-native-aborted-status"],
   ["thinking mal tipado", f => { f.events[1].message.content[0].thinking = {}; }, "invalid-native-thinking"],
@@ -322,13 +279,9 @@ test("CA-B02: entradas byte no inertes no llaman hooks de conversión", () => {
   Object.defineProperty(bytes, "valueOf", { get() { called++; throw Error("valueOf hook"); } });
   check(f, "accepted", null, bytes); assert.equal(called, 0);
 });
-test("CA-B03/05: texto vacío y varios pasos de usuario/respuesta bloquean", () => {
+test("CA-B03/05: texto vacío bloquea", () => {
   const f = fixture(1); f.events[1].message.content = [{ type: "text", text: " \n" }]; f.events[2].result = " \n";
   check(f, "blocked", "missing-final-response");
-  const g = fixture(2); const user = structuredClone(g.events[1]); user.step_update.step_index = 1;
-  g.events.splice(2, 0, user); check(g, "blocked", "multiple-native-turns");
-  const h = fixture(2); const response = structuredClone(h.events[3]); response.step_update.step_index = 4;
-  h.events.splice(5, 0, response); check(h, "blocked", "multiple-final-messages");
 });
 for (const subtype of ["error_during_execution", "error_max_turns", "error_max_budget_usd", "error_max_structured_output_retries"]) {
   test(`CA-B03: Claude ${subtype} nunca se acepta por traer texto`, () => {
@@ -362,7 +315,7 @@ test("CA-B06/08: el esquema no permite certificar esfuerzo o éxito contradictor
   ]) { const r = structuredClone(original); change(r); assert.equal(reportValid(r), false); }
 });
 test("CA-B02/03: tipos corruptos en cada campo nativo siempre devuelven informe válido", () => {
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < ROUTES.length; i++) {
     const original = fixture(i);
     for (let index = 0; index < original.events.length; index++) {
       const paths = [];

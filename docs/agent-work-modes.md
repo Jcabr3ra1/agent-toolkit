@@ -9,7 +9,7 @@
 - Profundidad: estándar, con límites explícitos de autoría y permisos.
 
 Esta etapa documenta la elección de modo. No activa permisos, modifica perfiles
-instalados ni cambia el comportamiento actual de Codex, Claude o Gemini.
+instalados ni cambia el comportamiento actual de Codex o Claude.
 El commit de este documento no instala una política global ni selecciona un
 modo para AVISENS u otro proyecto.
 

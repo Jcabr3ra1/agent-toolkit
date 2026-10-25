@@ -22,7 +22,7 @@ solo por recibir un mensaje de éxito o por existir una prueba aprobada.
 
 ## A. Resultado del escritor y comprobaciones
 
-Esta sección la completa Gemini en autónomo. En tutor se recoge lo escrito por
+Esta sección la completa Claude en autónomo. En tutor se recoge lo escrito por
 el usuario; un agente puede documentar esa evidencia sin atribuirse su autoría.
 
 - Reporter: [responsable del informe]

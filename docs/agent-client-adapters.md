@@ -15,7 +15,7 @@ solo tareas con `purpose: external-verifier` y destino `openai/codex-cli`. La
 vista previa local no usa el modelo; la invocación necesita un segundo comando
 con código y huella de un solo uso después de que la persona revise cuenta,
 modelo, archivos y `argv`. Esta excepción no implementa el runner general de
-esta especificación, no habilita Claude Code/Gemini, no admite tareas de edición
+esta especificación, no habilita Claude Code, no admite tareas de edición
 y no automatiza consentimiento. La verificación real y cualquier consumo siguen
 requiriendo autorización concreta del usuario.
 
@@ -154,12 +154,9 @@ clientes por similitud de nombre ni se cambia de proveedor para evitar un error.
 | --- | --- | --- |
 | OpenAI / Codex | CLI nativo de Codex | Registro compatible de versión y controles |
 | Anthropic / Claude | Claude Code nativo | Registro compatible de versión y controles |
-| Google / Gemini | Antigravity CLI, ejecutable `agy` | Solo modelos Google admitidos por la política |
 
-Antigravity y Gemini CLI son clientes diferentes. Añadir soporte para Gemini
-CLI oficial requerirá otro registro y pruebas; no se renombra `agy` como si
-fuera ese cliente. Los modelos de otros proveedores ofrecidos dentro de
-Antigravity no entran en la ruta Google.
+Solo se admiten estas dos rutas. Añadir otro cliente requerirá un registro,
+esquemas y pruebas propios.
 
 Se transmite el identificador explícito elegido por el selector, no un alias
 móvil como «latest» o «default». Un modelo nuevo entra como candidato y necesita
@@ -331,11 +328,6 @@ compatibilidad de las instalaciones locales. Consulta: 2026-10-03.
   y flags adicionales dependen de versión. Esto exige evaluar también conexiones
   y personalizaciones antes del arranque.
   [Referencia de Claude Code](https://code.claude.com/docs/en/cli-reference).
-- Antigravity documenta `agy -p`, modelo/esfuerzo explícitos y eventos `init`,
-  `step_update` y `result`. La configuración de inicio y el resultado tienen
-  semánticas distintas. Sus estados de espera o ejecución no certifican entrega;
-  el plazo nativo tampoco sustituye al del runner.
-  [Modo headless de Antigravity](https://www.antigravity.google/docs/cli/headless/).
 
 No se adopta ninguna opción para omitir todos los permisos. Los ejemplos
 externos de CI, facturación o autenticación no amplían el alcance autorizado.
@@ -478,8 +470,7 @@ heredar capacidades de otra versión del mismo cliente.
 La intención usa pares abstractos `model`/`effort`, no argumentos nativos listos
 para lanzar. Contiene `promptRef`, nunca el prompt o una ruta de archivo. Su
 futura traducción a flags dependerá de una variante evaluada y autorizada.
-Los modelos deben estar fijados y admitidos expresamente en el registro;
-para Antigravity/Google también se exige la familia de identificadores Gemini.
+Los modelos deben estar fijados y admitidos expresamente en el registro.
 
 Se exigen siete controles declarados: sin herramientas, subagentes, MCP, hooks,
 personalizaciones o actualizaciones, y entrada textual por stdin. El registro

@@ -9,7 +9,7 @@ import { runCli } from "../src/cli.js";
 import { initializeMemory } from "../src/init.js";
 import { inspectMemoryStatus } from "../src/status.js";
 
-test("status informa una memoria y tres agentes saludables", async (context) => {
+test("status informa una memoria y dos agentes saludables", async (context) => {
   const fixture = createFixture(context);
   const report = await inspectMemoryStatus(
     { targetPath: fixture.memory },
@@ -20,7 +20,7 @@ test("status informa una memoria y tres agentes saludables", async (context) => 
   );
 
   assert.equal(report.status, "ok");
-  assert.equal(report.summary.healthyAgents, 3);
+  assert.equal(report.summary.healthyAgents, 2);
   assert.equal(report.summary.errors, 0);
   assert.equal(report.summary.warnings, 0);
 });
@@ -32,7 +32,7 @@ test("status convierte una conexión pendiente en advertencia", async (context) 
     {
       diagnoseMemory: async () => healthyDoctor(fixture),
       connectMemory: async (options) =>
-        options.agentId === "gemini"
+        options.agentId === "claude"
           ? pendingConnection()
           : healthyConnection()
     }
@@ -41,7 +41,7 @@ test("status convierte una conexión pendiente en advertencia", async (context) 
   assert.equal(report.status, "warning");
   assert.equal(report.summary.pendingAgents, 1);
   assert.equal(
-    report.agents.find((agent) => agent.id === "gemini").status,
+    report.agents.find((agent) => agent.id === "claude").status,
     "warning"
   );
 });

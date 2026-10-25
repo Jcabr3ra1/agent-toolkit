@@ -33,8 +33,7 @@
               "formatId": {
                 "enum": [
                   "codex-jsonl-text-v1",
-                  "claude-jsonl-text-v1",
-                  "antigravity-jsonl-text-v1"
+                  "claude-jsonl-text-v1"
                 ]
               }
             }

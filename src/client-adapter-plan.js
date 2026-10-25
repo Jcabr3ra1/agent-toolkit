@@ -8,8 +8,7 @@ import { createModelSelector } from "./model-selection.js";
 const SCHEMA_ID = "https://agent-toolkit.local/schemas/agent-client-adapter.schema.json";
 const ROUTES = {
   "codex-cli": ["openai", "codex-native"],
-  "claude-code": ["anthropic", "claude-native"],
-  "antigravity-cli": ["google", "antigravity-native"]
+  "claude-code": ["anthropic", "claude-native"]
 };
 const CONTROLS = [
   "no-tools", "no-subagents", "no-mcp", "no-hooks",
@@ -144,8 +143,6 @@ export function createClientAdapterPlanner(baseSchema, preferenceSchema, adapter
         if (CONTROLS.some((control) => !record.controls.includes(control))) block("client-controls-incomplete");
       }
     }
-    if (recommendation.provider === "google" &&
-        !recommendation.requestedModel.startsWith("gemini-")) block("non-google-model-route");
 
     const context = data.context;
     if (context?.authorization) {

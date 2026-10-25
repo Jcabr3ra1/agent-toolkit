@@ -26,7 +26,7 @@ comparación de huellas, preservación de fuentes y contraste del README aplicad
 con el resultado esperado. Esto consume trabajo repetido del coordinador.
 
 La operación tiene contrato propio. No da por fiable una afirmación de
-Gemini/Claude del tipo «todo coincide», ni usará un JSON recibido como permiso.
+un agente del tipo «todo coincide», ni usará un JSON recibido como permiso.
 No cambiará los gates de autenticación (etapa separada, no incluida en esta entrega), la
 selección de modelos o el comportamiento de prepare para hacer pasar una tarea.
 

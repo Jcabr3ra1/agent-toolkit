@@ -74,7 +74,7 @@ Verás un resumen estructurado. Los resultados principales esperados son:
 - `modelVerification`: `unknown` y `observedModels`: lista vacía.
 - `availabilityCurrentVerified`: `false`; no comprobó disponibilidad hoy.
 
-No se ejecutó ese modelo ni se enviaron instrucciones a Claude, Gemini o Codex.
+No se ejecutó ese modelo ni se enviaron instrucciones a Claude o Codex.
 Las fechas y perfiles del ejemplo son históricos e inventados: no sirven como
 catálogo real ni prueban acceso a tu suscripción.
 

@@ -9,7 +9,6 @@ autoriza cambios en la configuración personal del agente.
 ```bash
 project-memory connect /ruta/a/la/memoria --agent codex
 project-memory connect /ruta/a/la/memoria --agent claude --apply
-project-memory connect /ruta/a/la/memoria --agent gemini --apply
 ```
 
 También se puede pasar directamente la ruta de `project-memory.json`.
@@ -55,11 +54,6 @@ denegación:
 | --- | --- | --- | --- |
 | Codex | `~/.agents/skills/` | `codex mcp` | `enabled_tools` en `~/.codex/config.toml` |
 | Claude Code | `~/.claude/skills/` | `claude mcp --scope user` | reglas `allow` y `deny` de usuario |
-| Gemini CLI | `~/.gemini/antigravity-cli/skills/` | configuración JSON personal | `includeTools` |
-
-Gemini admite tanto la configuración de Antigravity en
-`~/.gemini/config/mcp_config.json` como `~/.gemini/settings.json`; se conserva
-la variante que ya exista en la máquina.
 
 ## Seguridad e idempotencia
 

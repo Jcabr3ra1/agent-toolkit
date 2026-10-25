@@ -58,7 +58,7 @@ aplicar código, PR, despliegues, sincronización de memoria y servicio permanen
 
 Cada entrega necesita aprobación de su alcance. Aprobar C1 no aprueba C2 ni C3.
 Una prueba C2 solo certifica el mecanismo ensayado, no el aislamiento, facturación
-o cancelación remota de Codex, Claude o Antigravity.
+o cancelación remota de Codex o Claude.
 
 ## RC-01. Admisión vinculada, fresca y revocable
 
@@ -263,9 +263,6 @@ Consulta: 2026-10-03. Interfaces documentadas, no instalaciones certificadas:
   alcances diferentes y pueden conservar políticas administradas; no se deduce
   «sin efectos» de un solo flag.
   [Referencia de CLI](https://code.claude.com/docs/en/cli-reference).
-- Antigravity documenta stdin y un timeout nativo. El contrato local mantiene
-  supervisión externa y evaluación de controles como requisitos adicionales.
-  [Modo headless](https://www.antigravity.google/docs/cli/headless/).
 
 Los límites de llamadas internas, aislamiento, cuotas y mecanismos de autenticación
 efectivos siguen pendientes de evidencia por instalación. No se adoptan ejemplos

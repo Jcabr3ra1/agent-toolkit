@@ -37,7 +37,7 @@ verdad: las notas explican el contexto, no lo sustituyen.
 
 - **Preparar una memoria nueva** con una estructura común, sin copiar los datos
   de otro proyecto ni sobrescribir archivos distintos.
-- **Conectar Codex, Claude Code y Gemini CLI** mediante sus configuraciones
+- **Conectar Codex y Claude Code** mediante sus configuraciones
   locales de Skills y acceso de lectura. Cada conexión requiere comprobarse
   también en el cliente real.
 - **Detectar problemas** en la estructura, los enlaces, la configuración y

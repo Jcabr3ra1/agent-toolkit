@@ -51,7 +51,7 @@ Los enlaces de esta entrega apuntan solo a archivos incluidos o ya versionados.
 
 El encargo identificará cada decisión por proyecto, tarea, revisión y rol.
 El perfil de un tutor/proponente no se reutiliza como selección del ejecutor
-o revisor. En tutor no se prepara un encargo de escritura para Gemini.
+o revisor. En tutor no se prepara un encargo de escritura para un agente.
 
 Para cada participante realmente encargado, registrar:
 
@@ -148,7 +148,7 @@ inválido el resultado del piloto solo por usar una plantilla anterior.
 | --- | --- | --- |
 | CA-01 | La decisión queda ligada a identidad y rol del destinatario | Revisar un tutor y un autónomo ficticios |
 | CA-02 | Propuesta/revisión distinguen solicitado, observado y procedencia | Revisar metadata, declaración y dato ausente |
-| CA-03 | Tutor conserva usuario escritor y un único paso; Gemini no lo aplica | Contrastar instrucciones antes/después |
+| CA-03 | Tutor conserva usuario escritor y un único paso; ningún agente lo aplica | Contrastar instrucciones antes/después |
 | CA-04 | Recomendación no concede permiso ni configura el CLI | Revisar instrucciones explícitas y exclusiones |
 | CA-05 | Modelos desconocidos/discrepantes requieren revisión sin retry automático | Escenarios de alias, auxiliares y metadata ausente |
 | CA-06 | Decisión bloqueada/incompleta no queda lista ni usa fallback | Recorrer los cinco estados del bloque |

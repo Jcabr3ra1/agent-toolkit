@@ -208,7 +208,7 @@ intento. En modo tutor, el usuario escribe el código y Codex revisa el resultad
 
 S3.3 necesita especificación de adaptador/registro/parser nativos y pruebas antes
 de ejecutarse. S2 no ofrece esas capacidades hoy. No anunciar autonomía completa,
-soporte Gemini/Codex o integración de proyectos por cerrar un diagnóstico Claude.
+soporte Codex o integración de proyectos por cerrar un diagnóstico Claude.
 
 ## Criterios de cierre S3.1 y paradas
 
