@@ -21,6 +21,14 @@ usuario no indica cuál, pregunta solo eso.
 
 ## Iniciar (agente principal)
 
+0. Si el usuario no describió la tarea, pídesela y espera. Con la tarea delante y
+   antes de trabajar, recomienda con la [guía](#guía-de-recomendación) la
+   configuración para **ti mismo** y la que prevés para el revisor, cada una con
+   su motivo: «Para mí: <modelo>, <esfuerzo>: <motivo>. Para el revisor:
+   <modelo>, <esfuerzo>». Di qué modelo y esfuerzo usas ahora si lo sabes, y que
+   se cambian con `/model`. Espera a que el usuario confirme o cambie la
+   configuración; no empieces la tarea antes. Es una autoevaluación: si dudas
+   entre dos opciones, dilo en lugar de elegir la mayor.
 1. Busca colaboraciones abiertas con `get_collaboration` sin `taskId`. Reutiliza
    solo una cuyo `primaryAgent` sea tu `agent`; si hay varias, pregunta cuál. Las
    que inició el otro agente no te sirven para enviar: ignóralas.
@@ -70,6 +78,8 @@ qué modelos tiene la otra terminal, dilo y propón la familia.
 | Varios módulos, datos o migraciones | `sonnet`, `high` | modelo estándar, `high` |
 | Seguridad, concurrencia, arquitectura o un bug difícil | `opus`, `high` o `xhigh` | modelo más capaz, `high` o `xhigh` |
 
+La misma tabla sirve para el principal según el trabajo que hará: planificar
+o implementar algo delicado pide más que coordinar revisiones sencillas.
 Reserva `max` para un problema que ya falló con `xhigh`. El motivo debe decir
 por qué en una frase, por ejemplo: «toca autenticación y permisos».
 
