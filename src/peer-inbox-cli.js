@@ -24,10 +24,12 @@ function parse(argv) {
   const [command, ...rest] = argv;
   if (command !== "wait") return null;
   const options = { timeoutSeconds: 3600 };
+  const seen = new Set();
   const names = { "--agent": "agent", "--project-root": "projectRoot", "--task": "taskId", "--review": "reviewId", "--timeout-seconds": "timeoutSeconds" };
   for (let i = 0; i < rest.length; i += 2) {
     const key = names[rest[i]];
-    if (!key || rest[i + 1] === undefined || Object.hasOwn(options, key) && key !== "timeoutSeconds") return null;
+    if (!key || rest[i + 1] === undefined || seen.has(key)) return null;
+    seen.add(key);
     options[key] = rest[i + 1];
   }
   options.timeoutSeconds = Number(options.timeoutSeconds);
@@ -68,10 +70,10 @@ function summary(value) {
 }
 
 export async function runPeerInboxCli(argv, { out, err, store = createPeerReviewStore(), now = Date.now,
-  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000, codexHome } = {}) {
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000, codexHome, claudeHome } = {}) {
   if (argv[0] === "modelos") {
     if (argv.length > 2 || (argv[1] !== undefined && argv[1] !== "--json")) { await err(HELP); return EXIT.usage; }
-    const result = await agentModels(codexHome ? { codexHome } : {});
+    const result = await agentModels({ ...(codexHome && { codexHome }), ...(claudeHome && { claudeHome }) });
     await out(argv[1] === "--json" ? JSON.stringify(result) + "\n" : agentModelsTable(result));
     return EXIT.found;
   }

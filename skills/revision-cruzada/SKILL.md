@@ -245,9 +245,9 @@ Para cambiarla: Codex → `/model` · Claude → `Esc`, `/model` y otra vez `/re
 ```
 
 Adapta los nombres de agente a quién es principal. Para saber tu configuración
-actual: Claude conoce su modelo; el comando `modelos` muestra el modelo y el
-esfuerzo que Codex tiene configurados. Si no puedes comprobarla,
-escríbelo así.
+actual: el comando `modelos` muestra el modelo y el esfuerzo que Codex tiene
+configurados y los que Claude dejó guardados con `/model` (una sesión iniciada
+con `--model` puede diferir). Si no puedes comprobarla, escríbelo así.
 
 ### Encargo listo para enviar
 
@@ -328,7 +328,8 @@ con la memoria del proyecto».
    - Si no coincide, **no lo reclames**. Escribe «Recomendado: <modelo>,
      <esfuerzo>. Esta sesión usa <tu modelo>. Cambia el modelo y vuelve a
      ejecutar atender» y detente. El encargo sigue pendiente.
-   - Si coincide, menciona que el esfuerzo no lo puedes comprobar y continúa.
+   - Si coincide, compara también tu esfuerzo guardado, que muestra `modelos`; si no coincide con
+     el recomendado, avísalo, y continúa.
 4. Llama `claim_peer_review` con el `taskId` y el `reviewId` recibidos **antes**
    de leer archivos. Guarda el `claimToken` solo para la entrega.
 5. Lee únicamente los archivos enumerados en el encargo, directamente del

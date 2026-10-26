@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { getStaticTOMLValue, parseTOML } from "toml-eslint-parser";
 
 // Claude Code accepts stable aliases; Codex publishes its catalog in models_cache.json.
 const CLAUDE = [
@@ -36,30 +37,41 @@ async function codexCatalog(codexHome) {
   return { available: true, fetchedAt: cache.fetched_at ?? null, models };
 }
 
+// A top-level `profile` selects the [profiles.<name>] table whose values override the top-level ones.
 async function codexCurrent(codexHome) {
-  let text;
-  try { text = await fs.readFile(path.join(codexHome, "config.toml"), "utf8"); } catch { return null; }
-  const top = text.split(/^\s*\[/mu)[0];
-  const value = key => top.match(new RegExp(`^\\s*${key}\\s*=\\s*"([^"]+)"`, "mu"))?.[1] ?? null;
-  return { model: value("model"), effort: value("model_reasoning_effort") };
+  let config;
+  try { config = getStaticTOMLValue(parseTOML(await fs.readFile(path.join(codexHome, "config.toml"), "utf8"))); } catch { return null; }
+  const text = (table, key) => typeof table?.[key] === "string" && table[key] ? table[key] : null;
+  const chosen = typeof config.profile === "string" && Object.hasOwn(config.profiles ?? {}, config.profile) ? config.profiles[config.profile] : null;
+  return { model: text(chosen, "model") ?? text(config, "model"), effort: text(chosen, "model_reasoning_effort") ?? text(config, "model_reasoning_effort") };
 }
 
-function pick(models, wanted) {
-  return models.filter(item => item.category === wanted).sort((a, b) => a.priority - b.priority)[0] ?? null;
+// Claude Code saves the choice of /model in settings.json; a session started with --model may differ.
+async function claudeCurrent(claudeHome) {
+  let settings;
+  try { settings = JSON.parse(await fs.readFile(path.join(claudeHome, "settings.json"), "utf8")); } catch { return null; }
+  const value = key => typeof settings?.[key] === "string" && settings[key] ? settings[key] : null;
+  return { model: value("model"), effort: value("effortLevel") };
 }
 
-export async function agentModels({ codexHome = process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex") } = {}) {
+// The newest model of the category that supports the effort; a newer one without it must not hide an older one that does.
+function pick(models, wanted, effort) {
+  return models.filter(item => item.category === wanted && item.efforts.includes(effort)).sort((a, b) => a.priority - b.priority)[0] ?? null;
+}
+
+export async function agentModels({ codexHome = process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"),
+  claudeHome = process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude") } = {}) {
   const codex = await codexCatalog(codexHome);
   const levels = LEVELS.map(entry => {
-    const codexModel = pick(codex.models, entry.category);
+    const codexModel = pick(codex.models, entry.category, entry.effort);
     const claudeModel = CLAUDE.find(item => item.category === entry.category);
     return { ...entry, claude: { model: claudeModel.model, effort: entry.effort },
-      codex: codexModel && codexModel.efforts.includes(entry.effort) ? { model: codexModel.model, effort: entry.effort } : null };
+      codex: codexModel ? { model: codexModel.model, effort: entry.effort } : null };
   });
-  return { claude: CLAUDE, codex, codexCurrent: await codexCurrent(codexHome), levels };
+  return { claude: CLAUDE, codex, codexCurrent: await codexCurrent(codexHome), claudeCurrent: await claudeCurrent(claudeHome), levels };
 }
 
-export function agentModelsTable({ claude, codex, codexCurrent, levels }) {
+export function agentModelsTable({ claude, codex, codexCurrent, claudeCurrent, levels }) {
   const lines = ["**Modelos disponibles**", "", "| Agente | Modelo | Categoría | Esfuerzos |", "| --- | --- | --- | --- |"];
   for (const item of claude) lines.push(`| Claude | \`${item.model}\` | ${item.category} | ${item.efforts.join(", ")} |`);
   if (!codex.available) lines.push("| Codex | — | — | No se encontró `models_cache.json`; abre Codex una vez |");
@@ -72,6 +84,9 @@ export function agentModelsTable({ claude, codex, codexCurrent, levels }) {
   lines.push("", codexCurrent?.model
     ? `Codex usa ahora: \`${codexCurrent.model}\`, \`${codexCurrent.effort ?? "sin esfuerzo fijado"}\`.`
     : "No se pudo leer la configuración actual de Codex.");
+  lines.push(claudeCurrent?.model || claudeCurrent?.effort
+    ? `Claude tiene guardado: \`${claudeCurrent.model ?? "sin modelo fijado"}\`, \`${claudeCurrent.effort ?? "sin esfuerzo fijado"}\` (lo que dejó \`/model\`; una sesión iniciada con \`--model\` puede diferir).`
+    : "No se pudo leer la configuración guardada de Claude.");
   lines.push("La categoría de Codex se deduce de la descripción de cada modelo; «anterior» no se recomienda.", "");
   return lines.join("\n");
 }

@@ -47,6 +47,57 @@ test("a missing catalog or unsupported effort is reported instead of inventing a
   assert.equal(limited.levels.find(level => level.level === "Máximo").codex, null);
 });
 
+test("a newer model without the effort does not hide an older one that supports it", async () => {
+  const result = await agentModels({ codexHome: await codexHome([
+    { slug: "nuevo", description: "Latest workhorse model", priority: 0, supported_reasoning_levels: levels(["low", "medium"]) },
+    { slug: "anterior-util", description: "Everyday workhorse model", priority: 1, supported_reasoning_levels: levels(["low", "medium", "high"]) }]) });
+  assert.deepEqual(result.levels.map(level => level.codex && `${level.codex.model}:${level.codex.effort}`),
+    [null, "nuevo:medium", "anterior-util:high", null, null]);
+});
+
+test("the Codex profile selected at the top level overrides the model and effort", async () => {
+  const current = async config => (await agentModels({ codexHome: await codexHome(null, config) })).codexCurrent;
+  const profile = 'profile = "trabajo"\nmodel = "base"\nmodel_reasoning_effort = "low"\n[profiles.otro]\nmodel = "otro"\n[profiles.trabajo]\nmodel = "elegido"\n[profiles.trabajo.extra]\nmodel = "no"\n';
+  assert.deepEqual(await current(profile), { model: "elegido", effort: "low" });
+  assert.deepEqual(await current('profile = "trabajo"\n[profiles.trabajo]\nmodel_reasoning_effort = "xhigh"\nmodel = "m"\n'), { model: "m", effort: "xhigh" });
+  assert.deepEqual(await current('profile = "ausente"\nmodel = "base"\n'), { model: "base", effort: null });
+  assert.deepEqual(await current("model = 'comillas-simples'\n"), { model: "comillas-simples", effort: null });
+  assert.equal(await current("model = \n"), null);
+  assert.deepEqual(await current('model = "base"\n[profiles.undefined]\nmodel = "no-seleccionado"\n'), { model: "base", effort: null });
+  assert.deepEqual(await current('profile = 1\nmodel = "base"\n[profiles."1"]\nmodel = "no-seleccionado"\n'), { model: "base", effort: null });
+});
+
+test("Codex profile headers are matched by their decoded key segments", async () => {
+  const current = async config => (await agentModels({ codexHome: await codexHome(null, config) })).codexCurrent;
+  const spaced = 'profile = "trabajo"\nmodel = "base"\n[ profiles . "trabajo" ] # perfil\nmodel = "elegido"\n';
+  assert.deepEqual(await current(spaced), { model: "elegido", effort: null });
+  assert.deepEqual(await current('profile = "trabajo"\n["profiles"."trabajo"]\nmodel = "elegido"\n'), { model: "elegido", effort: null });
+  const dotted = ['[profiles.trabajo.extra]\nmodel = "no-es-el-perfil"\n', '[profiles."trabajo.extra"]\nmodel = "elegido"\n'];
+  for (const tables of [dotted, [...dotted].reverse()]) {
+    assert.deepEqual(await current('profile = "trabajo.extra"\nmodel = "base"\n' + tables.join("")), { model: "elegido", effort: null });
+  }
+});
+
+test("the saved Claude model and effort are read from settings.json or reported as unreadable", async () => {
+  const dir = await fs.mkdtemp(path.join(root, "claude-"));
+  await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ model: "sonnet", effortLevel: "high", env: { X: "1" } }));
+  const result = await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir });
+  assert.deepEqual(result.claudeCurrent, { model: "sonnet", effort: "high" });
+  assert.match(agentModelsTable(result), /Claude tiene guardado: `sonnet`, `high`/u);
+  await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ model: "opus" }));
+  assert.match(agentModelsTable(await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir })), /`opus`, `sin esfuerzo fijado`/u);
+  await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ effortLevel: "high" }));
+  assert.match(agentModelsTable(await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir })), /`sin modelo fijado`, `high`/u);
+  await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ model: 5, effortLevel: ["high"] }));
+  assert.deepEqual((await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir })).claudeCurrent, { model: null, effort: null });
+  for (const content of ["{roto", "[]", null]) {
+    if (content === null) await fs.rm(path.join(dir, "settings.json"));
+    else await fs.writeFile(path.join(dir, "settings.json"), content);
+    const unreadable = await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir });
+    assert.match(agentModelsTable(unreadable), /No se pudo leer la configuración guardada de Claude/u);
+  }
+});
+
 test("the inbox CLI prints the catalog as a table or JSON", async () => {
   const dir = await codexHome([{ slug: "diario", description: "Latest workhorse model", supported_reasoning_levels: levels(["low", "medium", "high"]) }]);
   const out = [], json = [], errors = [];

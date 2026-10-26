@@ -78,7 +78,8 @@ test("invalid arguments and unreadable inboxes fail without waiting", async () =
     ["wait", "--agent", "claude"], ["wait", "--agent", "claude", "--project-root", f.projectRoot, "--task", f.bound.taskId],
     ["wait", "--agent", "claude", "--project-root", f.projectRoot, "--timeout-seconds", "0"],
     ["wait", "--agent", "claude", "--project-root", f.projectRoot, "--task", "x", "--review", "y"],
-    ["wait", "--agent", "claude", "--project-root", f.projectRoot, "--extra", "1"]]) {
+    ["wait", "--agent", "claude", "--project-root", f.projectRoot, "--extra", "1"],
+    ["wait", "--agent", "claude", "--project-root", f.projectRoot, "--timeout-seconds", "5", "--timeout-seconds", "9"]]) {
     const result = await run(argv, f.store);
     assert.equal(result.code, 2, JSON.stringify(argv));
     assert.match(result.errors, /Uso: agent-toolkit-inbox wait/u);
