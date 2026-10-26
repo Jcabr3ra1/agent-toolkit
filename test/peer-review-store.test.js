@@ -202,6 +202,25 @@ test("storage is private, rejects linked records, and never removes an existing 
   await assert.rejects(f.store.getCollaboration(f.bound), { code: "peer-storage" });
 });
 
+test("an unreadable record is skipped by listings but valid reviews and results still show", async () => {
+  const f = await fixture();
+  const broken = crypto.randomUUID();
+  await fs.writeFile(path.join(f.storage, broken + ".json"), "{roto", { mode: 0o600 });
+  await fs.writeFile(path.join(f.storage, crypto.randomUUID() + ".json"), "{}", { mode: 0o644 });
+  assert.deepEqual((await f.store.listCollaborations({ projectRoot: f.projectRoot })).tasks.map(task => task.taskId), [f.task.id]);
+  const request = await f.dispatch();
+  const handoff = await f.store.findHandoff({ projectRoot: f.projectRoot, agent: "codex" });
+  assert.equal(handoff.done, true);
+  assert.equal(handoff.value.review.id, request.id);
+  const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "codex" });
+  await f.store.submitReview({ ...f.bound, reviewId: request.id, agent: "codex", claimToken: claim.claimToken, content: "Informe válido." });
+  await f.store.recordOutcome({ ...f.bound, reviewId: request.id, agent: "claude", verdict: "aprobado", findings: 2, upheld: 1 });
+  const { groups } = await f.store.performance({});
+  assert.equal(groups.length, 1);
+  assert.deepEqual([groups[0].reviews, groups[0].findings, groups[0].upheld], [1, 2, 1]);
+  await assert.rejects(f.store.getCollaboration({ taskId: broken, projectRoot: f.projectRoot }), { code: "peer-storage" });
+});
+
 test("input, report and history limits are bounded in bytes and same-agent reviews are rejected", async () => {
   const f = await fixture();
   await assert.rejects(f.prepare({ to: "claude" }), { code: "peer-input" });

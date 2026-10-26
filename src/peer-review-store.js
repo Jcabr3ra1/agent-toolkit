@@ -196,6 +196,12 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     } finally { await handle?.close(); }
   }
 
+  // One damaged record must not hide every other collaboration; a direct read of that id still fails.
+  async function readable(directory, id) {
+    try { return await read(directory, id); }
+    catch (error) { if (error instanceof PeerReviewError && ["peer-storage", "peer-missing"].includes(error.code)) return null; throw error; }
+  }
+
   async function write(directory, task) {
     const data = JSON.stringify(task, null, 2);
     if (Buffer.byteLength(data) > PEER_LIMITS.recordBytes) fail("limit");
@@ -286,8 +292,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     const directory = await storage();
     const tasks = [];
     for (const name of (await fs.readdir(directory)).filter(name => UUID.test(name.slice(0, -5)) && name.endsWith(".json"))) {
-      const task = await read(directory, name.slice(0, -5));
-      if (task.project.root === binding.root && sameIdentity(task.project, binding) && task.state === "open") {
+      const task = await readable(directory, name.slice(0, -5));
+      if (task && task.project.root === binding.root && sameIdentity(task.project, binding) && task.state === "open") {
         tasks.push({ taskId: task.id, title: task.title, project: task.project.name, projectRoot: binding.root, primaryAgent: task.primaryAgent,
           autoReviews: task.autoApprove?.maxReviews ?? 0, revision: task.revision, updatedAt: task.updatedAt });
       }
@@ -427,8 +433,8 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     const root = projectRoot ? (await project(projectRoot)).root : null;
     const groups = new Map();
     for (const name of (await fs.readdir(directory)).filter(name => name.endsWith(".json") && UUID.test(name.slice(0, -5)))) {
-      const task = await read(directory, name.slice(0, -5));
-      if (root && task.project.root !== root) continue;
+      const task = await readable(directory, name.slice(0, -5));
+      if (!task || root && task.project.root !== root) continue;
       for (const review of task.reviews) {
         if (!review.outcome) continue;
         const row = { reviewer: review.to, model: review.reviewer?.model ?? null, effort: review.reviewer?.effort ?? null, level: review.outcome.level };
