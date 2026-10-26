@@ -9,6 +9,8 @@ const REVIEW = { ...BOUND, reviewId: z.string().uuid() };
 const TTL_MS = 20 * 60_000;
 const MAX_PREVIEWS = 8;
 const MAX_WAIT_MS = 60_000;
+// Claude Code does not declare MCP elicitation; the SDK rejects the request with this code.
+const sinDialogo = failure => failure?.code === "CAPABILITY_NOT_SUPPORTED";
 const REVIEWER = z.object({
   model: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/u),
   effort: z.enum(["minimal", "low", "medium", "high", "xhigh", "max"]),
@@ -18,7 +20,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const result = value => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
 const error = message => ({ isError: true, content: [{ type: "text", text: message }] });
 
-export const PEER_REVIEW_INSTRUCTIONS = "Para colaborar entre sesiones ya abiertas de Claude y Codex, usa start_collaboration y comparte el taskId y la raíz exacta del proyecto. publish_peer_context sustituye el contexto compartido con control de versión. preview_peer_review no envía nada; muestra su contenido completo y solicita aprobación directa antes de approve_peer_review. Incluye en reviewer el modelo y el esfuerzo que recomiendas para el revisor con un motivo breve, para que el usuario pueda cambiarlos en la otra terminal antes de aprobar; el MCP no cambia modelos. La aprobación envía un encargo a la bandeja compartida, no inicia una CLI ni un modelo. El receptor debe estar atendiendo wait_for_peer_handoff desde su propia sesión; no se despiertan ventanas inactivas. Antes de leer debe usar claim_peer_review, revisar solo los archivos aprobados en modo de lectura, sin pruebas ni ediciones, mostrar el trabajo en su terminal y devolver el informe con submit_peer_review. El principal consulta get_collaboration para recuperar los hallazgos y su vigencia. Solo si el usuario pide expresamente trabajar sin aprobar cada encargo, crea la colaboración con autoReviews; el usuario lo confirma una sola vez y después el agente principal usa request_peer_review, hasta ese cupo, sin vista previa. El revisor nunca envía encargos automáticos. Sin taskId, wait_for_peer_handoff atiende todas las colaboraciones abiertas de esa raíz. No repitas wait_for_peer_handoff en bucle para esperas largas: cada llamada es un turno del modelo; usa el comando agent-toolkit-inbox wait, que espera sin usar ningún modelo. No te asignes un modelo o una identidad verificada: los roles y autores son declarados, y los permisos de la sesión nativa siguen siendo los suyos. No inicies bucles de espera sin que el usuario pida atender la bandeja. Nunca apruebes encargos por tu cuenta ni envíes un encargo como respuesta a otro de forma automática.";
+export const PEER_REVIEW_INSTRUCTIONS = "Para colaborar entre sesiones ya abiertas de Claude y Codex, usa start_collaboration y comparte el taskId y la raíz exacta del proyecto. publish_peer_context sustituye el contexto compartido con control de versión. preview_peer_review no envía nada; muestra su contenido completo y solicita aprobación directa antes de approve_peer_review. Incluye en reviewer el modelo y el esfuerzo que recomiendas para el revisor con un motivo breve, para que el usuario pueda cambiarlos en la otra terminal antes de aprobar; el MCP no cambia modelos. La aprobación envía un encargo a la bandeja compartida, no inicia una CLI ni un modelo. El receptor debe estar atendiendo wait_for_peer_handoff desde su propia sesión; no se despiertan ventanas inactivas. Antes de leer debe usar claim_peer_review, revisar solo los archivos aprobados en modo de lectura, sin pruebas ni ediciones, mostrar el trabajo en su terminal y devolver el informe con submit_peer_review. El principal consulta get_collaboration para recuperar los hallazgos y su vigencia. Si el cliente no ofrece diálogo de confirmación MCP (por ejemplo Claude Code), la aprobación de approve_peer_review es el aviso de permiso del propio cliente: llámalo solo después de que el usuario apruebe el encargo en el chat. Solo si el usuario pide expresamente trabajar sin aprobar cada encargo, crea la colaboración con autoReviews; el usuario lo confirma una sola vez y después el agente principal usa request_peer_review, hasta ese cupo, sin vista previa. El revisor nunca envía encargos automáticos. Sin taskId, wait_for_peer_handoff atiende todas las colaboraciones abiertas de esa raíz. No repitas wait_for_peer_handoff en bucle para esperas largas: cada llamada es un turno del modelo; usa el comando agent-toolkit-inbox wait, que espera sin usar ningún modelo. No te asignes un modelo o una identidad verificada: los roles y autores son declarados, y los permisos de la sesión nativa siguen siendo los suyos. No inicies bucles de espera sin que el usuario pida atender la bandeja. Nunca apruebes encargos por tu cuenta ni envíes un encargo como respuesta a otro de forma automática.";
 
 export function registerPeerReviewTools(server, store = createPeerReviewStore(), { now = Date.now } = {}) {
   const previews = new Map();
@@ -52,7 +54,13 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
         "Cada encargo pide solo lectura de los archivos que indique el principal. No se inicia una CLI ni otro modelo, y los permisos nativos de cada sesión no cambian."
       ].join("\n\n"),
       requestedSchema: { type: "object", properties: { decision: { type: "string", enum: ["approve", "cancel"], title: "Decisión" } }, required: ["decision"] }
+    }).catch(failure => {
+      if (sinDialogo(failure)) return null;
+      throw failure;
     });
+    if (!response) {
+      return { state: "blocked", created: false, message: "Este cliente MCP no ofrece diálogo de confirmación, que el modo automático necesita. Crea la colaboración sin autoReviews y aprueba cada encargo." };
+    }
     if (response.action !== "accept" || response.content?.decision !== "approve") {
       return { state: "cancelled", created: false, message: "No se creó la colaboración automática." };
     }
@@ -81,7 +89,7 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     return preview;
   });
 
-  tool("approve_peer_review", "Después de la aprobación directa de la vista previa completa, solicita confirmación interactiva y publica un único encargo para la sesión receptora. Bloquea clientes sin confirmación, vistas previas vencidas o cambios de contexto/archivos. No inicia modelos; no repitas automáticamente encargos fallidos.", {
+  tool("approve_peer_review", "Después de la aprobación directa de la vista previa completa, solicita confirmación interactiva y publica un único encargo para la sesión receptora. Si el cliente no ofrece diálogo MCP, la aprobación es su propio aviso de permiso para esta herramienta y queda registrada como permiso-cliente. Bloquea vistas previas vencidas o cambios de contexto/archivos. No inicia modelos; no repitas automáticamente encargos fallidos.", {
     previewId: z.string().regex(/^[a-f0-9]{32}$/u), confirmationCode: z.string().regex(/^[A-F0-9]{8}$/u)
   }, async (args, context) => {
     const pending = previews.get(args.previewId);
@@ -93,6 +101,7 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
       return { state: "blocked", sent: false, message: "Este cliente MCP no ofrece confirmación interactiva. El encargo no fue enviado." };
     }
     const preview = pending.preview;
+    let method = "dialogo";
     const response = await context.mcpReq.elicitInput({
       message: ["Autoriza este encargo para una sesión ya abierta. No se iniciará una CLI ni otro modelo.",
         `Vista previa: ${preview.previewId}`, `De ${preview.from} a ${preview.to}`,
@@ -103,13 +112,17 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
         "El receptor necesita estar atendiendo la bandeja. Solo se solicita lectura; sus permisos nativos no se modifican."
       ].join("\n\n"),
       requestedSchema: { type: "object", properties: { decision: { type: "string", enum: ["approve", "cancel"], title: "Decisión" } }, required: ["decision"] }
+    }).catch(failure => {
+      if (!sinDialogo(failure)) throw failure;
+      method = "permiso-cliente";
+      return { action: "accept", content: { decision: "approve" } };
     });
     if (response.action !== "accept" || response.content?.decision !== "approve") {
       return { state: "cancelled", sent: false, message: "El encargo fue cancelado; no se envió al otro agente." };
     }
     if (pending.expires <= now()) throw new PeerReviewError("revision");
-    const review = await store.dispatchReview(preview, { previewId: preview.previewId });
-    return { state: "pending", sent: true, review, startsModel: false };
+    const review = await store.dispatchReview(preview, { previewId: preview.previewId, method });
+    return { state: "pending", sent: true, review, approvedBy: method, startsModel: false };
   });
 
   tool("request_peer_review", "Envía directamente un encargo de revisión de solo lectura en una colaboración creada con autoReviews, sin vista previa ni aprobación por encargo. Solo lo admite el agente principal y hasta el cupo confirmado; en otro caso usa preview_peer_review. No inicia modelos ni CLIs.", {

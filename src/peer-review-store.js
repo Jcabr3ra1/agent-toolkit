@@ -337,7 +337,7 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
       limits: { readOnlyRequested: true, enforcedSandbox: false, startsModel: false, checksRequested: false } };
   }
 
-  async function dispatchReview(prepared, { previewId, automatic = false }) {
+  async function dispatchReview(prepared, { previewId, automatic = false, method = "dialogo" }) {
     return transaction(prepared.taskId, prepared.projectRoot, async task => {
       requireOpen(task);
       if (automatic && (task.autoApprove?.from !== prepared.from ||
@@ -351,7 +351,7 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
       if (hash(prompt) !== prepared.promptSha256) fail("revision");
       const review = { id: randomUUID(), from: prepared.from, to: prepared.to, state: "pending", message: prepared.message, reviewer: prepared.reviewer,
         contextRevision: task.revision, snapshot: current, prompt, promptSha256: prepared.promptSha256,
-        approval: automatic ? { automatic: true, approvedAt: stamp() } : { previewId, approvedAt: stamp() },
+        approval: automatic ? { automatic: true, approvedAt: stamp() } : { previewId, method, approvedAt: stamp() },
         review: null, createdAt: stamp() };
       task.reviews.push(review);
       return structuredClone(review);

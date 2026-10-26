@@ -226,3 +226,35 @@ test("automatic collaborations need one confirmation and the inbox finds request
   assert.equal((await f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", reviewId: sent.review.id })).isError, true);
   assert.equal((await f.call("wait_for_peer_handoff", { projectRoot: f.projectRoot, agent: "codex", waitMs: 60_001 }).catch(() => ({ isError: true }))).isError, true);
 });
+
+test("clients without MCP elicitation approve through their own tool permission", async () => {
+  const f = await harness();
+  const sinDialogo = { mcpReq: { elicitInput: async () => { throw Object.assign(new Error("Client does not support elicitation"), { code: "CAPABILITY_NOT_SUPPORTED" }); } } };
+  const preview = await f.preview();
+  const sent = decode(await f.call("approve_peer_review", { previewId: preview.previewId, confirmationCode: preview.confirmationCode }, sinDialogo));
+  assert.deepEqual({ sent: sent.sent, approvedBy: sent.approvedBy, method: sent.review.approval.method }, { sent: true, approvedBy: "permiso-cliente", method: "permiso-cliente" });
+  await f.store.cancelReview({ ...f.bound, reviewId: sent.review.id });
+  const other = await f.preview();
+  const fallo = { mcpReq: { elicitInput: async () => { throw new Error("transport closed"); } } };
+  assert.equal((await f.call("approve_peer_review", { previewId: other.previewId, confirmationCode: other.confirmationCode }, fallo)).isError, true);
+  assert.equal((await f.store.getCollaboration(f.bound)).reviews.length, 1);
+  const withDialog = await f.preview();
+  assert.equal(decode(await f.call("approve_peer_review", { previewId: withDialog.previewId, confirmationCode: withDialog.confirmationCode }, f.approveContext)).review.approval.method, "dialogo");
+  const auto = decode(await f.call("start_collaboration", { ...input, projectRoot: f.projectRoot, autoReviews: 2 }, sinDialogo));
+  assert.deepEqual({ state: auto.state, created: auto.created }, { state: "blocked", created: false });
+  assert.match(auto.message, /no ofrece diálogo de confirmación/u);
+});
+
+test("a real stdio client without elicitation can send after its own permission step", async t => {
+  const f = await project();
+  const transport = new StdioClientTransport({ command: process.execPath, args: [entry], cwd: path.dirname(entry),
+    env: { PATH: "/usr/bin:/bin", HOME: os.homedir(), AGENT_TOOLKIT_WORKFLOW_DIR: path.join(f.directory, "workflows") }, stderr: "pipe" });
+  const client = new Client({ name: "claude-code-like", version: "1.0.0" }, { capabilities: {} });
+  t.after(async () => { await client.close().catch(() => {}); await transport.close().catch(() => {}); });
+  await client.connect(transport);
+  const call = async (name, args) => decode(await client.callTool({ name, arguments: args }));
+  const task = await call("start_collaboration", { ...input, projectRoot: f.projectRoot });
+  const preview = await call("preview_peer_review", { taskId: task.id, projectRoot: f.projectRoot, from: "claude", to: "codex", message: "Revisa answer.", paths: ["app.js"] });
+  const sent = await call("approve_peer_review", { previewId: preview.previewId, confirmationCode: preview.confirmationCode });
+  assert.deepEqual({ sent: sent.sent, approvedBy: sent.approvedBy }, { sent: true, approvedBy: "permiso-cliente" });
+});
