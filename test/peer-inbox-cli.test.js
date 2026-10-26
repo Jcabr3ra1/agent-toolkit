@@ -103,3 +103,23 @@ test("the installed bin blocks without a model and exits when a request arrives"
   assert.equal(await exited, 0, stderr);
   assert.equal(JSON.parse(stdout).review.id, sent.id);
 });
+
+test("rendimiento prints a table of recorded outcomes without using a model", async () => {
+  const f = await fixture();
+  const empty = [];
+  assert.equal(await runPeerInboxCli(["rendimiento"], { store: f.store, out: t => empty.push(t), err: () => {} }), 0);
+  assert.match(empty.join(""), /Sin resultados registrados/u);
+  const request = await f.send();
+  const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "claude" });
+  await f.store.submitReview({ ...f.bound, reviewId: request.id, agent: "claude", claimToken: claim.claimToken, content: "Veredicto: Aprobado" });
+  await f.store.recordOutcome({ ...f.bound, reviewId: request.id, agent: "codex", verdict: "aprobado", findings: 2, upheld: 1, level: "normal" });
+  const output = [];
+  assert.equal(await runPeerInboxCli(["rendimiento", "--project-root", f.projectRoot], { store: f.store, out: t => output.push(t), err: () => {} }), 0);
+  assert.match(output.join(""), /\| claude \| sonnet \| medium \| normal \| 1 \| 2 \| 1 \(50 %\) \| 1 \/ 0 \/ 0 \|/u);
+  const json = [];
+  await runPeerInboxCli(["rendimiento", "--json"], { store: f.store, out: t => json.push(t), err: () => {} });
+  assert.equal(JSON.parse(json.join("")).groups[0].reviews, 1);
+  const errors = [];
+  assert.equal(await runPeerInboxCli(["rendimiento", "--otro"], { store: f.store, out: () => {}, err: t => errors.push(t) }), 2);
+  assert.match(errors.join(""), /rendimiento \[--project-root/u);
+});

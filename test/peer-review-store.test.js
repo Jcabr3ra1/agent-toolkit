@@ -294,3 +294,26 @@ test("reviewer recommendations are validated per agent and travel inside the app
   const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "codex" });
   assert.equal(claim.review.reviewer.model, "gpt-5-codex");
 });
+
+test("outcomes are recorded once by the sender of a completed review and aggregated by model and level", async () => {
+  const f = await fixture();
+  const reviewer = { model: "gpt-6.1-sol", effort: "high", reason: "Seguridad acotada." };
+  const request = await f.store.dispatchReview(await f.prepare({ reviewer }), { previewId: "a".repeat(32) });
+  const outcome = { ...f.bound, reviewId: request.id, agent: "claude", verdict: "requiere_cambios", findings: 3, upheld: 2,
+    level: "exigente", principal: { model: "sonnet", effort: "high" } };
+  await assert.rejects(f.store.recordOutcome(outcome), { code: "peer-outcome" });
+  const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "codex" });
+  await f.store.submitReview({ ...f.bound, reviewId: request.id, agent: "codex", claimToken: claim.claimToken, content: "Veredicto: Requiere cambios" });
+  for (const bad of [{ upheld: 4 }, { verdict: "ok" }, { level: "alto" }, { principal: { model: "sonnet", effort: "ultra" } }, { findings: -1 }]) {
+    await assert.rejects(f.store.recordOutcome({ ...outcome, ...bad }), { code: "peer-input" });
+  }
+  await assert.rejects(f.store.recordOutcome({ ...outcome, agent: "codex", principal: undefined }), { code: "peer-outcome" });
+  const saved = await f.store.recordOutcome(outcome);
+  assert.deepEqual({ verdict: saved.outcome.verdict, upheld: saved.outcome.upheld, principal: saved.outcome.principal },
+    { verdict: "requiere_cambios", upheld: 2, principal: { model: "sonnet", effort: "high" } });
+  await assert.rejects(f.store.recordOutcome(outcome), { code: "peer-outcome" });
+  const stats = await createPeerReviewStore({ root: f.storage }).performance({ projectRoot: f.projectRoot });
+  assert.deepEqual(stats.groups, [{ reviewer: "codex", model: "gpt-6.1-sol", effort: "high", level: "exigente", reviews: 1, findings: 3, upheld: 2,
+    verdicts: { aprobado: 0, aprobado_con_cambios: 0, requiere_cambios: 1 } }]);
+  assert.deepEqual((await f.store.performance({ projectRoot: path.join(f.directory, "otro") }).catch(() => ({ groups: "error" }))).groups, "error");
+});

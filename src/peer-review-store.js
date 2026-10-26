@@ -13,6 +13,8 @@ const PRIVATE = new Set([".git", ".ssh", ".aws", ".codex", ".claude", ".agents"]
 const ACTIVE = new Set(["pending", "claimed"]);
 const EFFORTS = { claude: ["low", "medium", "high", "xhigh", "max"], codex: ["minimal", "low", "medium", "high", "xhigh"] };
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/u;
+const VERDICTS = new Set(["aprobado", "aprobado_con_cambios", "requiere_cambios"]);
+const LEVELS = new Set(["ligero", "normal", "exigente", "critico", "maximo"]);
 const MESSAGES = {
   input: "Los datos de colaboración no son válidos o superan los límites.",
   project: "La raíz del proyecto no es válida, cambió o no coincide con la tarea.",
@@ -25,6 +27,7 @@ const MESSAGES = {
   active: "Ya hay una revisión pendiente o en curso; consúltala o cancela ese encargo.",
   limit: "La colaboración alcanzó su límite de revisiones; crea una tarea nueva.",
   claim: "El encargo no está disponible para esa sesión o el comprobante no coincide.",
+  outcome: "Solo el agente que envió un encargo completado registra su resultado, y una sola vez.",
   auto: "Esta colaboración no admite un envío automático de ese agente o agotó su cupo; usa preview_peer_review y la aprobación del usuario.",
   files: "No se pudo obtener una huella estable de los archivos indicados. Usa archivos regulares dentro del proyecto."
 };
@@ -403,6 +406,43 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     });
   }
 
+  async function recordOutcome({ taskId, projectRoot, reviewId, agent, verdict, findings, upheld, level, principal }) {
+    if (!AGENTS.has(agent) || !UUID.test(reviewId ?? "") || !VERDICTS.has(verdict) ||
+        !Number.isInteger(findings) || findings < 0 || findings > 100 ||
+        !Number.isInteger(upheld) || upheld < 0 || upheld > findings ||
+        (level !== undefined && !LEVELS.has(level)) ||
+        (principal !== undefined && (!principal || !MODEL.test(principal.model ?? "") || !EFFORTS[agent].includes(principal.effort)))) fail("input");
+    return transaction(taskId, projectRoot, task => {
+      const review = task.reviews.find(item => item.id === reviewId);
+      if (!review || review.state !== "completed" || review.from !== agent || review.outcome) fail("outcome");
+      review.outcome = { verdict, findings, upheld, level: level ?? null,
+        principal: principal ? { model: principal.model, effort: principal.effort } : null, recordedAt: stamp() };
+      return { reviewId, outcome: structuredClone(review.outcome) };
+    });
+  }
+
+  // Aggregates recorded outcomes across collaborations so model choices can be tuned with evidence.
+  async function performance({ projectRoot } = {}) {
+    const directory = await storage();
+    const root = projectRoot ? (await project(projectRoot)).root : null;
+    const groups = new Map();
+    for (const name of (await fs.readdir(directory)).filter(name => name.endsWith(".json") && UUID.test(name.slice(0, -5)))) {
+      const task = await read(directory, name.slice(0, -5));
+      if (root && task.project.root !== root) continue;
+      for (const review of task.reviews) {
+        if (!review.outcome) continue;
+        const row = { reviewer: review.to, model: review.reviewer?.model ?? null, effort: review.reviewer?.effort ?? null, level: review.outcome.level };
+        const key = JSON.stringify(row);
+        const group = groups.get(key) ?? { ...row, reviews: 0, findings: 0, upheld: 0,
+          verdicts: { aprobado: 0, aprobado_con_cambios: 0, requiere_cambios: 0 } };
+        group.reviews++; group.findings += review.outcome.findings; group.upheld += review.outcome.upheld;
+        group.verdicts[review.outcome.verdict]++;
+        groups.set(key, group);
+      }
+    }
+    return { projectRoot: root, groups: [...groups.values()].sort((a, b) => b.reviews - a.reviews) };
+  }
+
   async function cancelReview({ taskId, projectRoot, reviewId }) {
     return transaction(taskId, projectRoot, task => {
       const review = task.reviews.find(item => item.id === reviewId);
@@ -420,5 +460,5 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
   }
 
   return Object.freeze({ startCollaboration, getCollaboration, listCollaborations, findHandoff, publishContext, prepareReview,
-    dispatchReview, requestReview, claimReview, submitReview, cancelReview, closeCollaboration });
+    dispatchReview, requestReview, claimReview, submitReview, recordOutcome, performance, cancelReview, closeCollaboration });
 }

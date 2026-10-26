@@ -140,6 +140,21 @@ y `~/.codex/skills/`:
 encargo está pendiente, quién debe actuar y el último veredicto, sin modificar
 nada.
 
+## Rendimiento de los modelos
+
+Después de verificar un informe, el principal llama `record_review_outcome` una
+sola vez con el veredicto, los hallazgos recibidos, cuántos se sostuvieron, el
+nivel de la clasificación y su propia configuración. Solo puede hacerlo quien
+envió el encargo y solo si está completado.
+
+```sh
+node bin/agent-toolkit-inbox.js rendimiento [--project-root /ruta] [--json]
+```
+
+resume esos resultados por revisor, modelo, esfuerzo y nivel: encargos,
+hallazgos, porcentaje que se sostuvo y veredictos. Sirve para ajustar la
+clasificación con datos propios. No usa ningún modelo.
+
 `programar` y `revisar` son accesos directos a `revision-cruzada`, que sigue
 disponible con `iniciar` y `atender` y contiene todas las reglas. Instala las
 tres carpetas de skills.
