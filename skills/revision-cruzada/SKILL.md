@@ -148,18 +148,51 @@ genérica.
 - Si no conoces los modelos de la otra terminal, dilo y pide al usuario que los
   mire en su `/model`; no inventes nombres.
 
-| Trabajo | Claude | Codex |
-| --- | --- | --- |
-| Texto, configuración o un cambio trivial | `haiku`, `low` | `gpt-6-luna`, `low` |
-| Lógica normal o un cambio pequeño en pocos archivos | `sonnet`, `medium` | `gpt-6.1-sol`, `medium` |
-| Varios módulos, datos, migraciones o un cambio pequeño de seguridad | `sonnet`, `high` | `gpt-6.1-sol`, `high` |
-| Seguridad amplia, concurrencia, arquitectura o un bug difícil | `opus`, `high` o `xhigh` | `gpt-6-astra`, `high` o `xhigh` |
+### Clasificar la tarea
 
-La misma tabla sirve para el principal según el trabajo que hará: coordinar una
-revisión pide menos que planificar o implementar algo delicado. Reserva `max`
-para un problema que ya falló con `xhigh`. El motivo cabe en una frase concreta,
-por ejemplo: «7 líneas del webhook de WhatsApp; basta una revisión de seguridad
-acotada».
+Clasifica **cada trabajo por separado** (el tuyo y el del revisor) con estos
+cinco criterios. No estimes a ojo: puntúa, suma y aplica las reglas.
+
+| Criterio | 0 | 1 | 2 |
+| --- | --- | --- | --- |
+| Riesgo | Texto, estilo, documentación | Lógica normal | Seguridad, autenticación, permisos, datos o migraciones, dinero, concurrencia, hardware físico o producción |
+| Tamaño | 1 archivo y menos de 30 líneas | 2 a 5 archivos o menos de 200 líneas | Más que eso |
+| Ambigüedad | Instrucciones exactas | Hay que decidir detalles | Hay que diseñar o investigar |
+| Contexto | El cambio se entiende solo | Requiere leer pruebas o llamadores | Cruza módulos o servicios |
+| Tipo de trabajo | Coordinar | Revisar o escribir código | Planificar o diseñar arquitectura |
+
+Total de 0 a 10 → nivel:
+
+| Total | Nivel | Claude | Codex |
+| --- | --- | --- | --- |
+| 0–2 | Ligero | `haiku`, `low` | `gpt-6-luna`, `low` |
+| 3–4 | Normal | `sonnet`, `medium` | `gpt-6.1-sol`, `medium` |
+| 5–6 | Exigente | `sonnet`, `high` | `gpt-6.1-sol`, `high` |
+| 7–8 | Crítico | `opus`, `high` | `gpt-6-astra`, `high` |
+| 9–10 | Máximo | `opus`, `xhigh` | `gpt-6-astra`, `xhigh` |
+
+Reglas que corrigen el total:
+
+1. **Riesgo 2 fija un mínimo de Exigente**, aunque el cambio sea pequeño: un
+   error en seguridad, datos o hardware cuesta más que el modelo.
+2. **Sube un nivel** si un intento anterior falló o si el revisor encontró un
+   hallazgo de severidad alta en ese mismo trabajo.
+3. **Coordinar nunca pasa de Normal**: solo se reparte trabajo y se leen
+   informes.
+4. `max` (Claude) solo cuando `xhigh` ya falló en esa tarea. En Codex como
+   revisor, el MCP no acepta más que `xhigh`.
+5. Ante la duda entre dos niveles, elige el menor y dilo; el revisor y la
+   reevaluación lo corregirán si se queda corto.
+
+Si dos reglas chocan, manda el número menor de la lista salvo la 3, que siempre
+limita el trabajo de coordinar.
+
+Ejemplo: corregir la validación de firma de `firma-meta.guard.ts` y sus pruebas
+→ riesgo 2, tamaño 1, ambigüedad 0, contexto 1, escribir código 1 = 5 →
+Exigente → Claude `sonnet`, `high`. Revisar ese cambio → la misma suma → Codex
+`gpt-6.1-sol`, `high`. Coordinar el encargo → riesgo 2, tamaño 0, ambigüedad
+0, contexto 0, coordinar 0 = 2, pero la regla 1 lo subiría a Exigente y la
+regla 3 lo limita a Normal → `sonnet`, `medium`.
 
 ## Formatos
 
@@ -170,12 +203,13 @@ Usa estos formatos tal cual, en Markdown, sin añadir párrafos alrededor.
 ```markdown
 **Configuración recomendada**
 
-| Agente | Modelo | Esfuerzo | Motivo |
-| --- | --- | --- | --- |
-| Codex (principal) | `gpt-6.1-sol` | `medium` | Coordina la revisión de un archivo |
-| Claude (revisor) | `sonnet` | `high` | Cambio pequeño con impacto de seguridad |
+| Agente | Trabajo | Riesgo | Tamaño | Ambigüedad | Contexto | Tipo | Total | Nivel | Modelo | Esfuerzo |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Claude (principal) | Corregir la validación de firma | 2 | 1 | 0 | 1 | 1 | 5 | Exigente | `sonnet` | `high` |
+| Codex (revisor) | Revisar ese cambio | 2 | 1 | 0 | 1 | 1 | 5 | Exigente | `gpt-6.1-sol` | `high` |
 
-Ahora uso: `gpt-6.1-sol`, `high` (o «no lo puedo comprobar»).
+Reglas aplicadas: riesgo 2 → mínimo Exigente.
+Ahora uso: `sonnet`, `low` → **conviene cambiar con `/model`** (o «no lo puedo comprobar»).
 Para cambiarla: Codex → `/model` · Claude → `Esc`, `/model` y otra vez `/revision-cruzada atender`.
 
 ¿La confirmas o prefieres otra?
@@ -189,16 +223,25 @@ escríbelo así.
 ### Encargo listo para enviar
 
 ```markdown
-**Encargo para Claude**
+**Encargo para Codex**
 
 | | |
 | --- | --- |
-| Pide | Revisar el arreglo del webhook y buscar errores, sin editar |
-| Archivos | `avisens-backend/src/modules/whatsapp/whatsapp.controller.ts` |
-| Revisor | `sonnet`, `high`: cambio pequeño con impacto de seguridad |
+| Cambio | Rama `fix/firma-meta-hex`, base `develop`: valida que la firma sea hexadecimal de 64 caracteres y restaura `process.env` en las pruebas |
+| Preguntas | 1. ¿Rechaza toda firma no hexadecimal o de longitud distinta? 2. ¿Las pruebas cubren sufijo inválido, longitud impar y prefijo ausente? 3. ¿Algún caso válido de Meta queda rechazado? |
+| Archivos | `firma-meta.guard.ts`, `firma-meta.guard.spec.ts` (cambiados) |
+| Ya comprobado | `jest` del módulo en verde; diff revisado |
+| Se aprueba si | Ninguna firma mal formada pasa y no se rechaza ninguna válida |
+| Revisor | Exigente (5): `gpt-6.1-sol`, `high` |
 
-¿Lo envío? Después confirmarás también en el diálogo.
+¿Lo envío? Después confirmarás también en el diálogo o en el aviso de permiso.
 ```
+
+Un encargo bien gestionado lleva siempre esas seis filas: qué cambió y dónde,
+como máximo tres preguntas concretas, los archivos (cambiados, sus pruebas y los
+llamadores directos que hagan falta, sin carpetas enteras), lo que ya
+comprobaste, el criterio para aprobarlo y el nivel del revisor con su total.
+«Revisa este archivo» sin preguntas ni criterio no es un encargo válido.
 
 ### Informe recibido
 
@@ -257,8 +300,12 @@ paso es la decisión del usuario sobre commit y PR.
    - Si coincide, menciona que el esfuerzo no lo puedes comprobar y continúa.
 4. Llama `claim_peer_review` con el `taskId` y el `reviewId` recibidos **antes**
    de leer archivos. Guarda el `claimToken` solo para la entrega.
-5. Lee únicamente los archivos enumerados en el encargo. No edites, no ejecutes
-   pruebas ni más comandos que `agent-toolkit-inbox`, no hagas commits. Muestra tus acciones en la terminal.
+5. Lee únicamente los archivos enumerados en el encargo, directamente del
+   repositorio con tus herramientas normales de lectura (en Codex, comandos de
+   solo lectura como `sed -n` o `cat`). No uses los MCP de memoria
+   (`avisens-memory`, `agent-toolkit-memory`) para leer código: solo dan acceso a
+   la bóveda de notas. No edites, no ejecutes pruebas ni comandos que escriban,
+   no hagas commits. Muestra tus acciones en la terminal.
 6. Entrega con `submit_peer_review`: hallazgos con severidad, ruta y línea,
    evidencia y límites. No afirmes comprobaciones que no hiciste. Termina el
    informe con tu segunda opinión sobre la configuración: si la tuya fue
