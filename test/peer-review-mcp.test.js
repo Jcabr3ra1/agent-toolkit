@@ -100,7 +100,11 @@ test("the preview cache is bounded and approval displays the complete exact prom
   assert.equal(dispatched.sent, true);
   assert.ok(shown.includes(latest.prompt));
   assert.ok(shown.includes(latest.snapshot.sha256));
-  assert.equal(dispatched.review.prompt, latest.prompt);
+  // The approval result stays compact; the exact prompt was shown for approval and is stored with the review.
+  assert.equal("prompt" in dispatched.review, false);
+  assert.equal(dispatched.review.snapshotSha256, latest.snapshot.sha256);
+  assert.deepEqual(dispatched.review.files, latest.snapshot.files.map(file => file.path));
+  assert.equal((await f.store.getCollaboration(f.bound)).reviews.at(-1).prompt, latest.prompt);
   assert.equal(dispatched.review.approval.previewId, latest.previewId);
 });
 
@@ -166,8 +170,10 @@ test("two stdio MCP processes exchange visible-session handoffs both ways withou
   assert.equal(dispatched.startsModel, false);
   const received = await waiting;
   assert.equal(received.review.id, dispatched.review.id);
-  assert.equal(received.review.prompt, preview.prompt);
+  assert.equal("prompt" in received.review, false);
   const claim = await codex.call("claim_peer_review", { ...bound, reviewId: received.review.id, agent: "codex" });
+  assert.equal(claim.review.prompt, preview.prompt);
+  assert.equal("snapshot" in claim.review, false);
   const secondClaim = await claude.client.callTool({ name: "claim_peer_review", arguments: { ...bound, reviewId: received.review.id, agent: "codex" } });
   assert.equal(secondClaim.isError, true);
   const report = "Hallazgo P2 en app.js:1. Propuesta de mejora. No ejecuté pruebas.";
@@ -259,4 +265,45 @@ test("a real stdio client without elicitation can send after its own permission 
   const preview = await call("preview_peer_review", { taskId: task.id, projectRoot: f.projectRoot, from: "claude", to: "codex", message: "Revisa answer.", paths: ["app.js"] });
   const sent = await call("approve_peer_review", { previewId: preview.previewId, confirmationCode: preview.confirmationCode });
   assert.deepEqual({ sent: sent.sent, approvedBy: sent.approvedBy }, { sent: true, approvedBy: "permiso-cliente" });
+});
+
+test("tool results stay compact: no prompts, hashes or history, and completo returns the whole record", async () => {
+  const f = await harness();
+  const preview = await f.preview();
+  const sent = decode(await f.call("approve_peer_review", { previewId: preview.previewId, confirmationCode: preview.confirmationCode }, f.approveContext));
+  const claim = decode(await f.call("claim_peer_review", { ...f.bound, reviewId: sent.review.id, agent: "codex" }));
+  const report = "Informe largo ".repeat(200);
+  const submitted = decode(await f.call("submit_peer_review", { ...f.bound, reviewId: sent.review.id, agent: "codex", claimToken: claim.claimToken, content: report }));
+  assert.equal(submitted.saved, true);
+  assert.equal(JSON.stringify(submitted).includes("Informe largo"), false);
+  // A wait that times out while the review is still claimed must not return the prompt either.
+  const pending = decode(await f.call("wait_for_peer_handoff", { ...f.bound, agent: "claude", reviewId: sent.review.id, waitMs: 0 }));
+  assert.equal(pending.review.state, "completed");
+  const second = await f.preview();
+  const secondSent = decode(await f.call("approve_peer_review", { previewId: second.previewId, confirmationCode: second.confirmationCode }, f.approveContext));
+  await f.call("claim_peer_review", { ...f.bound, reviewId: secondSent.review.id, agent: "codex" });
+  const timedOut = decode(await f.call("wait_for_peer_handoff", { ...f.bound, agent: "claude", reviewId: secondSent.review.id, waitMs: 0 }));
+  assert.equal(timedOut.timedOut, true);
+  assert.deepEqual([timedOut.review.state, "prompt" in timedOut.review, "snapshot" in timedOut.review], ["claimed", false, false]);
+  await f.store.cancelReview({ ...f.bound, reviewId: secondSent.review.id });
+  const published = decode(await f.call("publish_peer_context", { ...f.bound, author: "claude", expectedRevision: 1, content: "Contexto nuevo." }));
+  assert.deepEqual([published.id, published.revision, published.state, published.reviewCount], [f.task.id, 2, "open", 2]);
+  for (const key of ["history", "reviews", "context"]) assert.equal(key in published, false);
+  const compact = decode(await f.call("get_collaboration", f.bound));
+  assert.equal(compact.context.content, "Contexto nuevo.");
+  assert.equal("history" in compact, false);
+  assert.equal(compact.reviews[0].review.content, report);
+  // Once the principal records the outcome the list keeps only the report's fingerprint.
+  await f.store.recordOutcome({ ...f.bound, reviewId: sent.review.id, agent: "claude", verdict: "aprobado", findings: 0, upheld: 0 });
+  const verified = decode(await f.call("get_collaboration", f.bound)).reviews[0];
+  assert.deepEqual(Object.keys(verified.review).sort(), ["authorDeclared", "savedAt", "sha256"]);
+  assert.equal(verified.outcome.verdict, "aprobado");
+  assert.equal("prompt" in compact.reviews[0] || "snapshot" in compact.reviews[0], false);
+  const full = decode(await f.call("get_collaboration", { ...f.bound, completo: true }));
+  assert.equal(full.history.length, 2);
+  assert.equal(typeof full.reviews[0].prompt, "string");
+  assert.equal(full.reviews[0].review.content, report);
+  assert.ok(JSON.stringify(compact).length < JSON.stringify(full).length);
+  assert.equal(decode(await f.call("close_collaboration", f.bound)).state, "closed");
+  assert.equal(JSON.stringify(decode(await f.call("start_collaboration", { ...input, projectRoot: f.projectRoot }))).includes("history"), false);
 });
