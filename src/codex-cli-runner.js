@@ -9,7 +9,7 @@ const PLAN_SCHEMA = fileURLToPath(new URL("../schemas/task-workflow-plan-output.
 const MAX_PROMPT_BYTES = 48_000;
 const MAX_OUTPUT_BYTES = 32_000;
 const RUN_TIMEOUT_MS = 180_000;
-const CODEX_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
+const CODEX_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max", "ultra"]);
 const CLAUDE_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max"]);
 const CONTROL_PATTERN = /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u;
 

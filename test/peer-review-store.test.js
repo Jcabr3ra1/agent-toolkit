@@ -277,10 +277,11 @@ test("listed collaborations show who may send automatic requests", async () => {
 test("reviewer recommendations are validated per agent and travel inside the approved prompt", async () => {
   const f = await fixture();
   const reviewer = { model: "gpt-5-codex", effort: "high", reason: "Cambio de concurrencia con riesgo de carreras." };
-  for (const bad of [{ ...reviewer, effort: "max" }, { ...reviewer, model: "modelo con espacios" }, { ...reviewer, reason: "" }, { model: "x", effort: "low" }]) {
+  for (const bad of [{ ...reviewer, effort: "minimal" }, { ...reviewer, model: "modelo con espacios" }, { ...reviewer, reason: "" }, { model: "x", effort: "low" }]) {
     await assert.rejects(f.prepare({ reviewer: bad }), { code: "peer-input" });
   }
-  await assert.rejects(f.prepare({ from: "codex", to: "claude", reviewer: { ...reviewer, model: "opus", effort: "minimal" } }), { code: "peer-input" });
+  await assert.rejects(f.prepare({ from: "codex", to: "claude", reviewer: { ...reviewer, model: "opus", effort: "ultra" } }), { code: "peer-input" });
+  assert.equal((await f.prepare({ reviewer: { ...reviewer, effort: "ultra" } })).reviewer.effort, "ultra");
   const plain = await f.prepare();
   assert.equal(plain.reviewer, null);
   assert.doesNotMatch(plain.prompt, /Configuración recomendada/u);

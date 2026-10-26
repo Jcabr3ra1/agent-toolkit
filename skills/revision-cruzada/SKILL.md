@@ -169,8 +169,8 @@ genérica.
   `xhigh` o `max`.
 - **Codex:** los modelos que muestra su `/model`; en este equipo, `gpt-6-luna`
   (ligero), `gpt-6.1-sol` (trabajo diario) y `gpt-6-astra` (lo más exigente).
-  Esfuerzo `low`, `medium`, `high` o `xhigh`: el MCP no acepta todavía `max` ni
-  `ultra` para un revisor Codex.
+  Esfuerzo `low`, `medium`, `high`, `xhigh`, `max` o `ultra` (`ultra` solo en
+  los modelos que lo muestran en `/model`).
 - Si no conoces los modelos de la otra terminal, dilo y pide al usuario que los
   mire en su `/model`; no inventes nombres.
 
@@ -205,8 +205,8 @@ Reglas que corrigen el total:
    hallazgo de severidad alta en ese mismo trabajo.
 3. **Coordinar nunca pasa de Normal**: solo se reparte trabajo y se leen
    informes.
-4. `max` (Claude) solo cuando `xhigh` ya falló en esa tarea. En Codex como
-   revisor, el MCP no acepta más que `xhigh`.
+4. `max` (Claude y Codex) solo cuando `xhigh` ya falló en esa tarea, y `ultra`
+   (Codex) solo cuando `max` también falló.
 5. Ante la duda entre dos niveles, elige el menor y dilo; el revisor y la
    reevaluación lo corregirán si se queda corto.
 

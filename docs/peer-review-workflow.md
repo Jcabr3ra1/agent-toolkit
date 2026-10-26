@@ -115,7 +115,7 @@ encargos cancelados o desactualizados también consumen cupo.
 `preview_peer_review` y `request_peer_review` aceptan `reviewer` con `model`,
 `effort` y `reason`: la configuración que el principal recomienda para el
 revisor y por qué. Los esfuerzos admitidos dependen del revisor: `low` a `max`
-para Claude y `minimal` a `xhigh` para Codex. La recomendación forma parte del
+para Claude y `low` a `ultra` para Codex. La recomendación forma parte del
 prompt aprobado y de su huella, se muestra en el diálogo de confirmación y se
 guarda con el encargo.
 
