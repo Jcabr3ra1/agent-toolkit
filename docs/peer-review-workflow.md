@@ -155,6 +155,17 @@ resume esos resultados por revisor, modelo, esfuerzo y nivel: encargos,
 hallazgos, porcentaje que se sostuvo y veredictos. Sirve para ajustar la
 clasificación con datos propios. No usa ningún modelo.
 
+```sh
+node bin/agent-toolkit-inbox.js modelos [--json]
+```
+
+lista los alias de Claude y los modelos que Codex tiene disponibles
+(`~/.codex/models_cache.json`, o `CODEX_HOME`), los clasifica por su descripción
+(ligero, trabajo diario, más capaz, anterior) y genera la tabla de niveles con
+los nombres vigentes, además de la configuración actual de Codex. La skill lo
+consulta antes de recomendar, así que no queda desactualizada cuando cambian
+los modelos.
+
 `programar` y `revisar` son accesos directos a `revision-cruzada`, que sigue
 disponible con `iniciar` y `atender` y contiene todas las reglas. Instala las
 tres carpetas de skills.
