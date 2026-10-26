@@ -14,7 +14,8 @@ const ACTIVE = new Set(["pending", "claimed"]);
 const EFFORTS = { claude: ["low", "medium", "high", "xhigh", "max"], codex: ["low", "medium", "high", "xhigh", "max", "ultra"] };
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/u;
 const VERDICTS = new Set(["aprobado", "aprobado_con_cambios", "requiere_cambios"]);
-const LEVELS = new Set(["ligero", "normal", "exigente", "critico", "maximo"]);
+// critico and maximo are kept so outcomes recorded before they became "alto" still read.
+const LEVELS = new Set(["ligero", "normal", "exigente", "alto", "critico", "maximo"]);
 const MESSAGES = {
   input: "Los datos de colaboración no son válidos o superan los límites.",
   project: "La raíz del proyecto no es válida, cambió o no coincide con la tarea.",

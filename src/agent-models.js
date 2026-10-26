@@ -13,8 +13,7 @@ const LEVELS = [
   { level: "Ligero", total: "0–2", category: "ligero", effort: "low" },
   { level: "Normal", total: "3–4", category: "trabajo diario", effort: "medium" },
   { level: "Exigente", total: "5–6", category: "trabajo diario", effort: "high" },
-  { level: "Crítico", total: "7–8", category: "más capaz", effort: "high" },
-  { level: "Máximo", total: "9–10", category: "más capaz", effort: "xhigh" }
+  { level: "Alto", total: "7–10", category: "más capaz", effort: "high" }
 ];
 
 function category(description = "") {

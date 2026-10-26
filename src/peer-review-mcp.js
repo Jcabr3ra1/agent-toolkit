@@ -186,7 +186,7 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
   tool("record_review_outcome", "Después de verificar un informe, registra una sola vez el resultado del encargo: veredicto, hallazgos recibidos, cuántos se sostuvieron, nivel de la clasificación y configuración del principal. Solo lo registra el agente que envió el encargo. Sirve para medir qué modelo y esfuerzo rinden en cada nivel; no modifica el informe ni inicia modelos.", {
     ...REVIEW, agent: AGENT, verdict: z.enum(["aprobado", "aprobado_con_cambios", "requiere_cambios"]),
     findings: z.number().int().min(0).max(100), upheld: z.number().int().min(0).max(100),
-    level: z.enum(["ligero", "normal", "exigente", "critico", "maximo"]).optional(),
+    level: z.enum(["ligero", "normal", "exigente", "alto", "critico", "maximo"]).optional(),
     principal: REVIEWER.omit({ reason: true }).optional()
   }, args => store.recordOutcome(args));
 

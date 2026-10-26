@@ -5,8 +5,8 @@ import path from "node:path";
 import { agentModels } from "./agent-models.js";
 
 // Codex has no plugins, so its level agents are files. Claude's come from the `niveles` plugin.
-// Crítico is the "alto" level; Máximo is asked per spawn, only after Crítico failed.
-const LEVELS = [["Ligero", "ligero"], ["Normal", "normal"], ["Exigente", "exigente"], ["Crítico", "alto"]];
+// The top level is "alto"; xhigh is asked per spawn, only after high failed.
+const LEVELS = [["Ligero", "ligero"], ["Normal", "normal"], ["Exigente", "exigente"], ["Alto", "alto"]];
 const MODEL = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/u;
 
 export class LevelAgentsError extends Error {
