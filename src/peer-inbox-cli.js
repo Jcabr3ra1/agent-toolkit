@@ -1,4 +1,5 @@
 import { agentModels, agentModelsTable } from "./agent-models.js";
+import { LevelAgentsError, levelAgentPlan, levelAgentsTable, writeLevelAgents } from "./level-agents.js";
 import { createPeerReviewStore, PeerReviewError } from "./peer-review-store.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -7,6 +8,7 @@ const HELP = `Uso: agent-toolkit-inbox wait --agent <claude|codex> --project-roo
        [--task <taskId> --review <reviewId>] [--timeout-seconds <1-86400>]
      agent-toolkit-inbox rendimiento [--project-root <ruta>] [--json]
      agent-toolkit-inbox modelos [--json]
+     agent-toolkit-inbox agentes [--escribir [--forzar]] [--json]
 
 Espera sin usar ningún modelo hasta que llegue un encargo para el agente o,
 con --task y --review, hasta que ese encargo tenga informe o termine.
@@ -18,6 +20,12 @@ revisor, modelo, esfuerzo y nivel, de todos los proyectos o de uno.
 
 modelos lista los modelos de Claude y los que Codex tiene disponibles, y la
 tabla de niveles con los nombres vigentes.
+
+agentes prepara los agentes por nivel de Codex (nivel_ligero, nivel_normal,
+nivel_exigente y nivel_alto) en ~/.codex/agents con el modelo y el esfuerzo de
+esa tabla. Sin --escribir solo muestra la vista previa. Nunca sobrescribe ni
+borra: un archivo distinto se respeta, y con --forzar queda como .anterior-*.
+Los agentes de Claude vienen del plugin niveles.
 `;
 
 function parse(argv) {
@@ -76,6 +84,21 @@ export async function runPeerInboxCli(argv, { out, err, store = createPeerReview
     const result = await agentModels({ ...(codexHome && { codexHome }), ...(claudeHome && { claudeHome }) });
     await out(argv[1] === "--json" ? JSON.stringify(result) + "\n" : agentModelsTable(result));
     return EXIT.found;
+  }
+  if (argv[0] === "agentes") {
+    const flags = argv.slice(1);
+    if (flags.some(flag => !["--escribir", "--forzar", "--json"].includes(flag)) || new Set(flags).size !== flags.length ||
+        (flags.includes("--forzar") && !flags.includes("--escribir"))) { await err(HELP); return EXIT.usage; }
+    try {
+      let plan = await levelAgentPlan(codexHome ? { codexHome } : {});
+      if (flags.includes("--escribir")) plan = await writeLevelAgents(plan, { force: flags.includes("--forzar") });
+      await out(flags.includes("--json") ? JSON.stringify({ catalog: plan.catalog,
+        files: plan.files.map(({ content, ...file }) => file) }) + "\n" : levelAgentsTable(plan));
+      return EXIT.found;
+    } catch (failure) {
+      await err((failure instanceof LevelAgentsError ? failure.message : "No se pudieron preparar o escribir los agentes por nivel.") + "\n");
+      return EXIT.failure;
+    }
   }
   if (argv[0] === "rendimiento") {
     const options = parseRendimiento(argv.slice(1));
