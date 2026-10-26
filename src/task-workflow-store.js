@@ -6,7 +6,7 @@ import path from "node:path";
 const TASK_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const MAX_TASK_FILE_BYTES = 160_000;
 const MAX_OUTPUT_LENGTH = 32_000;
-const CODEX_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
+const CODEX_EFFORTS = new Set(["low", "medium", "high", "xhigh", "max", "ultra"]);
 const ALLOWED_STAGES = new Set([
   "codex-plan",
   "claude-proposal",

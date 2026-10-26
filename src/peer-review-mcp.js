@@ -17,7 +17,7 @@ function sinDialogo(failure) {
 }
 const REVIEWER = z.object({
   model: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/u),
-  effort: z.enum(["minimal", "low", "medium", "high", "xhigh", "max"]),
+  effort: z.enum(["low", "medium", "high", "xhigh", "max", "ultra"]),
   reason: z.string().min(1).max(500)
 }).strict();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
