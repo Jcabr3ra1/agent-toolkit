@@ -21,10 +21,28 @@ const REVIEWER = z.object({
   reason: z.string().min(1).max(500)
 }).strict();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const result = value => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
+// Compact JSON: indentation is pure token cost for the model reading the result.
+const result = value => ({ content: [{ type: "text", text: JSON.stringify(value) }] });
 const error = message => ({ isError: true, content: [{ type: "text", text: message }] });
 
 export const PEER_REVIEW_INSTRUCTIONS = "Para colaborar entre sesiones ya abiertas de Claude y Codex, usa start_collaboration y comparte el taskId y la raíz exacta del proyecto. publish_peer_context sustituye el contexto compartido con control de versión. preview_peer_review no envía nada; muestra su contenido completo y solicita aprobación directa antes de approve_peer_review. Incluye en reviewer el modelo y el esfuerzo que recomiendas para el revisor con un motivo breve, para que el usuario pueda cambiarlos en la otra terminal antes de aprobar; el MCP no cambia modelos. La aprobación envía un encargo a la bandeja compartida, no inicia una CLI ni un modelo. El receptor debe estar atendiendo wait_for_peer_handoff desde su propia sesión; no se despiertan ventanas inactivas. Antes de leer debe usar claim_peer_review, revisar solo los archivos aprobados en modo de lectura, sin pruebas ni ediciones, mostrar el trabajo en su terminal y devolver el informe con submit_peer_review. El principal consulta get_collaboration para recuperar los hallazgos y su vigencia. Si el cliente no ofrece diálogo de confirmación MCP (por ejemplo Claude Code), la aprobación de approve_peer_review es el aviso de permiso del propio cliente: llámalo solo después de que el usuario apruebe el encargo en el chat. Solo si el usuario pide expresamente trabajar sin aprobar cada encargo, crea la colaboración con autoReviews; el usuario lo confirma una sola vez y después el agente principal usa request_peer_review, hasta ese cupo, sin vista previa. El revisor nunca envía encargos automáticos. Sin taskId, wait_for_peer_handoff atiende todas las colaboraciones abiertas de esa raíz. No repitas wait_for_peer_handoff en bucle para esperas largas: cada llamada es un turno del modelo; usa el comando agent-toolkit-inbox wait, que espera sin usar ningún modelo. No te asignes un modelo o una identidad verificada: los roles y autores son declarados, y los permisos de la sesión nativa siguen siendo los suyos. No inicies bucles de espera sin que el usuario pida atender la bandeja. Nunca apruebes encargos por tu cuenta ni envíes un encargo como respuesta a otro de forma automática.";
+
+// Tool results carry what the caller needs next, not the whole record: a collaboration grows to tens of KB
+// (every prompt, hash and report so far) and each call would otherwise put all of it back in the model's context.
+// `completo` on get_collaboration still returns the full record.
+function reviewView(review, { prompt = false, report = true } = {}) {
+  if (!review) return review;
+  const { prompt: text, snapshot, review: saved, ...rest } = review;
+  return { ...rest, ...(prompt && { prompt: text }), ...(snapshot && { files: snapshot.files.map(file => file.path), snapshotSha256: snapshot.sha256 }),
+    // A report whose outcome is already recorded was verified: the list keeps its fingerprint, `completo` has the text.
+    ...(saved && { review: report ? saved : { sha256: saved.sha256, savedAt: saved.savedAt, authorDeclared: saved.authorDeclared } }) };
+}
+
+function taskView(task, { reviews = false } = {}) {
+  const { history, reviews: list, project, context, ...rest } = task;
+  return { ...rest, project: project.name, projectRoot: project.root, ...(reviews && { context, reviews: list.map(review => reviewView(review, { report: !review.outcome })) }),
+    reviewCount: list.length };
+}
 
 export function registerPeerReviewTools(server, store = createPeerReviewStore(), { now = Date.now } = {}) {
   const previews = new Map();
@@ -46,7 +64,7 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     context: z.string().max(PEER_LIMITS.contextBytes).optional(),
     autoReviews: z.number().int().min(0).max(PEER_LIMITS.autoReviews).optional()
   }, async (args, context) => {
-    if (!args.autoReviews) return store.startCollaboration(args);
+    if (!args.autoReviews) return taskView(await store.startCollaboration(args));
     if (typeof context?.mcpReq?.elicitInput !== "function") {
       return { state: "blocked", created: false, message: "Este cliente MCP no ofrece confirmación interactiva. La colaboración automática no fue creada." };
     }
@@ -68,16 +86,17 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     if (response.action !== "accept" || response.content?.decision !== "approve") {
       return { state: "cancelled", created: false, message: "No se creó la colaboración automática." };
     }
-    return store.startCollaboration(args);
+    return taskView(await store.startCollaboration(args));
   });
 
-  tool("get_collaboration", "Lee contexto, encargos e informes de una colaboración y su vigencia para los archivos actuales. Sin taskId lista las tareas abiertas en esa raíz; elige explícitamente si hay varias. No modifica el proyecto.", {
-    projectRoot: ROOT, taskId: z.string().uuid().optional()
-  }, args => args.taskId ? store.getCollaboration(args) : store.listCollaborations(args), true);
+  tool("get_collaboration", "Lee contexto, encargos e informes de una colaboración y su vigencia para los archivos actuales. Sin taskId lista las tareas abiertas en esa raíz; elige explícitamente si hay varias. Devuelve una vista compacta (sin prompts, huellas ni historial); completo=true devuelve el registro entero. No modifica el proyecto.", {
+    projectRoot: ROOT, taskId: z.string().uuid().optional(), completo: z.boolean().optional()
+  }, async ({ completo, ...args }) => args.taskId ? (completo ? store.getCollaboration(args) : taskView(await store.getCollaboration(args), { reviews: true }))
+    : store.listCollaborations(args), true);
 
   tool("publish_peer_context", "Publica un contexto completo nuevo con autor declarado y expectedRevision; conserva historial limitado e invalida encargos pendientes anteriores. No envía una revisión ni ejecuta modelos.", {
     ...BOUND, author: AGENT, content: z.string().min(1).max(PEER_LIMITS.contextBytes), expectedRevision: z.number().int().min(1)
-  }, args => store.publishContext(args));
+  }, async args => taskView(await store.publishContext(args)));
 
   tool("preview_peer_review", "Prepara un encargo de revisión de Claude a Codex o viceversa para una sesión ya abierta. Muestra el prompt íntegro, archivos y huellas. No envía ni ejecuta nada. Muestra la vista previa completa al usuario y espera aprobación explícita antes de approve_peer_review. reviewer recomienda modelo y esfuerzo para el revisor; es una recomendación declarada, no cambia la sesión receptora.", {
     ...BOUND, from: AGENT, to: AGENT, message: z.string().min(1).max(4_000),
@@ -126,13 +145,13 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     }
     if (pending.expires <= now()) throw new PeerReviewError("revision");
     const review = await store.dispatchReview(preview, { previewId: preview.previewId, method });
-    return { state: "pending", sent: true, review, approvedBy: method, startsModel: false };
+    return { state: "pending", sent: true, review: reviewView(review), approvedBy: method, startsModel: false };
   });
 
   tool("request_peer_review", "Envía directamente un encargo de revisión de solo lectura en una colaboración creada con autoReviews, sin vista previa ni aprobación por encargo. Solo lo admite el agente principal y hasta el cupo confirmado; en otro caso usa preview_peer_review. No inicia modelos ni CLIs.", {
     ...BOUND, from: AGENT, to: AGENT, message: z.string().min(1).max(4_000),
     paths: z.array(z.string().min(1).max(512)).min(1).max(PEER_LIMITS.paths), reviewer: REVIEWER.optional()
-  }, async args => ({ state: "pending", sent: true, automatic: true, review: await store.requestReview(args), startsModel: false }));
+  }, async args => ({ state: "pending", sent: true, automatic: true, review: reviewView(await store.requestReview(args)), startsModel: false }));
 
   tool("wait_for_peer_handoff", "Espera hasta 60 segundos un encargo aprobado para agent. Sin taskId revisa todas las colaboraciones abiertas de esa raíz y devuelve el taskId del encargo. Con taskId y reviewId espera su informe o estado terminal. Lee el almacenamiento común, por lo que funciona entre procesos MCP distintos. Solo espera cuando el usuario pida atender la bandeja; no arranca modelos ni despierta sesiones inactivas. No leas archivos antes de claim_peer_review.", {
     projectRoot: ROOT, taskId: z.string().uuid().optional(), agent: AGENT, reviewId: z.string().uuid().optional(),
@@ -141,8 +160,8 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     const deadline = Date.now() + args.waitMs;
     while (true) {
       const { done, value } = await store.findHandoff(args);
-      if (done) return value;
-      if (Date.now() >= deadline) return { ...value, timedOut: true,
+      if (done) return { ...value, review: reviewView(value.review) };
+      if (Date.now() >= deadline) return { ...value, review: reviewView(value.review), timedOut: true,
         message: "Sin un encargo nuevo o informe terminado. Esta espera no inicia otra llamada al modelo." };
       await sleep(Math.min(200, Math.max(1, deadline - Date.now())));
     }
@@ -150,11 +169,19 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
 
   tool("claim_peer_review", "Reclama una sola vez un encargo aprobado dirigido a agent. Verifica la raíz y las huellas antes de devolver el prompt y un claimToken exclusivo para submit_peer_review. Guarda el comprobante en el contexto de esta sesión; no lo publiques en el informe. No ejecuta modelos.", {
     ...REVIEW, agent: AGENT
-  }, args => store.claimReview(args));
+  }, async args => {
+    const claimed = await store.claimReview(args);
+    // The reviewer needs the prompt once, here; later calls never repeat it.
+    return claimed.review ? { ...claimed, review: reviewView(claimed.review, { prompt: true }) } : claimed;
+  });
 
   tool("submit_peer_review", "Guarda el informe de la sesión que reclamó el encargo. Requiere el claimToken y rechaza entregas duplicadas, canceladas o fuera del proyecto. Si cambiaron los archivos o el contexto, la revisión queda desactualizada y el informe no se guarda. No afirma identidad, modelo, permisos ni pruebas verificados.", {
     ...REVIEW, agent: AGENT, claimToken: z.string().regex(/^[a-f0-9]{64}$/u), content: z.string().min(1).max(PEER_LIMITS.reportBytes)
-  }, args => store.submitReview(args));
+  }, async args => {
+    const saved = await store.submitReview(args);
+    // The submitter wrote the report; echoing it back only costs tokens.
+    return saved.review ? { ...saved, review: { sha256: saved.review.sha256, savedAt: saved.review.savedAt } } : saved;
+  });
 
   tool("record_review_outcome", "Después de verificar un informe, registra una sola vez el resultado del encargo: veredicto, hallazgos recibidos, cuántos se sostuvieron, nivel de la clasificación y configuración del principal. Solo lo registra el agente que envió el encargo. Sirve para medir qué modelo y esfuerzo rinden en cada nivel; no modifica el informe ni inicia modelos.", {
     ...REVIEW, agent: AGENT, verdict: z.enum(["aprobado", "aprobado_con_cambios", "requiere_cambios"]),
@@ -165,5 +192,5 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
 
   tool("cancel_peer_review", "Cancela un encargo pendiente o reclamado. Impide guardar una entrega posterior, pero no interrumpe la sesión nativa del receptor; detén esa sesión manualmente si continúa trabajando. No reintenta ni reasigna el encargo.", REVIEW, args => store.cancelReview(args));
 
-  tool("close_collaboration", "Cierra una colaboración y cancela sus encargos activos. Conserva los informes para consulta. No interrumpe las sesiones de terminal ni modifica el proyecto.", BOUND, args => store.closeCollaboration(args));
+  tool("close_collaboration", "Cierra una colaboración y cancela sus encargos activos. Conserva los informes para consulta. No interrumpe las sesiones de terminal ni modifica el proyecto.", BOUND, async args => taskView(await store.closeCollaboration(args)));
 }

@@ -86,6 +86,18 @@ En la otra terminal pide:
 la tarea desde la otra sesión sin copiar su contenido. No se elige una tarea
 automáticamente cuando hay varias.
 
+Las respuestas de las herramientas son compactas para no llenar el contexto del
+modelo: una colaboración llega a decenas de KB (cada prompt, huella e informe) y
+repetirla en cada llamada cuesta tokens. `start_collaboration`,
+`publish_peer_context` y `close_collaboration` devuelven un resumen (`id`,
+`revision`, `state`, `reviewCount`). `approve_peer_review`, `request_peer_review`
+y `wait_for_peer_handoff` devuelven el encargo sin el prompt ni las huellas
+(`files` y `snapshotSha256`), y `submit_peer_review` no repite el informe.
+`claim_peer_review` entrega el prompt una sola vez, al revisor. `get_collaboration`
+omite el historial y los prompts, y deja de incluir el texto de los informes ya
+verificados (con resultado registrado); `completo: true` devuelve el registro
+entero.
+
 Las esperas duran 15 segundos por defecto y hasta 60 con `waitMs`. Sin `taskId`,
 `wait_for_peer_handoff` atiende todas las colaboraciones abiertas de esa raíz y
 devuelve el `taskId` del encargo recibido. Cada espera solo lee la bandeja. El agente
