@@ -48,9 +48,11 @@ absoluta sin `~` para que coincida con los permisos del cliente; en este equipo,
 0. Si el usuario no describió la tarea, pídesela y espera. Con la tarea delante y
    antes de trabajar, recomienda con la [guía](#guía-de-recomendación) la
    configuración para **ti mismo** y la que prevés para el revisor, usando el
-   formato [Configuración recomendada](#configuración-recomendada). Espera a que
-   el usuario confirme o cambie la configuración; no empieces la tarea antes. Es
-   una autoevaluación: si dudas entre dos opciones, dilo en lugar de elegir la
+   formato [Configuración recomendada](#configuración-recomendada). Si ambos
+   niveles son Ligero o Normal, anúncialo en **una línea** y empieza sin esperar
+   (el usuario puede interrumpir). Desde Exigente, espera a que el usuario
+   confirme o cambie la configuración; no empieces la tarea antes. Es una
+   autoevaluación: si dudas entre dos opciones, dilo en lugar de elegir la
    mayor.
 1. Busca colaboraciones abiertas con `get_collaboration` sin `taskId`. Reutiliza
    solo una cuyo `primaryAgent` sea tu `agent`; si hay varias, pregunta cuál. Las
@@ -116,10 +118,30 @@ edita si te lo pide de forma inequívoca («escríbelo tú»).
 6. Pide la revisión con `paths` = los archivos que cambiaste más los que el
    revisor necesite para entenderlos (pruebas, llamadores directos), y un
    `message` concreto: «Revisa mi cambio en `<rama>` respecto de `<base>`: …».
-7. Con el informe, corrige lo que se sostenga, vuelve al paso 4 y pide una
-   revisión nueva mientras queden hallazgos de severidad alta o media.
+7. Con el informe, corrige lo que se sostenga y vuelve al paso 4. Pide una
+   revisión nueva solo si quedan hallazgos de severidad alta o media, con las
+   [reglas de rondas](#rondas-de-revisión): como máximo 2 por cambio, y la
+   segunda un nivel por debajo de la primera.
 8. No hagas commit, push ni PR sin que el usuario lo pida. Cuando el usuario
    cree o fusione el PR, [cierra con la memoria](#cerrar-con-la-memoria).
+
+### Rondas de revisión
+
+La revisión cuesta tokens en ambos lados y cada ronda encuentra algo, así que se
+acota:
+
+- **Máximo 2 rondas por cambio.** La primera usa la configuración de la
+  clasificación; la segunda, que solo comprueba que lo corregido se sostiene,
+  un nivel por debajo, sin bajar del mínimo de la regla 1 (riesgo 2 → Exigente).
+- **Tras la segunda,** lo que quede de severidad media o baja se anota como
+  pendiente en el informe y decide el usuario. No pidas una tercera ronda salvo
+  que quede un hallazgo alto sostenido; antes de pedirla, pregunta al usuario si
+  conviene simplificar el diseño en lugar de seguir parcheando.
+- **No amplíes el alcance entre rondas:** corrige lo reportado y lo que esa
+  corrección toque. Lo demás es otra tarea.
+- **Un revisor de Normal** basta para cambios de documentación, texto o lógica
+  sin datos ni seguridad. Reserva Crítico y Máximo para riesgo 2 con ambigüedad
+  o contexto altos.
 
 ### Cerrar con la memoria
 
@@ -143,7 +165,9 @@ colaboración:
 
 Vale igual si el principal es Claude o Codex. Antes de cambiar de tipo de
 trabajo, vuelve a mostrar [Configuración recomendada](#configuración-recomendada)
-solo con tu fila y espera la confirmación del usuario. Tipos de trabajo:
+solo con tu fila; espera la confirmación del usuario únicamente si el nivel
+nuevo es Exigente o superior (con Ligero o Normal, anúncialo en una línea y
+sigue). Tipos de trabajo:
 coordinar o revisar, planificar, y escribir código. Por ejemplo, pasar de
 coordinar una revisión a corregir lo que encontró el revisor exige reevaluar.
 
@@ -204,14 +228,19 @@ Reglas que corrigen el total:
 
 1. **Riesgo 2 fija un mínimo de Exigente**, aunque el cambio sea pequeño: un
    error en seguridad, datos o hardware cuesta más que el modelo.
-2. **Sube un nivel** si un intento anterior falló o si el revisor encontró un
-   hallazgo de severidad alta en ese mismo trabajo.
+2. **Sube un nivel solo si el intento de corrección falló**: las pruebas siguen
+   en rojo, o la revisión nueva encuentra sin resolver el mismo hallazgo de
+   severidad alta. Un primer hallazgo alto no sube de nivel: se corrige con la
+   misma configuración, porque encontrarlo es justo para lo que sirve la
+   revisión.
 3. **Coordinar nunca pasa de Normal**: solo se reparte trabajo y se leen
    informes.
 4. `max` (Claude y Codex) solo cuando `xhigh` ya falló en esa tarea, y `ultra`
    (Codex) solo cuando `max` también falló.
 5. Ante la duda entre dos niveles, elige el menor y dilo; el revisor y la
    reevaluación lo corregirán si se queda corto.
+6. **Crítico y Máximo se justifican con una línea**: qué criterio puntúa 2 y por
+   qué no basta el nivel inferior. Si no puedes decirlo, baja un nivel.
 
 Si dos reglas chocan, manda el número menor de la lista salvo la 3, que siempre
 limita el trabajo de coordinar.
@@ -243,6 +272,10 @@ Para cambiarla: Codex → `/model` · Claude → `Esc`, `/model` y otra vez `/re
 
 ¿La confirmas o prefieres otra?
 ```
+
+Con Ligero o Normal en ambos lados, usa solo una línea y sigue: «Claude
+(principal): Normal (4), `sonnet`, `medium` · Codex (revisor): Normal (3),
+`gpt-6.1-sol`, `medium`. Empiezo; interrúmpeme si prefieres otra.»
 
 Adapta los nombres de agente a quién es principal. Para saber tu configuración
 actual: el comando `modelos` muestra el modelo y el esfuerzo que Codex tiene
@@ -283,6 +316,13 @@ comprobaste, el criterio para aprobarlo y el nivel del revisor con su total.
 
 Límites del revisor: <lo que no comprobó>.
 
+**Configuración según el revisor:** adecuada (`gpt-6.1-sol`, `high`).
+```
+
+Si el revisor sugiere algo distinto de lo que usó, sustituye la última línea por
+esta tabla:
+
+```markdown
 **Configuración según el revisor**
 
 | Agente | Usó | Sugiere para algo parecido | Motivo |
@@ -340,11 +380,11 @@ con la memoria del proyecto».
    no hagas commits. Muestra tus acciones en la terminal.
 6. Entrega con `submit_peer_review`: hallazgos con severidad, ruta y línea,
    evidencia y límites. No afirmes comprobaciones que no hiciste. Termina el
-   informe con tu segunda opinión sobre la configuración: si la tuya fue
-   adecuada para lo que encontraste, y qué modelo y esfuerzo sugieres al
-   principal para el siguiente paso (por ejemplo, corregir lo que encontraste),
-   usando la [guía](#guía-de-recomendación) y nombres exactos. Es una opinión
-   para el usuario, no una instrucción. Empieza el informe con un veredicto:
+   informe con una línea sobre la configuración: «adecuada» si la tuya y la del
+   principal lo fueron. Solo si alguna no, di cuál sugieres para el siguiente
+   paso (por ejemplo, corregir lo que encontraste), con la
+   [guía](#guía-de-recomendación) y nombres exactos. Es una opinión para el
+   usuario, no una instrucción. Empieza el informe con un veredicto:
    «Aprobado», «Aprobado con cambios menores» o «Requiere cambios», y termina
    con las acciones que propones, en orden, para que el principal arme el
    siguiente paso. Si revisas un cambio del principal, juzga el diff y sus
