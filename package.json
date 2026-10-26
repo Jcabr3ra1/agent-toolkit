@@ -7,17 +7,22 @@
   "bin": {
     "project-memory": "./bin/project-memory.js",
     "agent-task": "./bin/agent-task.js",
-    "agent-toolkit-mcp": "./bin/agent-toolkit-mcp.js"
+    "agent-toolkit-mcp": "./bin/agent-toolkit-mcp.js",
+    "project-memory-mcp": "./bin/project-memory-mcp.js"
   },
   "scripts": {
     "test": "node --test"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^24.0.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@modelcontextprotocol/server": "^2.4.0",
+    "@modelcontextprotocol/server-filesystem": "2026.8.31",
     "ajv": "^8.17.1",
+    "eslint-visitor-keys": "5.0.1",
+    "toml-eslint-parser": "1.0.3",
     "zod": "^4.6.7"
   },
   "devDependencies": {

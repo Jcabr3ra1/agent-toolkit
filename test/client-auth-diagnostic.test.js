@@ -120,8 +120,12 @@ test("AD inert schema/limits reject getters/proxies/toJSON without side effects"
 });
 
 const localTest = (name, fn) => test(name, { skip: process.platform !== "darwin", timeout: 20000 }, fn);
+// Native synthetic integration is not a startup-latency benchmark. Keep budget
+// validation independent, and exercise exact deadline boundaries virtually.
+const INTEGRATION_TIMING = Object.freeze({ processTimeoutMs: 3000, totalTimeoutMs: 5000, graceMs: 100, confirmationMs: 120 });
+const VALIDATION_TIMING = Object.freeze({ processTimeoutMs: 800, totalTimeoutMs: 2500, graceMs: 100, confirmationMs: 120 });
 function reviews(cfg) { const bindingSha256 = authDiagnosticReviewBinding(cfg); cfg.identityReview.bindingSha256 = bindingSha256; cfg.startupReview.bindingSha256 = bindingSha256; return cfg; }
-async function setup(t, mode = 0) {
+async function setup(t, mode = 0, timing = INTEGRATION_TIMING) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-auth-fixture-"))); await fs.chmod(root, 0o700);
   const owned = await fs.lstat(root);
   t.after(async () => { const s = await fs.lstat(root).catch(() => null); if (s?.isDirectory() && !s.isSymbolicLink() && s.dev === owned.dev && s.ino === owned.ino) await fs.rm(root, { recursive: true }); });
@@ -135,7 +139,7 @@ async function setup(t, mode = 0) {
     entryLink: statPin(e, entry), workspaceParent: { path: parent, dev: p.dev, ino: p.ino, uid: p.uid, mode: p.mode & 4095 }, excludedRoots: [path.join(root, "excluded-project")],
     identityReview: { state: "reviewed", bindingSha256: "0".repeat(64), evidenceSha256: "1".repeat(64) },
     startupReview: { state: "reviewed", bindingSha256: "0".repeat(64), evidenceSha256: "2".repeat(64), effectsEnumerated: true, unresolvedEffects: false },
-    limits: { processTimeoutMs: 800, totalTimeoutMs: 2500, graceMs: 100, confirmationMs: 120, maxOutputBytes: 32768, maxErrorBytes: 32768, permitLifetimeMs: 60000 } };
+    limits: { ...timing, maxOutputBytes: 32768, maxErrorBytes: 32768, permitLifetimeMs: 60000 } };
   return { cfg: reviews(cfg), root, parent, artifact, entry };
 }
 const permit = cfg => createAuthDiagnosticPermit(schema, cfg);
@@ -303,23 +307,14 @@ localTest("AD slow preparation and revocation during hashing never start a proce
   }
 });
 for (const missing of ["exit", "close", "stdout-close", "stderr-close", "pid"]) localTest("AD virtual transport missing " + missing + " stays indeterminate, late data cannot mutate report", async t => {
-  const { cfg } = await setup(t); cfg.limits.processTimeoutMs = 100; cfg.limits.graceMs = 20; cfg.limits.confirmationMs = 20;
-  const child = new EventEmitter(); child.pid = missing === "pid" ? 1 : 24680;
-  child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.stdout.destroy = () => {}; child.stderr.destroy = () => {};
-  const r = safe(await collector(cfg, permit(cfg), { spawn() {
-    setImmediate(() => { child.emit("spawn"); child.stdout.emit("data", Buffer.from(JSON.stringify(wire)));
-      if (missing !== "exit") child.emit("exit", 0);
-      if (missing !== "close") child.emit("close");
-      if (missing !== "stdout-close") child.stdout.emit("close");
-      if (missing !== "stderr-close") child.stderr.emit("close");
-    }); return child;
-  }, kill(pid, signal) { assert.equal(pid, -24680); if (signal === 0) { const e = Error("private"); e.code = "ESRCH"; throw e; } } }).run());
+  const f = await virtualTimingFixture(t, { missing });
+  f.complete(); f.advance(100); const r = safe(await f.result), child = f.child;
   assert.equal(r.state, "indeterminate"); assert.equal(r.terminationConfirmed, false); assert.equal(r.cleanupRequired, true);
   const snapshot = structuredClone(r); child.stdout.emit("data", Buffer.from("synthetic-private")); child.emit("exit", 0); child.emit("close");
   child.stdout.emit("close"); child.stderr.emit("close"); child.emit("spawn"); assert.deepEqual(r, snapshot);
 });
 localTest("AD configuration is closed with noncoercing budgets and no expanded recipe/env/prompt", async t => {
-  const { cfg } = await setup(t);
+  const { cfg } = await setup(t, 0, VALIDATION_TIMING);
   for (const mutate of [c => { c.argv = ["--print"]; }, c => { c.prompt = "private"; }, c => { c.env = {}; }, c => { c.recipe = "anything"; }, c => { c.limits.processTimeoutMs = 15001; },
     c => { c.limits.totalTimeoutMs = 90001; }, c => { c.limits.maxOutputBytes = 32769; }, c => { c.limits.maxErrorBytes = 32769; }, c => { c.artifact.size = 536870913; },
     c => { c.limits.processTimeoutMs = "800"; }, c => { c.limits.graceMs = 1000; }, c => { c.limits.processTimeoutMs = 2600; }, c => { c.excludedRoots = []; }]) {
@@ -388,6 +383,92 @@ function reviewBoundaryFixture({ size = 65537, growth = false, shortRead = null,
   } };
   return { cfg, counts, child, deps };
 }
+
+// Exact boundary checks use neither a compiler nor OS processes/scheduling.
+async function virtualTimingFixture(t, { missing = null, groupError = null, signal } = {}) {
+  t.mock.timers.enable({ apis: ["setInterval", "setTimeout"] });
+  const f = reviewBoundaryFixture({ late: true }), child = f.child;
+  if (missing === "pid") child.pid = 1;
+  let clock = 0, began = 0, groupGone = false, emitted = false, settled = false;
+  let ready; const started = new Promise(resolve => { ready = resolve; });
+  const signals = [];
+  const deps = { ...f.deps, signal, monotonic: () => clock,
+    spawn(file, argv) {
+      const returned = f.deps.spawn(file, argv);
+      queueMicrotask(() => { child.emit("spawn"); ready(); }); return returned;
+    },
+    kill(pid, kind) {
+      assert.equal(pid, -24680); // Never forwarded to process.kill.
+      signals.push({ kind, ms: clock - began });
+      if (kind === 0) {
+        if (groupError) throw Object.assign(Error("synthetic-private"), { code: groupError });
+        if (groupGone) throw Object.assign(Error("gone"), { code: "ESRCH" });
+      }
+      return true;
+    }
+  };
+  const authorization = permit(f.cfg), run = collector(f.cfg, authorization, deps);
+  clock = mono(); began = clock; // Permission was issued on this same monotonic epoch.
+  const advance = ms => { for (let i = 0; i < ms; i++) { clock++; t.mock.timers.tick(1); } };
+  const result = run.run(); result.then(() => { settled = true; }, () => { settled = true; });
+  t.after(async () => {
+    try { if (!settled) { advance(2500); await result; } }
+    finally { t.mock.timers.reset(); }
+  });
+  await Promise.race([started, result.then(() => { throw Error("Virtual run ended before spawn"); })]);
+  const complete = () => {
+    if (emitted) return; emitted = true; groupGone = true;
+    child.stdout.emit("data", Buffer.from(JSON.stringify(wire)));
+    if (missing !== "exit") child.emit("exit", 0);
+    if (missing !== "stdout-close") child.stdout.emit("close");
+    if (missing !== "stderr-close") child.stderr.emit("close");
+    if (missing !== "close") child.emit("close");
+  };
+  return { ...f, authorization, signals, advance, complete, result };
+}
+
+test("AD timing profiles separate synthetic integration from validation", () => {
+  assert.deepEqual(INTEGRATION_TIMING, { processTimeoutMs: 3000, totalTimeoutMs: 5000, graceMs: 100, confirmationMs: 120 });
+  assert.deepEqual(VALIDATION_TIMING, { processTimeoutMs: 800, totalTimeoutMs: 2500, graceMs: 100, confirmationMs: 120 });
+  assert.equal(INTEGRATION_TIMING.processTimeoutMs - INTEGRATION_TIMING.graceMs - INTEGRATION_TIMING.confirmationMs, 2780);
+});
+localTest("AD virtual deadline exact TERM 60 KILL 80 uncertainty 100", async t => {
+  const f = await virtualTimingFixture(t), commands = () => f.signals.filter(s => s.kind !== 0);
+  f.advance(59); assert.deepEqual(commands(), []);
+  f.advance(1); assert.deepEqual(commands(), [{ kind: "SIGTERM", ms: 60 }]);
+  f.advance(19); assert.deepEqual(commands(), [{ kind: "SIGTERM", ms: 60 }]);
+  f.advance(1); assert.deepEqual(commands(), [{ kind: "SIGTERM", ms: 60 }, { kind: "SIGKILL", ms: 80 }]);
+  let delivered = false; f.result.then(() => { delivered = true; });
+  f.advance(19); await Promise.resolve(); assert.equal(delivered, false);
+  f.advance(1); const r = safe(await f.result);
+  assert.equal(r.state, "indeterminate"); assert.equal(r.elapsedMs, 100); assert.equal(r.terminationConfirmed, false);
+  assert.equal(r.projection, null); assert.equal(r.cleanupRequired, true); assert.equal(f.counts.spawn, 1); assert.equal(f.counts.rmdir, 0);
+});
+for (const ms of [59, 60]) localTest("AD virtual complete closure at " + ms + " respects deadline", async t => {
+  const f = await virtualTimingFixture(t); f.advance(ms); f.complete(); const r = safe(await f.result);
+  assert.equal(r.state, ms === 59 ? "observation-complete" : "timed-out");
+  assert.equal(r.terminationConfirmed, true); assert.equal(r.cleanupRequired, false); assert.equal(f.counts.rmdir, 1);
+  assert.equal(r.elapsedMs, ms); assert.equal(f.counts.spawn, 1);
+  if (ms === 59) { assert.deepEqual(r.projection, { ...wire, classification: "compatible-declared" }); assert.ok(f.signals.every(s => s.kind === 0)); }
+  else { assert.equal(r.projection, null); assert.ok(r.reasons.includes("auth-deadline")); }
+});
+for (const kind of ["cancel", "revoke"]) localTest("AD virtual " + kind + " cannot publish fields", async t => {
+  const controller = new AbortController(), f = await virtualTimingFixture(t, { signal: controller.signal });
+  if (kind === "cancel") controller.abort(); else { revokeAuthDiagnosticPermit(f.authorization); f.advance(10); }
+  f.complete(); const r = safe(await f.result);
+  assert.equal(r.state, "canceled"); assert.equal(r.projection, null); assert.equal(r.terminationConfirmed, true);
+  assert.equal(r.cleanupRequired, false); assert.equal(f.counts.spawn, 1);
+  assert.ok(f.signals.some(s => s.kind === "SIGTERM"));
+});
+localTest("AD virtual EPERM is uncertainty, never group absence", async t => {
+  const f = await virtualTimingFixture(t, { groupError: "EPERM" }); f.complete(); f.advance(40); const r = safe(await f.result);
+  assert.equal(r.state, "indeterminate"); assert.equal(r.terminationConfirmed, false); assert.equal(r.cleanupRequired, true);
+  assert.equal(r.projection, null); assert.ok(r.reasons.includes("auth-group-unconfirmed")); assert.equal(f.counts.rmdir, 0);
+});
+for (const [graceMs, accepted] of [[659, true], [660, false]]) test("AD validation budget relation remains exact at grace " + graceMs, () => {
+  const f = reviewBoundaryFixture(); Object.assign(f.cfg.limits, VALIDATION_TIMING, { graceMs });
+  if (accepted) assert.doesNotThrow(() => collector(f.cfg, {})); else assert.throws(() => collector(f.cfg, {}), /^Error: Invalid auth diagnostic configuration$/);
+});
 function boundedReviewReads(f) {
   for (const { position, length } of f.counts.requests) {
     assert.ok(position < f.cfg.artifact.size, "must not request an EOF sentinel");

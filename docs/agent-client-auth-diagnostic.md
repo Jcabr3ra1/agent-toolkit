@@ -447,3 +447,92 @@ AD-3 sigue `blocked-before-start`: falta evidencia pertinente del startup de la
 instalación exacta y consentimiento específico para sus efectos. No se emitió
 un permiso nativo ni se sustituyeron esos requisitos por los resultados de tests,
 huellas, categoría de suscripción declarada o autorización de este commit.
+
+## AD-11. Separación de integración sintética y fronteras temporales
+
+Alcance autónomo autorizado el 2026-10-14, America/Bogota, únicamente para
+test/client-auth-diagnostic.test.js, este documento y
+docs/project-memory-mcp-integration.md. Contrato registrado antes de cambiar las
+pruebas. No permite modificar recolector, parser, esquema, fixture C, otras
+pruebas, dependencias, configuración, memoria, clientes reales, commit o push.
+
+La configuración anterior de integración reservaba 800 ms al proceso, incluidos
+100 ms de gracia y 120 ms de confirmación: la parada comenzaba a los 580 ms.
+Las mediciones de diagnóstico observaron arranques variables y cierres de hasta
+444 ms en los cinco transportes válidos. La repetición sin cambios pasó 5/5;
+también existen ejecuciones anteriores con fallos, que se conservan. Esto
+justifica separar responsabilidades de prueba, no prueba una causa del sistema
+operativo ni un defecto del recolector o de A1f.
+
+Perfil explícito de integración ficticia: processTimeoutMs=3000,
+totalTimeoutMs=5000, graceMs=100, confirmationMs=120; el margen activo es 2780 ms.
+Son valores de fixtures dentro del contrato existente, no nuevos defaults del
+producto ni una garantía de rendimiento. Los casos de validación de presupuestos
+mantienen el perfil rápido original 800/2500/100/120, para que las comprobaciones
+de relaciones inválidas no queden debilitadas por cambiar literales.
+
+Las fronteras temporales se comprueban con filesystem y transporte en memoria,
+reloj monotónico y temporizadores virtuales, sin compilar ni arrancar un cliente.
+Perfil virtual: proceso 100 ms, gracia 20 ms y confirmación 20 ms. Verificar
+ausencia de parada a 59 ms, SIGTERM a 60, ausencia de SIGKILL a 79 y SIGKILL a 80,
+y entrega indeterminate con workspace retenido a 100 si no se confirma el cierre.
+Comprobar también cierre completo antes/en la frontera, cancelación/revocación,
+EPERM y eventos faltantes/tardíos. Toda señal virtual queda dentro del doble;
+nunca se transmite el PID ficticio al sistema operativo.
+
+Se conservan las aserciones de protocolo, permisos, identidad, limpieza y
+terminación. No convertir incertidumbre en éxito ni elevar presupuestos de
+escenarios cuyo propósito sea demostrar vencimientos. No se suprimen fallos,
+deshabilitan casos o realizan reintentos hasta obtener verde.
+
+| ID | Criterio | Evidencia requerida |
+| --- | --- | --- |
+| CA-ADT01 | Perfiles de integración y validación explícitos y separados | Configuración inválida conserva rechazos; proceso C sigue comprobando payload/exit/cleanup |
+| CA-ADT02 | Fronteras 59/60/79/80/99/100 reproducibles | Reloj y timers virtuales; señales exactas y un único spawn simulado |
+| CA-ADT03 | Cierre, incertidumbre y revocación siguen protegidos | PID/exit/close/streams faltantes, EPERM, cancelación y eventos tardíos; sin proyección insegura |
+| CA-ADT04 | Solo tres archivos y fixtures, sin efectos reales | Snapshot de código/configuración/memoria/Skill y sin cuenta/cliente nativo |
+| CA-ADT05 | Evidencia y regresión verificadas | node --check, tanda virtual/integración, suite AD, relacionada y completa serial; formato/enlaces |
+
+### Evidencia de implementación
+
+Entorno comprobado: Node 24.14.1, darwin/arm64, 2026-10-14. node --check del
+archivo de pruebas: código 0. Se mantienen los rechazos de configuración y todas
+las aserciones de protocolo/terminación/limpieza. Se sustituyen cinco escenarios
+de eventos faltantes por dobles con tiempo virtual y se añaden nueve casos;
+ninguna prueba se omite o acepta incertidumbre como observación completa.
+
+| Comprobación | Resultado real |
+| --- | --- |
+| Tanda virtual, perfiles y relación de presupuesto, concurrency=1 | 14/14; 380.085959 ms; código 0 |
+| Suite AD completa aislada, concurrency=1 | 238/238; 20267.654041 ms; código 0 |
+| Receta fija y cinco transportes válidos, dos tandas previstas | 6/6 en ambas; 1304.253833 y 1268.546583 ms; código 0 |
+| AD y nueve archivos relacionados, concurrency=1 | 1099/1099; 23641.437541 ms; código 0 |
+| Regresión completa, concurrency=1 | 4134/4134; 199383.695 ms; código 0 |
+
+Las dos tandas nativas son repeticiones de estabilidad limitadas, no reintentos
+hasta obtener éxito. Antes de seleccionar correctamente los cinco transportes,
+un filtro por nombre solo seleccionó la receta fija: pasó 1/1 en dos ejecuciones
+(365.327125 y 235.897 ms), que no se cuentan como evidencia de seis casos.
+Todas las tandas finales tienen cero fallos, canceladas, omitidas o todo. La
+regresión suma nueve casos a los 4125 anteriores; conserva los casos previos.
+Los fallos históricos de A1f se conservan en
+[la especificación de integración](project-memory-mcp-integration.md).
+
+Quality-gate: **Aprobado con observaciones** para CA-ADT01 a CA-ADT05. CA-ADT01
+se comprueba con los perfiles separados, la validación original y la integración
+C; CA-ADT02/03 con fronteras virtuales, eventos faltantes/tardíos, cancelación,
+revocación y EPERM, además de la suite AD completa. CA-ADT04: snapshot de 300
+entradas con solo las tres rutas autorizadas diferentes, ninguna alta/baja y
+HEAD/staging sin cambios. Código funcional, fixture C, configuración, memoria y
+Skill conservan sus huellas. CA-ADT05: sintaxis, tandas y regresión anteriores;
+diff --check y enlaces locales correctos, sin hallazgos de patrones sensibles.
+
+Observaciones: evidencia local de esta versión y plataforma; no demuestra una
+causa ambiental de los fallos históricos ni garantiza estabilidad en toda carga
+o sistema. La heurística no certifica ausencia absoluta de secretos. No se
+presenta el mayor presupuesto ficticio como una mejora del rendimiento real.
+Se consultó Mantenimiento de la memoria: no se edita la bóveda, fuera del permiso
+de estas tres rutas.
+
+AD-3 y RG-2 no se cierran por estas pruebas; commit/push y aplicación real
+siguen sin autorización. No se inspeccionan cuentas ni se arrancan clientes IA.
