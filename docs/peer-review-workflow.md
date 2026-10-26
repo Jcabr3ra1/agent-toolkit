@@ -257,9 +257,37 @@ larga). Lo que se hace para acotarlo, y que la skill indica al revisor de Codex:
 - no relanzar la espera tras un `timeout` sin que el usuario lo pida.
 
 Si el límite de ~60 s no se puede ampliar, la espera sigue costando una vuelta
-por minuto; la salida sin coste sería despertar la sesión de Codex desde el
-principal (por ejemplo con `codex queue`), lo que cambiaría la regla actual de
-no despertar sesiones y requiere comprobarlo antes.
+por minuto. Por eso hay una vía sin espera:
+
+```sh
+node bin/agent-toolkit-inbox.js registrar --agent codex --project-root /ruta/al/proyecto [--thread <id>]
+node bin/agent-toolkit-inbox.js avisar --project-root /ruta/al/proyecto --task <taskId> --review <reviewId>
+```
+
+`registrar` (en la sesión de Codex, con `$revisar`) guarda el id de esa sesión
+como revisora del proyecto en `~/.agent-toolkit/workflows/reviewers` (0600). La
+encuentra sola si es la única sesión de Codex que escribió en ese proyecto en los
+últimos 2 minutos; si no, se indica con `--thread` (`/status` en Codex). Después
+Codex **termina su turno y no espera**. Cuando el usuario aprueba un encargo
+para Codex, el principal ejecuta `avisar`, que entrega con `codex queue` un
+aviso fijo y corto (taskId, reviewId y raíz) a esa sesión, la cual lo atiende
+con `claim_peer_review` y `submit_peer_review`.
+
+Se probó con una sesión de Codex inactiva: el mensaje encolado llegó como mensaje
+de usuario en el mismo segundo y la sesión respondió.
+
+Límites y garantías:
+
+- El MCP sigue siendo pasivo: no despierta nada. El aviso es una orden explícita
+  del principal (el cliente la pide al usuario) y solo se emite para un encargo
+  aprobado, `pending`, dirigido a Codex, en una colaboración abierta y con un
+  revisor registrado hace menos de 24 horas. No hay forma de enviar otro texto.
+- El aviso no lleva el prompt del encargo, solo identificadores: Codex obtiene el
+  prompt aprobado, con su huella, al reclamar.
+- Es un mensaje de usuario normal en la sesión de Codex, con sus permisos. Si
+  Codex está en mitad de un turno, queda en cola hasta que termine.
+- Si `codex queue` falla o no hay sesión registrada, el encargo sigue pendiente
+  en la bandeja y se puede usar la espera con las medidas de arriba.
 
 ## Del cambio al informe
 
