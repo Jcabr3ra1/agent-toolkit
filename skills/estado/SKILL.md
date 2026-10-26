@@ -30,3 +30,8 @@ Solo lectura: no reclames, envíes, canceles ni cierres nada.
 - **Qué toca ahora:** una línea por acción, con el comando exacto (`/revisar`, `$revisar`, `/programar <tarea>` o `$programar <tarea>`).
 
 Si no hay colaboraciones abiertas, dilo en una línea y sugiere `/programar <tarea>` para empezar.
+
+Si el usuario pide el rendimiento de los modelos, ejecuta
+`node /Users/juan_jaller/programacion/Agent-Toolkit/bin/agent-toolkit-inbox.js rendimiento`
+(añade `--project-root <projectRoot>` para limitarlo a este proyecto) y muestra
+su tabla tal cual. No usa ningún modelo ni modifica nada.

@@ -156,6 +156,13 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     ...REVIEW, agent: AGENT, claimToken: z.string().regex(/^[a-f0-9]{64}$/u), content: z.string().min(1).max(PEER_LIMITS.reportBytes)
   }, args => store.submitReview(args));
 
+  tool("record_review_outcome", "Después de verificar un informe, registra una sola vez el resultado del encargo: veredicto, hallazgos recibidos, cuántos se sostuvieron, nivel de la clasificación y configuración del principal. Solo lo registra el agente que envió el encargo. Sirve para medir qué modelo y esfuerzo rinden en cada nivel; no modifica el informe ni inicia modelos.", {
+    ...REVIEW, agent: AGENT, verdict: z.enum(["aprobado", "aprobado_con_cambios", "requiere_cambios"]),
+    findings: z.number().int().min(0).max(100), upheld: z.number().int().min(0).max(100),
+    level: z.enum(["ligero", "normal", "exigente", "critico", "maximo"]).optional(),
+    principal: REVIEWER.omit({ reason: true }).optional()
+  }, args => store.recordOutcome(args));
+
   tool("cancel_peer_review", "Cancela un encargo pendiente o reclamado. Impide guardar una entrega posterior, pero no interrumpe la sesión nativa del receptor; detén esa sesión manualmente si continúa trabajando. No reintenta ni reasigna el encargo.", REVIEW, args => store.cancelReview(args));
 
   tool("close_collaboration", "Cierra una colaboración y cancela sus encargos activos. Conserva los informes para consulta. No interrumpe las sesiones de terminal ni modifica el proyecto.", BOUND, args => store.closeCollaboration(args));

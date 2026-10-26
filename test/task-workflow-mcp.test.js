@@ -238,6 +238,7 @@ printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_e
     "preview_codex_review",
     "preview_peer_review",
     "publish_peer_context",
+    "record_review_outcome",
     "request_peer_review",
     "run_claude_implementation",
     "run_claude_proposal",
