@@ -131,10 +131,14 @@ terminal y aprueba cada encargo por separado, con la recomendación delante;
 solo usa `autoReviews` si el usuario lo pide. Instálala en `~/.claude/skills/`
 y `~/.codex/skills/`:
 
-> En la sesión principal: `/revision-cruzada iniciar` (Claude) o
-> `$revision-cruzada iniciar` (Codex), y describe la tarea.
+> En la terminal que va a trabajar: `/programar <tarea>` (Claude) o
+> `$programar <tarea>` (Codex).
 >
-> En la otra terminal: `/revision-cruzada atender` o `$revision-cruzada atender`.
+> En la otra terminal: `/revisar` (Claude) o `$revisar` (Codex).
+
+`programar` y `revisar` son accesos directos a `revision-cruzada`, que sigue
+disponible con `iniciar` y `atender` y contiene todas las reglas. Instala las
+tres carpetas de skills.
 
 ## Esperar sin consumir el modelo
 
