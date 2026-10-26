@@ -68,10 +68,10 @@ function summary(value) {
 }
 
 export async function runPeerInboxCli(argv, { out, err, store = createPeerReviewStore(), now = Date.now,
-  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000, codexHome } = {}) {
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000, codexHome, claudeHome } = {}) {
   if (argv[0] === "modelos") {
     if (argv.length > 2 || (argv[1] !== undefined && argv[1] !== "--json")) { await err(HELP); return EXIT.usage; }
-    const result = await agentModels(codexHome ? { codexHome } : {});
+    const result = await agentModels({ ...(codexHome && { codexHome }), ...(claudeHome && { claudeHome }) });
     await out(argv[1] === "--json" ? JSON.stringify(result) + "\n" : agentModelsTable(result));
     return EXIT.found;
   }

@@ -47,6 +47,26 @@ test("a missing catalog or unsupported effort is reported instead of inventing a
   assert.equal(limited.levels.find(level => level.level === "Máximo").codex, null);
 });
 
+test("the saved Claude model and effort are read from settings.json or reported as unreadable", async () => {
+  const dir = await fs.mkdtemp(path.join(root, "claude-"));
+  await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ model: "sonnet", effortLevel: "high", env: { X: "1" } }));
+  const result = await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir });
+  assert.deepEqual(result.claudeCurrent, { model: "sonnet", effort: "high" });
+  assert.match(agentModelsTable(result), /Claude tiene guardado: `sonnet`, `high`/u);
+  await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ model: "opus" }));
+  assert.match(agentModelsTable(await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir })), /`opus`, `sin esfuerzo fijado`/u);
+  await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ effortLevel: "high" }));
+  assert.match(agentModelsTable(await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir })), /`sin modelo fijado`, `high`/u);
+  await fs.writeFile(path.join(dir, "settings.json"), JSON.stringify({ model: 5, effortLevel: ["high"] }));
+  assert.deepEqual((await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir })).claudeCurrent, { model: null, effort: null });
+  for (const content of ["{roto", "[]", null]) {
+    if (content === null) await fs.rm(path.join(dir, "settings.json"));
+    else await fs.writeFile(path.join(dir, "settings.json"), content);
+    const unreadable = await agentModels({ codexHome: await codexHome(null, null), claudeHome: dir });
+    assert.match(agentModelsTable(unreadable), /No se pudo leer la configuración guardada de Claude/u);
+  }
+});
+
 test("the inbox CLI prints the catalog as a table or JSON", async () => {
   const dir = await codexHome([{ slug: "diario", description: "Latest workhorse model", supported_reasoning_levels: levels(["low", "medium", "high"]) }]);
   const out = [], json = [], errors = [];
