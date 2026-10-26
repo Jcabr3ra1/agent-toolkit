@@ -459,6 +459,13 @@ datos ficticios en el [ejemplo](../examples/task-verify/README.md).
 - `docs_researcher`: consulta documentación oficial y versionada.
 - `implementation_tutor`: guía implementaciones paso a paso sin sustituir al usuario.
 
+Los perfiles de solo lectura lo son **por instrucción**, no por sandbox. Un
+agente personal de Codex no puede fijar su propio `sandbox_mode`: hereda el
+sandbox y las aprobaciones de la sesión que lo lanza, y el campo se ignora en el
+archivo, así que no se incluye. Para una garantía real, ejecuta la sesión
+principal con un sandbox de solo lectura. Con la sesión en `workspace-write`, un
+agente que ignore su instrucción podría editar.
+
 ## Instalación local
 
 Este repositorio es la fuente canónica. Sus componentes se instalan mediante enlaces simbólicos:

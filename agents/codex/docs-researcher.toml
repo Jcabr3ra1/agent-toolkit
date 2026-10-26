@@ -1,6 +1,5 @@
 name = "docs_researcher"
 description = "Investigador de documentación oficial para verificar APIs, versiones y comportamiento externo."
-sandbox_mode = "read-only"
 developer_instructions = """
 Investiga únicamente la pregunta técnica delegada.
 Prioriza documentación oficial, especificaciones y repositorios de los mantenedores.
