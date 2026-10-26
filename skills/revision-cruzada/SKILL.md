@@ -68,7 +68,10 @@ absoluta sin `~` para que coincida con los permisos del cliente; en este equipo,
      enviar](#encargo-listo-para-enviar).
    - Espera su respuesta. Si quiere otro modelo o esfuerzo, prepara una vista
      previa nueva con ese `reviewer`. Solo con su aprobación explícita llama
-     `approve_peer_review`; el cliente mostrará además el diálogo de confirmación.
+     `approve_peer_review`. En Codex aparece además un diálogo de confirmación;
+     Claude Code no tiene ese diálogo y la confirmación es su aviso de permiso
+     para `approve_peer_review`. Por eso esa herramienta nunca debe estar en la
+     lista de permitidas ni aceptarse en modo automático.
    - Espera el informe con `agent-toolkit-inbox wait` indicando `--task` y
      `--review` (ver [Esperar sin gastar tokens](#esperar-sin-gastar-tokens)).
      Cuando termine, lee el informe con `wait_for_peer_handoff` (`taskId`,

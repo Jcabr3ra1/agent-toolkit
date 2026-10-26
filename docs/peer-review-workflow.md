@@ -39,10 +39,21 @@ AGENT_TOOLKIT_WORKFLOW_DIR=/ruta/privada/workflows` en Claude, antes de `--`.
 Usa un directorio propio; la carpeta `peers` y sus registros deben ser privados.
 Configurar otra raíz de almacenamiento crea una bandeja independiente.
 
-Los clientes deben admitir confirmación interactiva MCP para enviar encargos.
-Si no la ofrecen o el usuario cancela, el encargo no llega al receptor. La
-capacidad concreta de tus dos terminales requiere una comprobación real; las
-pruebas automatizadas usan clientes MCP simulados.
+Cada encargo necesita una confirmación del usuario fuera del modelo:
+
+- **Codex** declara el diálogo de confirmación de MCP (elicitation): al aprobar
+  aparece un diálogo con el prompt completo. Si se cancela, no se envía.
+- **Claude Code 2.1.310** no lo declara. `approve_peer_review` usa entonces el
+  aviso de permiso del propio cliente antes de ejecutar la herramienta y
+  registra la aprobación como `method: "permiso-cliente"`. Esa confirmación
+  solo existe si `approve_peer_review` no está en la lista de permitidas y la
+  terminal no acepta herramientas automáticamente. El MCP no puede comprobarlo.
+- El modo automático (`autoReviews`) exige el diálogo: sin él, la colaboración
+  automática no se crea.
+
+Comprobado el 2026-10-26: el primer encargo enviado desde Claude Code falló con
+un error genérico porque el SDK rechazaba la petición de diálogo; desde esta
+versión se envía con el aviso de permiso de Claude Code.
 
 ## Empezar mañana en otro proyecto
 
