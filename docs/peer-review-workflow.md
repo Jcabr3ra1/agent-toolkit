@@ -136,6 +136,27 @@ abierta: el usuario lo cambia con `/model` en la terminal del revisor antes de
 aprobar. El revisor compara la recomendación con su modelo y, si no coincide,
 no reclama el encargo y avisa. El esfuerzo real de la sesión no se verifica.
 
+### Delegar por nivel en Claude (sin cambiar `/model`)
+
+El plugin `niveles` de este repositorio añade cuatro agentes de Claude con
+modelo y esfuerzo fijos en su definición: `niveles:nivel-ligero` (`haiku`,
+`low`), `niveles:nivel-normal` (`sonnet`, `medium`), `niveles:nivel-exigente`
+(`sonnet`, `high`) y `niveles:nivel-alto` (`opus`, `high`). Instálalo una vez:
+
+```text
+/plugin marketplace add Jcabr3ra1/agent-toolkit
+/plugin install niveles@agent-toolkit
+```
+
+La sesión principal clasifica la tarea con la tabla de la skill y delega el
+código al agente de ese nivel, así que no hace falta `/model` ni reiniciar. La
+sesión principal se queda en una configuración fija y barata, lo que además
+conserva su caché de prompts: cambiar de modelo o de esfuerzo a mitad de sesión
+la invalida. El agente delegado tiene su propia caché y empieza sin la
+conversación, así que la delegación debe llevar un encargo completo. Se probó
+con una sesión `sonnet` que delegó en `niveles:nivel-ligero`: el uso de modelo
+registró `haiku`. El esfuerzo del archivo no se verificó de la misma forma.
+
 ## Uso diario con la skill
 
 La skill `skills/revision-cruzada` reduce el uso diario a un comando por

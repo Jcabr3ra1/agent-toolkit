@@ -1,0 +1,11 @@
+{
+  "name": "agent-toolkit",
+  "owner": { "name": "Juan Jaller" },
+  "plugins": [
+    {
+      "name": "niveles",
+      "source": "./plugins/niveles",
+      "description": "Agentes por nivel (ligero, normal, exigente, alto) con modelo y esfuerzo fijos para delegar sin cambiar /model."
+    }
+  ]
+}
