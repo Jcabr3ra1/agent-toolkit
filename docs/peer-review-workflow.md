@@ -199,6 +199,23 @@ los nombres vigentes, además de la configuración actual de Codex. La skill lo
 consulta antes de recomendar, así que no queda desactualizada cuando cambian
 los modelos.
 
+```sh
+node bin/agent-toolkit-inbox.js agentes [--escribir [--forzar]] [--json]
+```
+
+prepara los agentes por nivel de **Codex** (`nivel_ligero`, `nivel_normal`,
+`nivel_exigente` y `nivel_alto`) en `~/.codex/agents` (o `CODEX_HOME`) con el
+modelo y el esfuerzo de la tabla de niveles; los de Claude vienen del plugin
+`niveles`. Sin `--escribir` solo muestra la vista previa. **Nunca sobrescribe ni
+borra:** un archivo que ya existe con otro contenido, un enlace o un directorio
+se respetan, y con `--escribir --forzar` se apartan enteros como
+`nivel_<nivel>.toml.anterior-<fecha>-<id>` antes de crear el nuevo, así que no
+se pierde nada aunque otro proceso cambie el archivo a la vez. Si
+`models_cache.json` no se puede leer, no escribe nada. Vuelve a ejecutarlo con
+`--forzar` cuando cambien los modelos. Al delegar en Codex, la sesión principal
+nombra el agente (por ejemplo, `nivel_alto`); Máximo se pide por llamada solo si
+Crítico ya falló.
+
 `programar` y `revisar` son accesos directos a `revision-cruzada`, que sigue
 disponible con `iniciar` y `atender` y contiene todas las reglas. Instala las
 tres carpetas de skills.
