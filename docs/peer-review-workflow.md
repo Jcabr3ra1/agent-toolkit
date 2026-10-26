@@ -136,6 +136,10 @@ y `~/.codex/skills/`:
 >
 > En la otra terminal: `/revisar` (Claude) o `$revisar` (Codex).
 
+`/estado` (o `$estado`) muestra en una tabla las colaboraciones abiertas, qué
+encargo está pendiente, quién debe actuar y el último veredicto, sin modificar
+nada.
+
 `programar` y `revisar` son accesos directos a `revision-cruzada`, que sigue
 disponible con `iniciar` y `atender` y contiene todas las reglas. Instala las
 tres carpetas de skills.
