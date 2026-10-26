@@ -1,3 +1,4 @@
+import { agentModels, agentModelsTable } from "./agent-models.js";
 import { createPeerReviewStore, PeerReviewError } from "./peer-review-store.js";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
@@ -5,6 +6,7 @@ const EXIT = Object.freeze({ found: 0, failure: 1, usage: 2, timeout: 3 });
 const HELP = `Uso: agent-toolkit-inbox wait --agent <claude|codex> --project-root <ruta>
        [--task <taskId> --review <reviewId>] [--timeout-seconds <1-86400>]
      agent-toolkit-inbox rendimiento [--project-root <ruta>] [--json]
+     agent-toolkit-inbox modelos [--json]
 
 Espera sin usar ningún modelo hasta que llegue un encargo para el agente o,
 con --task y --review, hasta que ese encargo tenga informe o termine.
@@ -13,6 +15,9 @@ Imprime una línea JSON y sale con 0 (encargo o informe), 3 (tiempo agotado),
 
 rendimiento resume los resultados registrados con record_review_outcome por
 revisor, modelo, esfuerzo y nivel, de todos los proyectos o de uno.
+
+modelos lista los modelos de Claude y los que Codex tiene disponibles, y la
+tabla de niveles con los nombres vigentes.
 `;
 
 function parse(argv) {
@@ -63,7 +68,13 @@ function summary(value) {
 }
 
 export async function runPeerInboxCli(argv, { out, err, store = createPeerReviewStore(), now = Date.now,
-  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000 } = {}) {
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000, codexHome } = {}) {
+  if (argv[0] === "modelos") {
+    if (argv.length > 2 || (argv[1] !== undefined && argv[1] !== "--json")) { await err(HELP); return EXIT.usage; }
+    const result = await agentModels(codexHome ? { codexHome } : {});
+    await out(argv[1] === "--json" ? JSON.stringify(result) + "\n" : agentModelsTable(result));
+    return EXIT.found;
+  }
   if (argv[0] === "rendimiento") {
     const options = parseRendimiento(argv.slice(1));
     if (!options) { await err(HELP); return EXIT.usage; }

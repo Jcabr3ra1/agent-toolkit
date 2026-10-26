@@ -167,8 +167,11 @@ genérica.
 
 - **Claude:** `haiku`, `sonnet` u `opus`; esfuerzo `low`, `medium`, `high`,
   `xhigh` o `max`.
-- **Codex:** los modelos que muestra su `/model`; en este equipo, `gpt-6-luna`
-  (ligero), `gpt-6.1-sol` (trabajo diario) y `gpt-6-astra` (lo más exigente).
+- **Codex:** los modelos que muestra su `/model`. **Antes de recomendar,
+  ejecuta** `node <toolkit>/bin/agent-toolkit-inbox.js modelos`: lee la lista
+  real de Codex y su configuración actual y genera la tabla de niveles con los
+  nombres vigentes. Usa esa tabla; la de abajo es solo el ejemplo del
+  2026-10-26 (`gpt-6-luna`, `gpt-6.1-sol` y `gpt-6-astra`).
   Esfuerzo `low`, `medium`, `high`, `xhigh`, `max` o `ultra` (`ultra` solo en
   los modelos que lo muestran en `/model`).
 - Si no conoces los modelos de la otra terminal, dilo y pide al usuario que los
@@ -187,7 +190,7 @@ cinco criterios. No estimes a ojo: puntúa, suma y aplica las reglas.
 | Contexto | El cambio se entiende solo | Requiere leer pruebas o llamadores | Cruza módulos o servicios |
 | Tipo de trabajo | Coordinar | Revisar o escribir código | Planificar o diseñar arquitectura |
 
-Total de 0 a 10 → nivel:
+Total de 0 a 10 → nivel (ejemplo; usa la tabla que genera `modelos`):
 
 | Total | Nivel | Claude | Codex |
 | --- | --- | --- | --- |
@@ -242,8 +245,8 @@ Para cambiarla: Codex → `/model` · Claude → `Esc`, `/model` y otra vez `/re
 ```
 
 Adapta los nombres de agente a quién es principal. Para saber tu configuración
-actual: Claude conoce su modelo; Codex puede leer `model` y
-`model_reasoning_effort` en `~/.codex/config.toml`. Si no puedes comprobarla,
+actual: Claude conoce su modelo; el comando `modelos` muestra el modelo y el
+esfuerzo que Codex tiene configurados. Si no puedes comprobarla,
 escríbelo así.
 
 ### Encargo listo para enviar
