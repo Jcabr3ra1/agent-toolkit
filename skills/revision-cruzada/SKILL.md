@@ -8,8 +8,9 @@ description: Coordina revisiones entre sesiones abiertas de Claude y Codex media
 Conecta tu sesión con la del otro agente sin que el usuario copie identificadores.
 Cada encargo se aprueba: antes de enviarlo recomiendas modelo y esfuerzo para el
 revisor, y el usuario decide si cambia la configuración de la otra terminal. Hay
-dos papeles: **iniciar** (agente principal) y **atender** (revisor). Si el
-usuario no indica cuál, pregunta solo eso.
+dos papeles: **iniciar** (agente principal) y **atender** (revisor). Los
+comandos cortos `/programar` (o `$programar`) y `/revisar` (o `$revisar`) eligen
+el papel directamente. Si el usuario no indica cuál, pregunta solo eso.
 
 ## Datos comunes
 
