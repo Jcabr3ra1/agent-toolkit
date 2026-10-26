@@ -18,7 +18,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const result = value => ({ content: [{ type: "text", text: JSON.stringify(value, null, 2) }] });
 const error = message => ({ isError: true, content: [{ type: "text", text: message }] });
 
-export const PEER_REVIEW_INSTRUCTIONS = "Para colaborar entre sesiones ya abiertas de Claude y Codex, usa start_collaboration y comparte el taskId y la raíz exacta del proyecto. publish_peer_context sustituye el contexto compartido con control de versión. preview_peer_review no envía nada; muestra su contenido completo y solicita aprobación directa antes de approve_peer_review. Incluye en reviewer el modelo y el esfuerzo que recomiendas para el revisor con un motivo breve, para que el usuario pueda cambiarlos en la otra terminal antes de aprobar; el MCP no cambia modelos. La aprobación envía un encargo a la bandeja compartida, no inicia una CLI ni un modelo. El receptor debe estar atendiendo wait_for_peer_handoff desde su propia sesión; no se despiertan ventanas inactivas. Antes de leer debe usar claim_peer_review, revisar solo los archivos aprobados en modo de lectura, sin pruebas ni ediciones, mostrar el trabajo en su terminal y devolver el informe con submit_peer_review. El principal consulta get_collaboration para recuperar los hallazgos y su vigencia. Solo si el usuario pide expresamente trabajar sin aprobar cada encargo, crea la colaboración con autoReviews; el usuario lo confirma una sola vez y después el agente principal usa request_peer_review, hasta ese cupo, sin vista previa. El revisor nunca envía encargos automáticos. Sin taskId, wait_for_peer_handoff atiende todas las colaboraciones abiertas de esa raíz. No te asignes un modelo o una identidad verificada: los roles y autores son declarados, y los permisos de la sesión nativa siguen siendo los suyos. No inicies bucles de espera sin que el usuario pida atender la bandeja. Nunca apruebes encargos por tu cuenta ni envíes un encargo como respuesta a otro de forma automática.";
+export const PEER_REVIEW_INSTRUCTIONS = "Para colaborar entre sesiones ya abiertas de Claude y Codex, usa start_collaboration y comparte el taskId y la raíz exacta del proyecto. publish_peer_context sustituye el contexto compartido con control de versión. preview_peer_review no envía nada; muestra su contenido completo y solicita aprobación directa antes de approve_peer_review. Incluye en reviewer el modelo y el esfuerzo que recomiendas para el revisor con un motivo breve, para que el usuario pueda cambiarlos en la otra terminal antes de aprobar; el MCP no cambia modelos. La aprobación envía un encargo a la bandeja compartida, no inicia una CLI ni un modelo. El receptor debe estar atendiendo wait_for_peer_handoff desde su propia sesión; no se despiertan ventanas inactivas. Antes de leer debe usar claim_peer_review, revisar solo los archivos aprobados en modo de lectura, sin pruebas ni ediciones, mostrar el trabajo en su terminal y devolver el informe con submit_peer_review. El principal consulta get_collaboration para recuperar los hallazgos y su vigencia. Solo si el usuario pide expresamente trabajar sin aprobar cada encargo, crea la colaboración con autoReviews; el usuario lo confirma una sola vez y después el agente principal usa request_peer_review, hasta ese cupo, sin vista previa. El revisor nunca envía encargos automáticos. Sin taskId, wait_for_peer_handoff atiende todas las colaboraciones abiertas de esa raíz. No repitas wait_for_peer_handoff en bucle para esperas largas: cada llamada es un turno del modelo; usa el comando agent-toolkit-inbox wait, que espera sin usar ningún modelo. No te asignes un modelo o una identidad verificada: los roles y autores son declarados, y los permisos de la sesión nativa siguen siendo los suyos. No inicies bucles de espera sin que el usuario pida atender la bandeja. Nunca apruebes encargos por tu cuenta ni envíes un encargo como respuesta a otro de forma automática.";
 
 export function registerPeerReviewTools(server, store = createPeerReviewStore(), { now = Date.now } = {}) {
   const previews = new Map();
@@ -117,29 +117,13 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     paths: z.array(z.string().min(1).max(512)).min(1).max(PEER_LIMITS.paths), reviewer: REVIEWER.optional()
   }, async args => ({ state: "pending", sent: true, automatic: true, review: await store.requestReview(args), startsModel: false }));
 
-  async function handoff(args) {
-    const tasks = args.taskId ? [args.taskId] : (await store.listCollaborations(args)).tasks.map(task => task.taskId);
-    let last = null;
-    for (const taskId of tasks) {
-      const task = await store.getCollaboration({ projectRoot: args.projectRoot, taskId, freshness: false });
-      const request = args.reviewId ? task.reviews.find(review => review.id === args.reviewId) :
-        task.reviews.find(review => review.to === args.agent && review.state === "pending");
-      if (args.reviewId && !request) throw new PeerReviewError("missing");
-      const value = { taskId: task.id, projectRoot: task.project.root, taskState: task.state, review: request ?? null };
-      if (task.state === "closed" || request && (!args.reviewId || !["pending", "claimed"].includes(request.state))) return { done: true, value };
-      last = value;
-    }
-    return { done: false, value: last ?? { taskId: null, projectRoot: args.projectRoot, review: null, openTasks: 0 } };
-  }
-
   tool("wait_for_peer_handoff", "Espera hasta 60 segundos un encargo aprobado para agent. Sin taskId revisa todas las colaboraciones abiertas de esa raíz y devuelve el taskId del encargo. Con taskId y reviewId espera su informe o estado terminal. Lee el almacenamiento común, por lo que funciona entre procesos MCP distintos. Solo espera cuando el usuario pida atender la bandeja; no arranca modelos ni despierta sesiones inactivas. No leas archivos antes de claim_peer_review.", {
     projectRoot: ROOT, taskId: z.string().uuid().optional(), agent: AGENT, reviewId: z.string().uuid().optional(),
     waitMs: z.number().int().min(0).max(MAX_WAIT_MS).optional().default(15_000)
   }, async args => {
-    if (args.reviewId && !args.taskId) throw new PeerReviewError("input");
     const deadline = Date.now() + args.waitMs;
     while (true) {
-      const { done, value } = await handoff(args);
+      const { done, value } = await store.findHandoff(args);
       if (done) return value;
       if (Date.now() >= deadline) return { ...value, timedOut: true,
         message: "Sin un encargo nuevo o informe terminado. Esta espera no inicia otra llamada al modelo." };
