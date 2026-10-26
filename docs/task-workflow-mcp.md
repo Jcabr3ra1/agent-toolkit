@@ -16,7 +16,7 @@ procesos separados; ambos modos pueden usarse de forma independiente.
 
 ## Requisitos
 
-- Node.js 20 o posterior.
+- Node.js 24 (`^24.0.0`).
 - Codex CLI con sesión de ChatGPT disponible.
 - Claude Code CLI 2.1.259 o posterior con sesión `claude.ai` disponible.
 - Un repositorio local en una rama de trabajo. La implementación se bloquea en

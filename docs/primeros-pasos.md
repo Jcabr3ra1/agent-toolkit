@@ -24,7 +24,7 @@ Un checkout limpio muestra salida vacía en el primer comando. Si hay cambios
 que no reconoces, consérvalos y solicita revisión; no los borres para seguir.
 El segundo muestra tu versión de Node.js, el programa que ejecuta la herramienta.
 
-El paquete declara Node.js 20 o superior. R1 se comprobó en macOS con dependencias
+El paquete declara Node.js 24 (`^24.0.0`). R1 se comprobó en macOS con dependencias
 existentes; [R2](agent-toolkit-clean-install.md) validó una copia nueva con
 dependencias propias en macOS/arm64, Node.js `v24.14.1` y npm `11.11.0`.
 No certifica todas las versiones o sistemas operativos, ni una máquina sin
