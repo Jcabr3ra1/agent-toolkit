@@ -78,11 +78,19 @@ automatización está autorizada.
 1. Edita solo las notas enumeradas con las herramientas de archivos. Cambia
    `ultima_verificacion` solo donde comprobaste la fuente, añade fuente
    verificable, sin secretos y sin tocar `.obsidian` ni `07-AGENTES/skills`.
-2. Registra cada PR (escribe solo su fila del registro):
+2. Registra cada PR. Si `sync record` devuelve `BLOCKED` por `checks-missing` o
+   `area-unresolved` (repositorios sin CI o sin carpetas de área, como Agent
+   Toolkit), esas advertencias no se pueden admitir: añade la fila a mano al
+   final de la tabla de `Registro de sincronización` con el mismo formato
+   (`| [#N](url) | Revisado | fecha | resultado | commit |`) y dilo en el
+   informe. Si no, usa el comando, que escribe solo su fila:
 
    ```
    node <toolkit>/bin/project-memory.js sync record <bóveda> --pr <N> --outcome <no-documentation-change|documentation-updated> --reviewed --summary "<resumen seguro>" [--note <ruta relativa>]... --apply
    ```
+   `sync record` y `doctor` exigen una bóveda limpia: confirma antes cualquier
+   cambio de manifiesto en un commit aparte y pasa con `--note` todas las notas
+   editadas.
 3. Revisa `git diff` de la bóveda. Agrega rutas exactas, commit en español
    (`docs: registrar PR #a a #b`). **Sube (`push`) solo con autorización**: el
    usuario lo pidió o el manifiesto declara `git-automated` y la automatización
