@@ -39,9 +39,21 @@ absoluta sin `~` para que coincida con los permisos del cliente; en este equipo,
 - **Claude Code:** ejecútalo con Bash en segundo plano (`run_in_background`) y
   termina tu turno con una sola línea. No consultes su salida: el sistema te
   despierta cuando termina.
-- **Codex:** ejecútalo en primer plano con un tiempo límite de tu herramienta de
-  shell mayor que `--timeout-seconds`; si tu herramienta no lo permite, usa
-  `--timeout-seconds 600`. Mientras el comando espera no gastas tokens.
+- **Codex:** no tiene ejecución en segundo plano que lo despierte, y su
+  herramienta de shell devuelve el control cada ~60 s con «Script running…». Cada
+  devolución obliga a llamar otra vez a `wait`, que es un turno del modelo que
+  relee todo el contexto de la sesión: en una medición de tres sesiones fueron
+  55 turnos sin hacer nada y unos 5,6 millones de tokens de entrada, casi todos
+  de caché. Para acotarlo:
+  1. Lanza el comando con el mayor `yield_time_ms` que tu herramienta acepte
+     (empieza por `600000`, tanto al lanzarlo como en cada `wait`) y
+     `--timeout-seconds 600`.
+  2. Si el control vuelve antes con el comando aún en marcha, vuelve a llamar
+     `wait` **sin escribir texto** entre una llamada y otra.
+  3. Antes de empezar a esperar, si la sesión ya tiene mucho contexto, di al
+     usuario en una línea que `/new` o `/compact` abarata cada vuelta de la
+     espera; lo mejor es dedicar a `$revisar` una sesión corta.
+  4. Cuando termine, no relances la espera sin que el usuario lo pida.
 
 ## Iniciar (agente principal)
 
@@ -387,8 +399,10 @@ con la memoria del proyecto».
 
 1. Lanza `agent-toolkit-inbox wait` con `--agent` y `--project-root`, **sin**
    `--task`: así atiendes cualquier colaboración abierta de esta raíz (ver
-   [Esperar sin gastar tokens](#esperar-sin-gastar-tokens)). Di una sola vez
-   «Esperando encargos; no gasto tokens mientras tanto» y termina tu turno.
+   [Esperar sin gastar tokens](#esperar-sin-gastar-tokens)). En Claude, di una
+   sola vez «Esperando encargos; no gasto tokens mientras tanto» y termina tu
+   turno. En Codex, di «Esperando encargos» y aplica sus medidas: esperar cuesta
+   una vuelta por minuto.
 2. Si termina con `timeout`, avisa al usuario y detente, salvo que te haya
    pedido seguir; en ese caso vuelve a lanzarlo sin comentar más.
 3. Cuando llegue un encargo (`handoff`), anuncia en una línea qué te piden. Si trae

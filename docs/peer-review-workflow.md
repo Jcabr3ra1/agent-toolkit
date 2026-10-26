@@ -240,8 +240,26 @@ resultado, 3 si se agota el tiempo, 2 por uso incorrecto y 1 ante un error. No
 reclama ni modifica nada.
 
 Claude Code lo ejecuta en segundo plano y solo vuelve a usar el modelo cuando el
-comando termina. Codex lo ejecuta en primer plano: el modelo no trabaja mientras
-el comando espera. La skill `revision-cruzada` ya lo usa en ambos papeles.
+comando termina: la espera no gasta tokens.
+
+**Codex no tiene ese segundo plano.** Su herramienta de shell devuelve el
+control cada ~60 s con «Script running…» y el modelo debe llamar otra vez a
+`wait`, un turno que relee todo el contexto de la sesión. En las tres sesiones
+de Codex del 26/10 hubo 55 turnos de espera sin trabajo, unos 5,6 millones de
+tokens de entrada (99,8 % de caché) y unos 1.900 de salida; el coste de cada
+vuelta crece con el contexto (de 33 mil a 215 mil tokens en la sesión más
+larga). Lo que se hace para acotarlo, y que la skill indica al revisor de Codex:
+
+- pedir el mayor `yield_time_ms` que acepte la herramienta (empezando por
+  `600000`), y volver a llamar `wait` sin escribir texto entre vueltas;
+- dedicar a `$revisar` una sesión corta, o hacer `/new` o `/compact` antes de
+  esperar, porque cada vuelta cuesta proporcionalmente a su contexto;
+- no relanzar la espera tras un `timeout` sin que el usuario lo pida.
+
+Si el límite de ~60 s no se puede ampliar, la espera sigue costando una vuelta
+por minuto; la salida sin coste sería despertar la sesión de Codex desde el
+principal (por ejemplo con `codex queue`), lo que cambiaría la regla actual de
+no despertar sesiones y requiere comprobarlo antes.
 
 ## Del cambio al informe
 
