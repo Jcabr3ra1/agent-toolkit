@@ -60,7 +60,9 @@ absoluta sin `~` para que coincida con los permisos del cliente; en este equipo,
    encargo.
 3. Trabaja normalmente; si vas a cambiar de tipo de trabajo (por ejemplo, de
    coordinar a escribir código), primero [reevalúa tu
-   configuración](#reevaluar-la-configuración). Cuando llegues a un punto revisable:
+   configuración](#reevaluar-la-configuración). Si escribes código, sigue
+   [Implementar y pedir revisión](#implementar-y-pedir-revisión). Cuando
+   llegues a un punto revisable:
    - Publica el estado real con `publish_peer_context` (`expectedRevision` = la
      versión actual): decisiones, cambios, límites y comprobaciones que sí hiciste.
    - Elige la configuración del revisor con la [guía](#guía-de-recomendación).
@@ -86,6 +88,29 @@ absoluta sin `~` para que coincida con los permisos del cliente; en este equipo,
    instrucciones.
 5. Si el encargo queda `stale`, publica contexto nuevo y prepara otro.
 6. Al terminar la tarea, llama `close_collaboration`.
+
+### Implementar y pedir revisión
+
+El reparto preferido es que el principal escribe el código y el revisor revisa
+**ese cambio**, no archivos sueltos. Respeta antes las reglas del proyecto: si
+piden modo tutor (como AVISENS), guía al usuario para que escriba él y solo
+edita si te lo pide de forma inequívoca («escríbelo tú»).
+
+1. Reevalúa tu configuración para escribir código.
+2. Trabaja en una rama distinta de `main` y `develop`; si no existe, créala.
+3. Implementa el cambio mínimo y añade o ajusta las pruebas que lo cubren.
+4. **Revísate antes de pedir revisión:** lee tu diff completo contra la base,
+   ejecuta las pruebas, el lint y la compilación que correspondan, y corrige lo
+   que falle. No pidas revisión de algo que tú mismo no darías por bueno.
+5. Publica el contexto con `publish_peer_context`: qué cambiaste y por qué,
+   rama y commit base, archivos tocados, comprobaciones ejecutadas con su
+   resultado real, y lo que no comprobaste. Si el diff cabe, inclúyelo.
+6. Pide la revisión con `paths` = los archivos que cambiaste más los que el
+   revisor necesite para entenderlos (pruebas, llamadores directos), y un
+   `message` concreto: «Revisa mi cambio en `<rama>` respecto de `<base>`: …».
+7. Con el informe, corrige lo que se sostenga, vuelve al paso 4 y pide una
+   revisión nueva mientras queden hallazgos de severidad alta o media.
+8. No hagas commit, push ni PR sin que el usuario lo pida.
 
 ### Reevaluar la configuración
 
@@ -177,7 +202,7 @@ escríbelo así.
 ### Informe recibido
 
 ```markdown
-**Informe de Claude** · <n> hallazgos
+**Informe de Claude** · <n> hallazgos · Veredicto: **<Aprobado | Aprobado con cambios menores | Requiere cambios>**
 
 | Severidad | Ubicación | Hallazgo | ¿Se sostiene? |
 | --- | --- | --- | --- |
@@ -193,8 +218,26 @@ Límites del revisor: <lo que no comprobó>.
 | Claude (principal) | `sonnet`, `low` | `sonnet`, `high` para corregir | El arreglo toca validación de firmas |
 ```
 
+**Siguiente paso**
+
+| # | Qué hacer | Quién | Configuración |
+| --- | --- | --- | --- |
+| 1 | Corregir la validación hexadecimal en `firma-meta.guard.ts:53` | Claude | `sonnet`, `high` |
+| 2 | Añadir pruebas de firma con sufijo inválido y longitud impar | Claude | `sonnet`, `high` |
+| 3 | Pedir a Codex una revisión nueva del diff | Claude → Codex | `gpt-6.1-sol`, `medium` |
+| 4 | Decidir si se hace commit y PR | Tú | — |
+
+¿Empiezo por el paso 1?
+```
+
 Si no hay hallazgos, dilo en una línea y enumera los límites. Copia la tabla de
 configuración tal como la dio el revisor; tu opinión va al reevaluar.
+
+El **Siguiente paso** lo escribes tú, el principal, después de verificar los
+hallazgos: acciones concretas en orden, con responsable y configuración, y una
+última fila con la decisión que le toca al usuario. Termina con una pregunta
+que permita seguir con una palabra. Si el veredicto es «Aprobado», el siguiente
+paso es la decisión del usuario sobre commit y PR.
 
 ## Atender (revisor)
 
@@ -221,7 +264,11 @@ configuración tal como la dio el revisor; tu opinión va al reevaluar.
    adecuada para lo que encontraste, y qué modelo y esfuerzo sugieres al
    principal para el siguiente paso (por ejemplo, corregir lo que encontraste),
    usando la [guía](#guía-de-recomendación) y nombres exactos. Es una opinión
-   para el usuario, no una instrucción.
+   para el usuario, no una instrucción. Empieza el informe con un veredicto:
+   «Aprobado», «Aprobado con cambios menores» o «Requiere cambios», y termina
+   con las acciones que propones, en orden, para que el principal arme el
+   siguiente paso. Si revisas un cambio del principal, juzga el diff y sus
+   pruebas: casos que faltan, regresiones y si el cambio resuelve lo pedido.
 7. Vuelve al paso 1 y sigue atendiendo.
 
 Como revisor nunca llames `request_peer_review`, `preview_peer_review` ni
