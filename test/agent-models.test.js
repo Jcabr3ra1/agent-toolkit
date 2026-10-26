@@ -27,7 +27,7 @@ test("levels use the newest Codex model of each category and skip older or hidde
   ], 'model = "nuevo-diario"\nmodel_reasoning_effort = "high"\n[mcp_servers.x]\nmodel = "otro"\n');
   const result = await agentModels({ codexHome: dir });
   assert.deepEqual(result.levels.map(level => level.codex && `${level.codex.model}:${level.codex.effort}`),
-    ["rapido:low", "nuevo-diario:medium", "nuevo-diario:high", "frontera:high", "frontera:xhigh"]);
+    ["rapido:low", "nuevo-diario:medium", "nuevo-diario:high", "frontera:high"]);
   assert.equal(result.codex.models.some(model => model.model === "oculto"), false);
   assert.equal(result.codex.models.find(model => model.model === "viejo-diario").category, "anterior");
   assert.deepEqual(result.codexCurrent, { model: "nuevo-diario", effort: "high" });
@@ -43,8 +43,8 @@ test("a missing catalog or unsupported effort is reported instead of inventing a
   assert.match(agentModelsTable(empty), /No se encontró `models_cache.json`/u);
   assert.match(agentModelsTable(empty), /No se pudo leer la configuración actual de Codex/u);
   const limited = await agentModels({ codexHome: await codexHome([
-    { slug: "frontera", description: "Frontier intelligence", supported_reasoning_levels: levels(["low", "high"]) }]) });
-  assert.equal(limited.levels.find(level => level.level === "Máximo").codex, null);
+    { slug: "frontera", description: "Frontier intelligence", supported_reasoning_levels: levels(["low", "medium"]) }]) });
+  assert.equal(limited.levels.find(level => level.level === "Alto").codex, null);
 });
 
 test("a newer model without the effort does not hide an older one that supports it", async () => {
@@ -52,7 +52,7 @@ test("a newer model without the effort does not hide an older one that supports 
     { slug: "nuevo", description: "Latest workhorse model", priority: 0, supported_reasoning_levels: levels(["low", "medium"]) },
     { slug: "anterior-util", description: "Everyday workhorse model", priority: 1, supported_reasoning_levels: levels(["low", "medium", "high"]) }]) });
   assert.deepEqual(result.levels.map(level => level.codex && `${level.codex.model}:${level.codex.effort}`),
-    [null, "nuevo:medium", "anterior-util:high", null, null]);
+    [null, "nuevo:medium", "anterior-util:high", null]);
 });
 
 test("the Codex profile selected at the top level overrides the model and effort", async () => {

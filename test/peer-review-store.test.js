@@ -324,7 +324,7 @@ test("outcomes are recorded once by the sender of a completed review and aggrega
   await assert.rejects(f.store.recordOutcome(outcome), { code: "peer-outcome" });
   const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "codex" });
   await f.store.submitReview({ ...f.bound, reviewId: request.id, agent: "codex", claimToken: claim.claimToken, content: "Veredicto: Requiere cambios" });
-  for (const bad of [{ upheld: 4 }, { verdict: "ok" }, { level: "alto" }, { principal: { model: "sonnet", effort: "ultra" } }, { findings: -1 }]) {
+  for (const bad of [{ upheld: 4 }, { verdict: "ok" }, { level: "extremo" }, { principal: { model: "sonnet", effort: "ultra" } }, { findings: -1 }]) {
     await assert.rejects(f.store.recordOutcome({ ...outcome, ...bad }), { code: "peer-input" });
   }
   await assert.rejects(f.store.recordOutcome({ ...outcome, agent: "codex", principal: undefined }), { code: "peer-outcome" });

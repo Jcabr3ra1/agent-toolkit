@@ -294,10 +294,12 @@ test("tool results stay compact: no prompts, hashes or history, and completo ret
   assert.equal("history" in compact, false);
   assert.equal(compact.reviews[0].review.content, report);
   // Once the principal records the outcome the list keeps only the report's fingerprint.
-  await f.store.recordOutcome({ ...f.bound, reviewId: sent.review.id, agent: "claude", verdict: "aprobado", findings: 0, upheld: 0 });
+  // "alto" is the current top level; critico and maximo stay valid in the schema for outcomes recorded before it.
+  await f.call("record_review_outcome", { ...f.bound, reviewId: sent.review.id, agent: "claude", verdict: "aprobado", findings: 0, upheld: 0, level: "alto" });
   const verified = decode(await f.call("get_collaboration", f.bound)).reviews[0];
   assert.deepEqual(Object.keys(verified.review).sort(), ["authorDeclared", "savedAt", "sha256"]);
   assert.equal(verified.outcome.verdict, "aprobado");
+  assert.equal(verified.outcome.level, "alto");
   assert.equal("prompt" in compact.reviews[0] || "snapshot" in compact.reviews[0], false);
   const full = decode(await f.call("get_collaboration", { ...f.bound, completo: true }));
   assert.equal(full.history.length, 2);

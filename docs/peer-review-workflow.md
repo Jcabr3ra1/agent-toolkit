@@ -213,8 +213,8 @@ se respetan, y con `--escribir --forzar` se apartan enteros como
 se pierde nada aunque otro proceso cambie el archivo a la vez. Si
 `models_cache.json` no se puede leer, no escribe nada. Vuelve a ejecutarlo con
 `--forzar` cuando cambien los modelos. Al delegar en Codex, la sesión principal
-nombra el agente (por ejemplo, `nivel_alto`); Máximo se pide por llamada solo si
-Crítico ya falló.
+nombra el agente (por ejemplo, `nivel_alto`); `xhigh` se pide por llamada solo si
+`high` ya falló.
 
 `programar` y `revisar` son accesos directos a `revision-cruzada`, que sigue
 disponible con `iniciar` y `atender` y contiene todas las reglas. Instala las
