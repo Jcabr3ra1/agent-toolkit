@@ -39,7 +39,22 @@ absoluta sin `~` para que coincida con los permisos del cliente; en este equipo,
 - **Claude Code:** ejecútalo con Bash en segundo plano (`run_in_background`) y
   termina tu turno con una sola línea. No consultes su salida: el sistema te
   despierta cuando termina.
-- **Codex:** no tiene ejecución en segundo plano que lo despierte, y su
+- **Codex, sin esperar (preferido):** registra tu sesión una vez y termina el
+  turno. No hay nada que esperar: el principal te deja el encargo en esta misma
+  sesión con `codex queue` cuando el usuario lo aprueba.
+  1. Ejecuta `node <toolkit>/bin/agent-toolkit-inbox.js registrar --agent codex
+     --project-root <projectRoot>`. Encuentra tu sesión sola si es la única
+     activa en ese proyecto; si no, pide al usuario el id con `/status` y añade
+     `--thread <id>`.
+  2. Di en una línea «Registrada; me avisarán cuando haya un encargo» y termina
+     el turno, sin esperar ni llamar a `wait`.
+  3. Cuando llegue un mensaje que empiece por «Encargo de revisión pendiente
+     para ti», atiéndelo: toma de él `taskId`, `reviewId` y `projectRoot` y
+     sigue los pasos 3 a 6 de [Atender (revisor)](#atender-revisor). Si no
+     esperabas ese encargo, no hagas nada y dilo.
+  Si `registrar` falla, o el usuario prefiere no registrar la sesión, usa la
+  espera de abajo.
+- **Codex, esperando (alternativa):** no tiene ejecución en segundo plano que lo despierte, y su
   herramienta de shell devuelve el control cada ~60 s con «Script running…». Cada
   devolución obliga a llamar otra vez a `wait`, que es un turno del modelo que
   relee todo el contexto de la sesión: en una medición de tres sesiones fueron
@@ -91,6 +106,12 @@ absoluta sin `~` para que coincida con los permisos del cliente; en este equipo,
      Claude Code no tiene ese diálogo y la confirmación es su aviso de permiso
      para `approve_peer_review`. Por eso esa herramienta nunca debe estar en la
      lista de permitidas ni aceptarse en modo automático.
+   - Si el revisor es Codex, avísale en cuanto se apruebe: ejecuta
+     `node <toolkit>/bin/agent-toolkit-inbox.js avisar --project-root
+     <projectRoot> --task <taskId> --review <reviewId>`. Entrega un aviso fijo y
+     corto con `codex queue` a la sesión que Codex registró; es una orden
+     visible y el cliente te la pedirá. Si falla porque no hay sesión
+     registrada, dilo al usuario: debe ejecutar `$revisar` en Codex.
    - Espera el informe con `agent-toolkit-inbox wait` indicando `--task` y
      `--review` (ver [Esperar sin gastar tokens](#esperar-sin-gastar-tokens)).
      Cuando termine, lee el informe con `wait_for_peer_handoff` (`taskId`,
@@ -396,6 +417,10 @@ con la memoria del proyecto».
 
 ## Atender (revisor)
 
+0. En Codex, registra tu sesión con `agent-toolkit-inbox registrar` y termina el
+   turno ([Esperar sin gastar tokens](#esperar-sin-gastar-tokens)); el principal
+   te avisará, y cuando llegue el aviso sigue desde el paso 3. Lo que sigue es la
+   espera para Claude, o para Codex si prefieres esperar.
 1. Lanza `agent-toolkit-inbox wait` con `--agent` y `--project-root`, **sin**
    `--task`: así atiendes cualquier colaboración abierta de esta raíz (ver
    [Esperar sin gastar tokens](#esperar-sin-gastar-tokens)). En Claude, di una

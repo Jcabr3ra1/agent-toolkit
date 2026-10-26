@@ -1,4 +1,5 @@
 import { agentModels, agentModelsTable } from "./agent-models.js";
+import { DeliveryError, deliverReview, registerReviewer } from "./codex-delivery.js";
 import { LevelAgentsError, levelAgentPlan, levelAgentsTable, writeLevelAgents } from "./level-agents.js";
 import { createPeerReviewStore, PeerReviewError } from "./peer-review-store.js";
 
@@ -9,6 +10,8 @@ const HELP = `Uso: agent-toolkit-inbox wait --agent <claude|codex> --project-roo
      agent-toolkit-inbox rendimiento [--project-root <ruta>] [--json]
      agent-toolkit-inbox modelos [--json]
      agent-toolkit-inbox agentes [--escribir [--forzar]] [--json]
+     agent-toolkit-inbox registrar --agent codex --project-root <ruta> [--thread <id>]
+     agent-toolkit-inbox avisar --project-root <ruta> --task <taskId> --review <reviewId>
 
 Espera sin usar ningún modelo hasta que llegue un encargo para el agente o,
 con --task y --review, hasta que ese encargo tenga informe o termine.
@@ -26,6 +29,11 @@ nivel_exigente y nivel_alto) en ~/.codex/agents con el modelo y el esfuerzo de
 esa tabla. Sin --escribir solo muestra la vista previa. Nunca sobrescribe ni
 borra: un archivo distinto se respeta, y con --forzar queda como .anterior-*.
 Los agentes de Claude vienen del plugin niveles.
+
+registrar guarda la sesión de Codex como revisora del proyecto (la encuentra sola
+si es la única activa ahí, o con --thread). avisar entrega con codex queue un
+aviso fijo y corto a esa sesión por un encargo ya aprobado, pendiente y dirigido
+a Codex, para que Codex no tenga que esperar gastando una vuelta por minuto.
 `;
 
 function parse(argv) {
@@ -78,12 +86,35 @@ function summary(value) {
 }
 
 export async function runPeerInboxCli(argv, { out, err, store = createPeerReviewStore(), now = Date.now,
-  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000, codexHome, claudeHome } = {}) {
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000, codexHome, claudeHome, deliveryDirectory, deliver = deliverReview } = {}) {
   if (argv[0] === "modelos") {
     if (argv.length > 2 || (argv[1] !== undefined && argv[1] !== "--json")) { await err(HELP); return EXIT.usage; }
     const result = await agentModels({ ...(codexHome && { codexHome }), ...(claudeHome && { claudeHome }) });
     await out(argv[1] === "--json" ? JSON.stringify(result) + "\n" : agentModelsTable(result));
     return EXIT.found;
+  }
+  if (argv[0] === "registrar" || argv[0] === "avisar") {
+    const names = { "--agent": "agent", "--project-root": "projectRoot", "--thread": "thread", "--task": "taskId", "--review": "reviewId" };
+    const options = {};
+    for (let i = 1; i < argv.length; i += 2) {
+      const key = names[argv[i]];
+      if (!key || argv[i + 1] === undefined || Object.hasOwn(options, key)) { await err(HELP); return EXIT.usage; }
+      options[key] = argv[i + 1];
+    }
+    const valid = argv[0] === "registrar"
+      ? options.agent === "codex" && options.projectRoot && !options.taskId && !options.reviewId
+      : options.projectRoot && options.taskId && options.reviewId && !options.agent && !options.thread;
+    if (!valid) { await err(HELP); return EXIT.usage; }
+    try {
+      const result = argv[0] === "registrar"
+        ? await registerReviewer({ projectRoot: options.projectRoot, thread: options.thread, ...(deliveryDirectory && { directory: deliveryDirectory }), ...(codexHome && { codexHome }) })
+        : await deliver({ store, ...options, ...(deliveryDirectory && { directory: deliveryDirectory }) });
+      await out(JSON.stringify(result) + "\n");
+      return EXIT.found;
+    } catch (failure) {
+      await err((failure instanceof DeliveryError || failure instanceof PeerReviewError ? failure.message : "No se pudo completar la operación.") + "\n");
+      return EXIT.failure;
+    }
   }
   if (argv[0] === "agentes") {
     const flags = argv.slice(1);
