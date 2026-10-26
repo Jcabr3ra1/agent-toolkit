@@ -24,10 +24,12 @@ function parse(argv) {
   const [command, ...rest] = argv;
   if (command !== "wait") return null;
   const options = { timeoutSeconds: 3600 };
+  const seen = new Set();
   const names = { "--agent": "agent", "--project-root": "projectRoot", "--task": "taskId", "--review": "reviewId", "--timeout-seconds": "timeoutSeconds" };
   for (let i = 0; i < rest.length; i += 2) {
     const key = names[rest[i]];
-    if (!key || rest[i + 1] === undefined || Object.hasOwn(options, key) && key !== "timeoutSeconds") return null;
+    if (!key || rest[i + 1] === undefined || seen.has(key)) return null;
+    seen.add(key);
     options[key] = rest[i + 1];
   }
   options.timeoutSeconds = Number(options.timeoutSeconds);
