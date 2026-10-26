@@ -123,9 +123,28 @@ y `~/.codex/skills/`:
 >
 > En la otra terminal: `/revision-cruzada atender` o `$revision-cruzada atender`.
 
-El revisor espera en bloques de 60 segundos. Cada bloque es un turno de su
-modelo, por lo que mantener una bandeja atendida consume cuota aunque no lleguen
-encargos; la skill se detiene tras 60 minutos sin actividad.
+## Esperar sin consumir el modelo
+
+Esperar con `wait_for_peer_handoff` en bucle consume un turno del modelo en cada
+vuelta, aunque no llegue nada. Para esperas largas usa el comando
+`agent-toolkit-inbox`, que lee la bandeja sin usar ningún modelo:
+
+```sh
+node bin/agent-toolkit-inbox.js wait --agent claude --project-root /ruta/al/proyecto --timeout-seconds 3600
+node bin/agent-toolkit-inbox.js wait --agent codex --project-root /ruta/al/proyecto --task <taskId> --review <reviewId>
+```
+
+Sin `--task` espera un encargo pendiente para ese agente en cualquier
+colaboración abierta de la raíz; con `--task` y `--review` espera a que ese
+encargo tenga informe o termine. Consulta la bandeja cada 2 segundos y escribe
+una línea JSON con `state` (`handoff`, `finished`, `closed` o `timeout`), el
+`taskId` y un resumen del encargo sin el prompt ni el informe. Sale con 0 si hay
+resultado, 3 si se agota el tiempo, 2 por uso incorrecto y 1 ante un error. No
+reclama ni modifica nada.
+
+Claude Code lo ejecuta en segundo plano y solo vuelve a usar el modelo cuando el
+comando termina. Codex lo ejecuta en primer plano: el modelo no trabaja mientras
+el comando espera. La skill `revision-cruzada` ya lo usa en ambos papeles.
 
 ## Del cambio al informe
 

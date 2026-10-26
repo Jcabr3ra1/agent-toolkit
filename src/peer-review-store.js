@@ -292,6 +292,23 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     return { tasks: tasks.sort((a, b) => a.taskId.localeCompare(b.taskId)) };
   }
 
+  // Shared by the MCP wait tool and the inbox CLI so both stop on the same conditions.
+  async function findHandoff({ projectRoot, agent, taskId, reviewId }) {
+    if (!AGENTS.has(agent) || (reviewId && !taskId)) fail("input");
+    const tasks = taskId ? [taskId] : (await listCollaborations({ projectRoot })).tasks.map(task => task.taskId);
+    let last = null;
+    for (const id of tasks) {
+      const task = await getCollaboration({ projectRoot, taskId: id, freshness: false });
+      const request = reviewId ? task.reviews.find(review => review.id === reviewId) :
+        task.reviews.find(review => review.to === agent && review.state === "pending");
+      if (reviewId && !request) fail("missing");
+      const value = { taskId: task.id, projectRoot: task.project.root, taskState: task.state, review: request ?? null };
+      if (task.state === "closed" || request && (!reviewId || !ACTIVE.has(request.state))) return { done: true, value };
+      last = value;
+    }
+    return { done: false, value: last ?? { taskId: null, projectRoot, review: null, openTasks: 0 } };
+  }
+
   async function publishContext({ taskId, projectRoot, author, content, expectedRevision }) {
     if (!AGENTS.has(author) || !text(content, PEER_LIMITS.contextBytes)) fail("input");
     return transaction(taskId, projectRoot, task => {
@@ -402,6 +419,6 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     });
   }
 
-  return Object.freeze({ startCollaboration, getCollaboration, listCollaborations, publishContext, prepareReview,
+  return Object.freeze({ startCollaboration, getCollaboration, listCollaborations, findHandoff, publishContext, prepareReview,
     dispatchReview, requestReview, claimReview, submitReview, cancelReview, closeCollaboration });
 }
