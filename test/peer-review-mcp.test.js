@@ -235,9 +235,11 @@ test("clients without MCP elicitation approve through their own tool permission"
   assert.deepEqual({ sent: sent.sent, approvedBy: sent.approvedBy, method: sent.review.approval.method }, { sent: true, approvedBy: "permiso-cliente", method: "permiso-cliente" });
   await f.store.cancelReview({ ...f.bound, reviewId: sent.review.id });
   const other = await f.preview();
-  const fallo = { mcpReq: { elicitInput: async () => { throw new Error("transport closed"); } } };
-  assert.equal((await f.call("approve_peer_review", { previewId: other.previewId, confirmationCode: other.confirmationCode }, fallo)).isError, true);
-  assert.equal((await f.store.getCollaboration(f.bound)).reviews.length, 1);
+  const fallo = { mcpReq: { elicitInput: async () => { throw Object.assign(new Error("Method not found"), { code: -32601 }); } } };
+  const otherSent = decode(await f.call("approve_peer_review", { previewId: other.previewId, confirmationCode: other.confirmationCode }, fallo));
+  assert.equal(otherSent.approvedBy, "permiso-cliente");
+  await f.store.cancelReview({ ...f.bound, reviewId: otherSent.review.id });
+  assert.equal((await f.store.getCollaboration(f.bound)).reviews.length, 2);
   const withDialog = await f.preview();
   assert.equal(decode(await f.call("approve_peer_review", { previewId: withDialog.previewId, confirmationCode: withDialog.confirmationCode }, f.approveContext)).review.approval.method, "dialogo");
   const auto = decode(await f.call("start_collaboration", { ...input, projectRoot: f.projectRoot, autoReviews: 2 }, sinDialogo));

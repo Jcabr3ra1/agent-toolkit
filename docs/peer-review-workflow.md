@@ -43,17 +43,19 @@ Cada encargo necesita una confirmación del usuario fuera del modelo:
 
 - **Codex** declara el diálogo de confirmación de MCP (elicitation): al aprobar
   aparece un diálogo con el prompt completo. Si se cancela, no se envía.
-- **Claude Code 2.1.310** no lo declara. `approve_peer_review` usa entonces el
-  aviso de permiso del propio cliente antes de ejecutar la herramienta y
-  registra la aprobación como `method: "permiso-cliente"`. Esa confirmación
-  solo existe si `approve_peer_review` no está en la lista de permitidas y la
-  terminal no acepta herramientas automáticamente. El MCP no puede comprobarlo.
+- **Claude Code 2.1.310** no muestra ese diálogo. Si la petición falla por
+  cualquier motivo, `approve_peer_review` usa el aviso de permiso del propio
+  cliente, registra la aprobación como `method: "permiso-cliente"` y escribe
+  en el registro del MCP el código del fallo. Esa confirmación solo existe si
+  Claude Code pregunta por la herramienta: en modo automático hay que añadir
+  `mcp__agent-toolkit-workflow__approve_peer_review` a `permissions.ask` de
+  `~/.claude/settings.json`. El MCP no puede comprobarlo.
 - El modo automático (`autoReviews`) exige el diálogo: sin él, la colaboración
   automática no se crea.
 
-Comprobado el 2026-10-26: el primer encargo enviado desde Claude Code falló con
-un error genérico porque el SDK rechazaba la petición de diálogo; desde esta
-versión se envía con el aviso de permiso de Claude Code.
+Comprobado el 2026-10-26: los primeros encargos enviados desde Claude Code
+fallaron con un error genérico al pedir el diálogo, y en modo automático la
+herramienta se ejecutó sin aviso de permiso.
 
 ## Empezar mañana en otro proyecto
 
