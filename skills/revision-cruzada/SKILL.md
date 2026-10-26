@@ -139,6 +139,35 @@ colaboración:
 4. Termina con una línea de estado de la memoria, como pida el proyecto (en
    AVISENS: `Memoria AVISENS: …`).
 
+### Delegar por nivel (Claude)
+
+Si el plugin `niveles` está instalado (`claude plugin list`), el principal no
+pide `/model`: delega el trabajo de código al agente del nivel y la sesión se
+queda como está, coordinando.
+
+1. Clasifica con la [guía](#guía-de-recomendación) y elige el agente:
+   Ligero `niveles:nivel-ligero`, Normal `niveles:nivel-normal`, Exigente
+   `niveles:nivel-exigente`, y Crítico o Máximo `niveles:nivel-alto` (`opus`,
+   `high`). Pasa `effort: "xhigh"` en esa llamada solo si el trabajo es Máximo
+   por haber fallado ya en Crítico. Úsalo como `subagent_type` de la
+   herramienta Agent.
+2. Dale un encargo completo, porque empieza sin esta conversación: objetivo,
+   rama y base, archivos, reglas del proyecto, criterio de aceptación y las
+   comprobaciones que debe ejecutar.
+3. Comprueba la integración tú: que el diff solo toca lo pedido y que las
+   pruebas, el lint y la compilación pasan cuando tú los ejecutas. Su resumen es
+   una declaración. Juzgar si el cambio es correcto es revisar: lo hace el
+   revisor cruzado, o un agente del nivel de revisar con la orden de no editar.
+4. Para trabajo Ligero o Normal de pocas líneas, hacerlo tú en la sesión es más
+   barato que delegarlo: la delegación empieza sin contexto y devuelve un
+   resumen. Delega cuando el nivel que toca es mayor que el de esta sesión.
+5. Si el plugin no está, trabaja tú y recomienda `/model` como en
+   [Reevaluar la configuración](#reevaluar-la-configuración).
+
+Coordinar (repartir trabajo, leer informes y comprobar la integración) nunca
+pasa de Normal. El modelo y el esfuerzo del agente son los de su archivo, no una
+garantía: un valor por invocación o `CLAUDE_CODE_EFFORT_LEVEL` pueden prevalecer.
+
 ### Reevaluar la configuración
 
 Vale igual si el principal es Claude o Codex. Antes de cambiar de tipo de

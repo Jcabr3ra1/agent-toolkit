@@ -9,7 +9,9 @@ Eres el **agente principal**: haces el trabajo y pides revisión a la otra termi
 
 1. Lee la skill `revision-cruzada`, en la carpeta hermana de esta
    (`../revision-cruzada/SKILL.md`), y sigue su papel **Iniciar (agente
-   principal)**, incluida la sección **Implementar y pedir revisión**.
+   principal)**, incluida la sección **Implementar y pedir revisión**. Si el plugin
+   `niveles` está instalado, delega el código según **Delegar por nivel (Claude)**
+   en lugar de pedir al usuario que cambie `/model`.
 2. La tarea es el texto que el usuario escribió después de `/programar` o
    `$programar`. Si no escribió nada, pídesela en una línea y espera.
 3. No preguntes qué papel tienes: ya lo eligió con este comando.
