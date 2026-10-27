@@ -1,18 +1,17 @@
 # Identidad visual de Agent Toolkit
 
-## Símbolo vigente
+## Logo principal
 
-El símbolo principal está en [`agent-toolkit-mark.svg`](agent-toolkit-mark.svg).
-Parte de la **propuesta 02**: un núcleo hexagonal que representa la memoria del
-proyecto, rodeado de módulos que representan agentes y herramientas conectados.
-No forma una letra ni depende de un monograma.
+El logo principal está en [`agent-toolkit-mark.png`](agent-toolkit-mark.png).
+Es la imagen final proporcionada por el usuario a partir de la **propuesta 02**:
+un núcleo hexagonal que representa la memoria del proyecto, rodeado de módulos
+que representan agentes y herramientas conectados.
 
-La imagen se preparó como SVG para conservar bordes nítidos a cualquier tamaño.
-El fondo negro redondeado ayuda a que los cortes y uniones del símbolo se lean
-tanto en fondos claros como oscuros. El nombre “Agent Toolkit” se escribe como
-texto en el README, para mantenerlo legible y accesible.
+El archivo original es un PNG de 1024 × 765 píxeles con fondo negro, tonos
+morados y lilas, degradados y volumen. El README usa esta imagen y mantiene el
+nombre “Agent Toolkit” como texto para conservar su legibilidad y accesibilidad.
 
-### Paleta
+### Colores de referencia
 
 | Uso | Color |
 | --- | --- |
@@ -21,10 +20,12 @@ texto en el README, para mantenerlo legible y accesible.
 | Variación del morado | Morado oscuro `#6D28D9` |
 | Acentos | Lila `#A78BFA` y `#C4B5FD` |
 
-## Versión anterior
+## Otras versiones
 
-[`agent-toolkit-mark-v1.png`](agent-toolkit-mark-v1.png) conserva la propuesta
-anterior en verde menta y azul petróleo. El README principal usa el SVG vigente.
+- [`agent-toolkit-mark.svg`](agent-toolkit-mark.svg): variante vectorial
+  simplificada creada durante la exploración de la propuesta 02.
+- [`agent-toolkit-mark-v1.png`](agent-toolkit-mark-v1.png): propuesta anterior en
+  verde menta y azul petróleo.
 
 ## Alcance
 

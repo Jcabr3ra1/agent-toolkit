@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/brand/agent-toolkit-mark.svg" alt="Símbolo de Agent Toolkit: módulos morados conectados alrededor de un núcleo" width="112">
+  <img src="assets/brand/agent-toolkit-mark.png" alt="Logo de Agent Toolkit: módulos morados y lilas alrededor de un núcleo hexagonal" width="240">
 </p>
 
 <h1 align="center">Agent Toolkit</h1>
