@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480" role="img" aria-labelledby="title desc">
+  <title id="title">Símbolo de Agent Toolkit</title>
+  <desc id="desc">Un núcleo hexagonal morado rodeado de módulos conectados.</desc>
+  <rect x="16" y="16" width="448" height="448" rx="112" fill="#111015" />
+
+  <g stroke="#111015" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#7C3AED" d="M220 58h40q10 0 10 10v50q0 18 17 27l12 7-23 27q-16-13-36-13t-36 13l-23-27 12-7q17-9 17-27V68q0-10 10-10Z" />
+    <path fill="#6D28D9" d="M97 171q27-48 81-76l22 30q-35 20-49 59l-1 28h-34v24H80v-25q0-24 17-40Z" />
+    <path fill="#C4B5FD" d="M383 171q-27-48-81-76l-22 30q35 20 49 59l1 28h34v24h36v-25q0-24-17-40Z" />
+    <path fill="#A78BFA" d="M177 322q25 31 63 31t63-31l27 30q-23 27-60 42v34q0 10-10 10h-40q-10 0-10-10v-34q-37-15-60-42l27-30Z" />
+    <path fill="#7C3AED" d="m240 170 66 38v64l-66 38-66-38v-64l66-38Z" />
+  </g>
+</svg>

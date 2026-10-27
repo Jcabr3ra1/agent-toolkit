@@ -1,190 +1,137 @@
 <p align="center">
-  <img src="assets/brand/agent-toolkit-mark.png" alt="Símbolo de Agent Toolkit: piezas conectadas alrededor de una memoria común" width="144">
+  <img src="assets/brand/agent-toolkit-mark.svg" alt="Símbolo de Agent Toolkit: módulos morados conectados alrededor de un núcleo" width="112">
 </p>
 
 <h1 align="center">Agent Toolkit</h1>
 
-<p align="center"><strong>El contexto de tu proyecto, compartido entre tus agentes.</strong></p>
+<p align="center"><strong>El contexto de tu proyecto, compartido entre los agentes que tú eliges.</strong></p>
 
-<p align="center">Una memoria organizada · Varios agentes · Tú mantienes el control</p>
+<p align="center">Memoria por proyecto · herramientas revisables · control humano</p>
 
-## ¿Para qué sirve?
+<p align="center"><sub>v0.1.0 · beta privada · requiere acceso al repositorio</sub></p>
 
-Cambias de chat o de asistente y vuelves a explicar el proyecto desde cero.
-Las decisiones quedan dispersas, las notas envejecen y se repite trabajo que
-ya estaba hecho.
+---
 
-Agent Toolkit ayuda a organizar ese contexto para que tus agentes encuentren
-lo que necesitan, sepan dónde comprobarlo y puedan continuar con menos
-explicaciones repetidas.
+## Una memoria clara para trabajar con varios agentes
 
-No es otro chatbot ni un agente que hace todo por su cuenta. Es una caja de
-herramientas para conectar asistentes con una memoria de proyecto clara,
-compartida y mantenible.
+Agent Toolkit reúne herramientas locales para que Codex, Claude y otros
+asistentes puedan consultar el contexto estable de un proyecto. El código sigue
+siendo la fuente principal de verdad; la memoria vive aparte, en archivos que
+puedes leer y organizar.
 
-## Una memoria que puedes entender
+No es otro chatbot ni un agente que hace todo por su cuenta. Prepara conexiones,
+diagnósticos y encargos para que tú revises cada paso antes de aplicarlo o
+entregarlo.
 
-**Obsidian sigue siendo parte del sistema.** Allí puedes leer y organizar las
-notas del proyecto: su propósito, arquitectura, decisiones, avances y pendientes.
-Son archivos de texto; no una memoria invisible que solo entiende una IA.
+## Qué puedes hacer
 
-Los agentes consultan esa misma información mediante una conexión limitada.
-Sus instrucciones les ayudan a buscar primero y leer solo lo pertinente.
-El código y las pruebas del proyecto siguen siendo la fuente principal de
-verdad: las notas explican el contexto, no lo sustituyen.
+- **Crear y revisar memorias de proyecto.** Prepara una estructura separada del
+  repositorio y comprueba su estado antes de conectarla.
+- **Conectar Codex o Claude.** Configura una consulta de solo lectura a la
+  memoria, con una vista previa antes de modificar la configuración del agente.
+- **Preparar encargos revisables.** Define alcance, criterios y modo tutor o
+  autónomo; la herramienta genera un borrador y tú decides si lo entregas.
+- **Comprobar cambios concretos.** Compara archivos enumerados con sus huellas y
+  reúne evidencia para una revisión.
+- **Coordinar revisiones entre sesiones.** Prepara el contexto y los resultados
+  para una entrega manual entre agentes.
 
-## Lo que puedes hacer hoy
+La biblioteca incluye además perfiles de exploración, análisis, arquitectura,
+documentación, tutoría y revisión de calidad.
 
-- **Preparar una memoria nueva** con una estructura común, sin copiar los datos
-  de otro proyecto ni sobrescribir archivos distintos.
-- **Conectar Codex y Claude Code** mediante sus configuraciones
-  locales de Skills y acceso de lectura. Cada conexión requiere comprobarse
-  también en el cliente real.
-- **Detectar problemas** en la estructura, los enlaces, la configuración y
-  posibles secretos antes de seguir trabajando.
-- **Consultar el estado** de la memoria y de las conexiones declaradas.
-- **Encontrar cambios integrados en GitHub** que aún no aparecen como revisados
-  en el registro de la memoria.
-- **Reunir evidencia de un cambio**: qué archivos afectó, qué comprobaciones
-  tiene y qué áreas de las notas conviene revisar.
-- **Registrar una revisión terminada** con vista previa y autorización explícita,
-  sin duplicar su registro ni escribir otras notas.
-- **Aplicar cambios de notas ya revisados**: muestra las diferencias, exige la
-  huella del plan aprobado y comprueba versiones, enlaces y evidencia antes
-  de reemplazar únicamente las notas enumeradas.
-- **Preparar un encargo para otro agente**: a partir de los datos explícitos
-  de una tarea, sugiere modelo y esfuerzo y arma un borrador que revisas y
-  entregas tú. La sugerencia usa datos revisados que tú proporcionas; no
-  comprueba cuentas, disponibilidad actual ni qué modelo responderá. No envía
-  el encargo ni arranca otros asistentes.
-- **Comprobar una entrega contra lo revisado**: detecta diferencias en los
-  archivos que indicas, antes o después del trabajo. No revisa archivos fuera
-  de esa lista ni sustituye la revisión de calidad.
-- **Preparar una revisión externa de solo lectura**: `agent-task prepare` puede
-  generar un encargo explícito para el rol `reviewer`; exige archivos de
-  inspección y limita las acciones declaradas a lectura/verificación. El borrador
-  no arranca clientes. Opcionalmente, `agent-task external-verifier preview`
-  prepara una invocación confirmable de Codex CLI con archivos enumerados y
-  controles de solo lectura; la llamada solo ocurre al ejecutar el comando
-  `run` mostrado después de revisar la cuenta, el modelo y el alcance. La identidad
-  exacta de cuenta, plan y cuota no se consultan.
-- **Pedir revisiones entre sesiones abiertas de Claude y Codex**: crea una
-  colaboración ligada al repositorio, comparte contexto y envía encargos en
-  cualquiera de los dos sentidos con vista previa y aprobación. El receptor
-  atiende la bandeja desde su propia terminal y devuelve un informe que conserva
-  las huellas de los archivos revisados. El MCP no inicia modelos ni despierta
-  sesiones inactivas; las dos sesiones deben estar conectadas y atender la tarea.
-  Consulta [Revisión cruzada entre sesiones](docs/peer-review-workflow.md).
-- **Pasar un plan entre Codex y Claude Code desde MCP**: el servidor local
-  `agent-toolkit-mcp` prepara llamadas de Codex CLI y Claude Code CLI con vistas
-  previas y confirmación interactiva del cliente MCP. Codex planifica; Claude
-  contrasta la propuesta y puede implementar en una rama limpia si se habilita
-  expresamente al crear la tarea; Codex puede hacer la revisión final en modo de
-  solo lectura. Cada llamada vuelve a pedir confirmación. La configuración del
-  MCP y una sesión disponible de ambas CLIs siguen siendo necesarias. Consulta
-  [Flujo local entre Codex y Claude Code](docs/task-workflow-mcp.md). La demo
-  real confirmada cubre Codex planificando y Claude proponiendo; las etapas de
-  escritura y revisión final aún requieren demostración con cuentas reales.
+## Inicio rápido
 
-También incluye procedimientos reutilizables para definir requisitos,
-documentar decisiones, revisar calidad y pasar trabajo entre sesiones, junto
-con perfiles especializados de exploración, análisis y tutoría.
+Necesitas acceso al repositorio privado y **Node.js 24.x**. Desde una terminal:
 
-## Cómo encaja en tu trabajo
+```bash
+git clone https://github.com/Jcabr3ra1/agent-toolkit.git
+cd agent-toolkit
+node --version
+npm ci --ignore-scripts
+```
 
-1. **Organizas el proyecto.** Su código vive en su repositorio y su contexto en
-   una memoria independiente.
-2. **Conectas tus asistentes.** Consultan las notas relevantes y contrastan las
-   afirmaciones con las fuentes del proyecto.
-3. **Desarrollas y revisas los cambios.** Una rama en progreso no se presenta
-   como comportamiento ya integrado.
-4. **Revisas el impacto en la memoria.** Las herramientas actuales detectan e
-   inspeccionan cambios; una persona o un agente autorizado decide qué notas
-   deben actualizarse.
+`node --version` debe mostrar una versión 24.x. Instala las dependencias desde
+la raíz del repositorio y comprueba las herramientas:
 
-La consulta de memoria está separada de su escritura. La CLI puede aplicar
-texto previamente redactado y autorizado y registrar una conclusión revisada
-en otra operación. No redacta ni actualiza automáticamente las notas técnicas.
-Registrar tampoco significa aprobar el código.
+```bash
+node bin/project-memory.js --help
+node bin/agent-task.js --help
+```
 
-## Pensado para más de un proyecto
+No requiere una instalación global: ejecuta los comandos con `node bin/...`
+desde la carpeta `agent-toolkit`. El paquete es privado y no está publicado en
+npm.
 
-Agent Toolkit contiene las herramientas generales. Cada proyecto conserva su
-propia memoria, instrucciones y límites de acceso.
+## Prepara y conecta una memoria
 
-Puedes reutilizar la estructura sin llevarte las decisiones, documentos
-privados o credenciales de un proyecto a otro. Clonar esta biblioteca tampoco
-clona las memorias ni conecta automáticamente los agentes.
+Reemplaza `/ruta/a/mi-proyecto` por la ruta real de tu repositorio. Primero
+prepara una memoria en **vista previa**; este comando no escribe archivos:
 
-## Control y límites claros
+```bash
+node bin/project-memory.js init ../memoria-mi-proyecto \
+  --project-id mi-proyecto \
+  --project-name "Mi Proyecto" \
+  --source /ruta/a/mi-proyecto
+```
 
-- Las conexiones de memoria se preparan con herramientas de **solo lectura**.
-- Crear memorias y conexiones tiene una vista previa; aplicar cambios exige
-  una acción explícita.
-- No se deben guardar contraseñas, tokens, credenciales ni datos personales en
-  las memorias. Las comprobaciones ayudan, pero no garantizan detectar todo.
-- La herramienta se detiene ante los conflictos que comprueba; no intenta
-  resolverlos sobrescribiendo archivos.
-- No instala un sistema de permisos sin restricciones ni garantiza que todos
-  los clientes se comporten igual.
+Revisa el destino y el plan que muestra la herramienta. Si son correctos,
+repite el mismo comando añadiendo `--apply` para crear la memoria. Después,
+compruébala:
 
-## En qué punto está
+```bash
+node bin/project-memory.js doctor ../memoria-mi-proyecto
+```
 
-**Base funcional local · versión 0.1.0 · beta privada publicada.** La última
-regresión funcional documentada, del 9 de octubre de 2026, pasó 3.280 pruebas.
-Los cierres posteriores son documentales y no repiten esa ejecución. Es evidencia
-local con datos y procesos ficticios, no una certificación de producción, cuentas
-o compatibilidad completa entre sistemas operativos.
+Para preparar una conexión de solo lectura con Codex, primero revisa su vista
+previa:
 
-El hito **R1** está completo: guía inicial, recorrido integrado ficticio y
-publicación privada comprobada el 9 de octubre de 2026. Puedes obtener la
-biblioteca desde [su repositorio privado](https://github.com/Jcabr3ra1/agent-toolkit)
-si tienes acceso. Eso no instala conexiones, activa clientes de IA ni configura
-una automatización real. No se creó una etiqueta o release por llamarla beta.
+```bash
+node bin/project-memory.js connect ../memoria-mi-proyecto --agent codex
+```
 
-| Etapa | Estado |
+Si el plan es correcto, repítelo con `--apply`:
+
+```bash
+node bin/project-memory.js connect ../memoria-mi-proyecto --agent codex --apply
+node bin/project-memory.js status ../memoria-mi-proyecto
+```
+
+Para Claude, cambia `codex` por `claude`. Después de aplicar la conexión,
+reinicia la sesión del agente y prueba una consulta pequeña sobre una nota que
+ya conozcas. La conexión no instala Codex ni Claude Code.
+
+## Empieza sin tocar un proyecto real
+
+La [guía de primeros pasos](docs/primeros-pasos.md) usa datos ficticios y explica
+cómo probar los comandos sin conectar cuentas, modificar un proyecto ni ejecutar
+modelos de IA.
+
+## Documentación
+
+| Necesito… | Guía |
 | --- | --- |
-| Crear, diagnosticar y conectar memorias | Implementado |
-| Consultar el estado de las conexiones | Implementado |
-| Detectar e inspeccionar cambios fusionados | Implementado |
-| Registrar revisiones sin duplicarlas | Disponible en la beta privada y probado localmente |
-| Aplicar notas revisadas con autorización y verificaciones | Disponible en la beta privada; texto y plan revisados por separado |
-| Integrar el ciclo completo con una automatización | Pendiente |
-| Preparar borradores de encargo tutor o autónomo | Disponible en la beta privada; entrega manual |
-| Comprobar archivos de una entrega contra lo revisado | Disponible en la beta privada; solo archivos indicados |
-| Preparar un encargo de verificador externo | Disponible localmente; perfil declarado, sin invocación de clientes |
-| Empezar con ayudas y un encargo ficticio | Guía disponible y comprobada localmente |
-| Recorrido completo con proyecto y memoria ficticios | Verificado localmente; GitHub y conexiones simulados, no una instalación real |
-| Lanzar agentes o aplicar encargos automáticamente | MCP local experimental: plan Codex → propuesta Claude → implementación optativa y autorizada → revisión final Codex; la implementación y revisión aún requieren demostración con CLIs reales |
-| Búsqueda semántica y nuevos proveedores | Evolución posterior, no comprometida |
+| Probar la herramienta paso a paso | [Primeros pasos](docs/primeros-pasos.md) |
+| Consultar comandos y opciones | [Guía de comandos](docs/guia-de-comandos.md) |
+| Entender el uso completo | [Guía de uso](docs/uso.md) |
+| Crear una memoria | [Project Memory Init](docs/project-memory-init.md) |
+| Conectar Codex o Claude | [Project Memory Connect](docs/project-memory-connect.md) |
+| Diagnosticar una memoria y sus conexiones | [Project Memory Status](docs/project-memory-status.md) |
+| Entender la arquitectura | [Sistema de memoria](docs/project-memory-system.md) |
+| Preparar y comprobar encargos | [Preparar encargos](docs/agent-task-prepare.md) · [Verificar entregas](docs/agent-task-verify.md) |
+| Coordinar revisión entre sesiones | [Flujo de revisión cruzada](docs/peer-review-workflow.md) |
+| Usar las herramientas de Gemini | [Herramientas de Gemini](docs/herramientas-gemini.md) |
+| Revisar la identidad visual | [Identidad de marca](assets/brand/README.md) |
 
-El objetivo de la primera versión completa es cerrar el ciclo de revisión y
-mantenimiento con controles. Las capacidades avanzadas se añadirán cuando
-resuelvan una necesidad comprobada, no como requisitos para empezar.
+## Límites y cuidado de datos
 
-## ¿Quieres usarlo o entender cómo está construido?
+- La memoria de cada proyecto se mantiene separada; no guardes contraseñas,
+  tokens ni credenciales en ella.
+- Crear memorias y conexiones requiere revisar la vista previa y usar
+  `--apply` de forma explícita.
+- El MCP de memoria ofrece lectura. Preparar un encargo no lo envía ni arranca
+  otro asistente automáticamente.
+- Una conexión configurada no garantiza por sí sola que el cliente la haya
+  cargado; comprueba el estado y haz una consulta pequeña.
 
-- [Primeros pasos](docs/primeros-pasos.md): una prueba local sencilla, sin
-  conectar cuentas ni ejecutar otros agentes.
-- [Guía de uso e instalación](docs/uso.md): comandos y conexiones locales.
-- [Primera beta privada](docs/agent-toolkit-private-beta.md): alcance, criterios,
-  evidencia y cierre de las tres entregas.
-- [Arquitectura del sistema](docs/project-memory-system.md): separación de
-  herramientas, código y memoria.
-- [Registro de revisiones](docs/project-memory-sync-record.md): comportamiento,
-  controles y evidencia de la nueva base local.
-- [Aplicación de notas revisadas](docs/project-memory-sync-apply.md): plan
-  aprobado, escritura limitada y tratamiento de resultados parciales.
-- [Preparación de encargos](docs/agent-task-prepare.md): borrador revisable,
-  límites y ejemplo ficticio.
-- [Comprobación de entregas](docs/agent-task-verify.md): comparación de los archivos
-  indicados, sin aprobación automática ni ejecución de agentes.
-- [Verificador externo](docs/agent-task-external-verifier.md): encargo `reviewer`,
-  vista previa confirmable de Codex CLI y límites de solo lectura.
-- [Flujo local entre Codex y Claude Code](docs/task-workflow-mcp.md): conectar el
-  MCP local, habilitar cada etapa y revisar el traspaso automático, con sus límites actuales.
-- [Identidad visual](assets/brand/README.md): concepto y origen del logo.
-
-La beta se conserva en GitHub privado. Clonar la biblioteca no copia las bóvedas
-de tus proyectos ni conecta automáticamente tus agentes. Los cambios futuros
-seguirán necesitando revisión antes de sincronizar la copia local y el remoto.
+Consulta la [guía de uso](docs/uso.md) para conocer las opciones, límites y
+procedimientos completos.
