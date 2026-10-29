@@ -65,7 +65,13 @@ footer{max-width:920px;margin:0 auto;padding:10px 20px 50px;color:var(--muted);f
 .req code{white-space:nowrap}
 
 .steps,.cmds{grid-template-columns:minmax(0,1fr)}.steps>li,.cmds>li,.cmd{min-width:0}main{overflow-x:clip}
-.cmd pre{white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Commands never wrap (a break after a hyphen would split --options); long ones scroll, and the button sits below so it never covers text. */
+.cmd pre{white-space:pre;overflow-x:auto;padding:14px 16px}
+.copy{position:static;display:block;margin:8px 0 0 auto;min-height:34px;padding:4px 14px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+.copy:hover{background:color-mix(in srgb,var(--ink) 8%,var(--card))}
+.copy.ok{background:#1f7a55;border-color:#1f7a55;color:#fff}
+@media (max-width:600px){.cmd pre{padding:14px 16px}.copy{top:auto;bottom:auto}}
 </style></head><body>
 <header class="top">
 <a class="skip" href="#contenido">Saltar al contenido</a>
