@@ -38,7 +38,7 @@ test("research runs read-only in a private empty folder and keeps the answer", a
   assert.match(call.args[1], /Pregunta: ¿Qué hay de nuevo en Node\?/u);
   assert.deepEqual(call.args.slice(2), ["--model", "gemini-4-argon-medium", "--mode", "plan", "--output-format", "json", "--print-timeout", "600s"]);
   assert.equal(call.cwd, result.directory);
-  assert.equal(path.dirname(path.dirname(call.cwd)), f.outRoot);
+  assert.equal(path.dirname(path.dirname(call.cwd)), await fs.realpath(f.outRoot));
   assert.equal((await fs.stat(call.cwd)).mode & 0o777, 0o700);
   assert.equal(await fs.readFile(result.files[0], "utf8"), "Respuesta con fuentes https://ejemplo.org");
   assert.equal(JSON.parse(await fs.readFile(path.join(call.cwd, "meta.json"), "utf8")).conversationId, CONVERSATION);
@@ -69,7 +69,7 @@ test("image generation waits for the subagent's files and copies only images", a
   assert.deepEqual(result.files.map(file => path.basename(file)), ["logo_1.png"]);
   assert.equal(await fs.readFile(result.files[0], "utf8"), "PNG");
   const [call] = f.calls;
-  assert.match(call.args[1], /subagente image-generator.*Un logo/su);
+  assert.match(call.args[1], /generate_image.*Un logo/su);
   assert.deepEqual(call.args.slice(2, 6), ["--model", "gemini-3.8-flash-low", "--mode", "accept-edits"]);
   assert.equal(call.cwd, path.dirname(result.files[0]));
 });
@@ -110,4 +110,133 @@ test("the CLI maps options to the tools and rejects bad usage", async () => {
   const failing = await runGeminiCli(["imagen", "--prompt", "x"], { tools: { ...tools, imagen: async () => { throw new Error("detalle interno"); } }, out: () => {}, err: t => seen.push(t) });
   assert.equal(failing, 1);
   assert.equal(seen.at(-1), "No se pudo completar la operación.\n");
+});
+
+test('simultaneous identical prompts never share a directory or overwrite an answer', async () => {
+  const f = await fixture();
+  const [a,b] = await Promise.all([1,2].map(n => investigar({ prompt: 'same', outRoot: f.outRoot,
+    now: () => 1700000000000, run: f.run(f.ok({ response: String(n) })) })));
+  assert.notEqual(a.directory, b.directory);
+  assert.deepEqual(await Promise.all([a,b].map(r => fs.readFile(r.files[0], 'utf8'))), ['1','2']);
+});
+
+test('image artifact ids and symlinks cannot escape the conversation directory', async () => {
+  const f = await fixture();
+  await assert.rejects(imagen({ prompt: 'x', outRoot: f.outRoot, brainDirectory: f.brainDirectory,
+    waitMs: 1, pollMs: 1, run: f.run(f.ok({ conversation_id: '../outside' })) }), /conversación/u);
+  const artifacts = path.join(f.brainDirectory, CONVERSATION);
+  await fs.mkdir(artifacts, { recursive: true });
+  const secret = path.join(f.directory, 'private'); await fs.writeFile(secret, 'PRIVATE');
+  await fs.symlink(secret, path.join(artifacts, 'bad.png'));
+  await assert.rejects(imagen({ prompt: 'x', outRoot: f.outRoot, brainDirectory: f.brainDirectory,
+    waitMs: 1, pollMs: 1, run: f.run(f.ok()) }));
+});
+
+test('consultation persists usage; history and recovery never invoke a model', async () => {
+  const f = await fixture(), api = await import('../src/gemini-tools.js');
+  assert.equal(typeof api.consultar, 'function');
+  const result = await api.consultar({ prompt: 'hola', outRoot: f.outRoot, run: f.run(f.ok()) });
+  const history = await api.historial({ outRoot: f.outRoot });
+  assert.equal(history.runs.length, 1);
+  assert.equal(history.runs[0].directory, result.directory);
+  assert.equal(history.runs[0].usage.total_tokens, 100);
+  const recovered = await api.recuperar({ directory: result.directory, outRoot: f.outRoot });
+  assert.equal(recovered.response, f.ok().response);
+  assert.equal(f.calls.length, 1);
+});
+
+test('analysis copies only explicit inputs and rejects invalid or linked files before invoking agy', async () => {
+  const f = await fixture(), api = await import('../src/gemini-tools.js');
+  assert.equal(typeof api.analizar, 'function');
+  const file = path.join(f.directory, 'selected.txt'); await fs.writeFile(file, 'el número es 42');
+  const result = await api.analizar({ prompt: 'qué número', files: [file], outRoot: f.outRoot,
+    run: f.run(f.ok({ structured_output: { status: 'completed', answer: '42', filesRead: ['input-1.txt'] } }), async cwd => {
+      assert.equal(await fs.readFile(path.join(cwd, 'input-1.txt'), 'utf8'), 'el número es 42');
+    }) });
+  assert.equal(result.analysis.status, 'completed');
+  assert.equal(f.calls[0].args[1].includes(f.directory), false);
+  const linked = path.join(f.directory, 'linked.txt'); await fs.symlink(file, linked);
+  for (const files of [[], [linked], [path.join(f.directory, 'absent.pdf')], [f.directory]]) {
+    await assert.rejects(api.analizar({ prompt: 'x', files, outRoot: f.outRoot, run: f.run(f.ok()) }));
+  }
+  assert.equal(f.calls.length, 1);
+});
+
+test('unsupported media is reported honestly; no successful analysis without verified structured output', async () => {
+  const f = await fixture(), api = await import('../src/gemini-tools.js');
+  assert.equal(typeof api.analizar, 'function');
+  const file = path.join(f.directory, 'document.pdf'); await fs.writeFile(file, 'test pdf');
+  const response = f.ok({ structured_output: { status: 'unsupported', answer: 'No puedo leer audio', filesRead: [] } });
+  const result = await api.analizar({ prompt: 'transcribe', files: [file], outRoot: f.outRoot, run: f.run(response) });
+  assert.equal(result.analysis.status, 'unsupported');
+  await assert.rejects(api.analizar({ prompt: 'x', files: [file], outRoot: f.outRoot, run: f.run(f.ok()) }));
+});
+
+test('CLI supports explicit media, local history and recovery; unsupported analysis is not success', async () => {
+  const seen = [], tools = {
+    analizar: async input => { seen.push(input); return { analysis: { status: 'unsupported' } }; },
+    historial: async input => ({ runs: [], ...input }), recuperar: async input => ({ inferredAgain: false, ...input }),
+    consultar: async input => ({ response: input.prompt })
+  };
+  const run = async argv => { let stdout = ''; const code = await runGeminiCli(argv, { tools, out: t => { stdout += t; }, err: () => {} }); return { code, stdout }; };
+  assert.equal((await run(['analizar', '--prompt', 'resume', '--archivo', '/x.pdf', '--archivo', '/y.mp4'])).code, 3);
+  assert.deepEqual(seen[0].files, ['/x.pdf','/y.mp4']);
+  assert.equal((await run(['historial', '--limite', '5'])).code, 0);
+  assert.equal(JSON.parse((await run(['recuperar', '--directorio', '/run'])).stdout).inferredAgain, false);
+  assert.equal((await run(['consultar', '--prompt', 'hi'])).code, 0);
+  for (const args of [['analizar','--prompt','x'], ['consultar','--prompt','x','--archivo','x.pdf'], ['historial','--limite','0'], ['recuperar'], ['imagen','--prompt','x','--proveedor','api']]) assert.equal((await run(args)).code, 2);
+});
+
+test('audio is explicitly unavailable after failed native validation, without spending another model call', async () => {
+  const f=await fixture(), api=await import('../src/gemini-tools.js');
+  const file=path.join(f.directory,'speech.wav');await fs.writeFile(file,'test');
+  const result=await api.analizar({prompt:'transcribe',files:[file],outRoot:f.outRoot,run:f.run(f.ok())});
+  assert.equal(result.analysis.status,'unsupported');
+  assert.equal(result.inferred,false);
+  assert.equal(f.calls.length,0);
+});
+
+test('explicit task binding records provider usage once and never infers on an invalid collaboration', async () => {
+  const calls=[], records=[];
+  const store={getCollaboration:async ()=>({}),recordUsage:async input=>{records.push(input);return {recorded:true};}};
+  const tools={consultar:async ()=>{calls.push(1);return {kind:'consultar',conversationId:CONVERSATION,model:'gemini-3.8-flash-low',usage:{input_tokens:100,cache_read_tokens:40,output_tokens:5,total_tokens:105},durationMs:500};}};
+  const args=['consultar','--prompt','hi','--task',CONVERSATION,'--project-root','/project'];
+  const io={tools,usageStore:store,out:()=>{},err:()=>{}};
+  assert.equal(await runGeminiCli(args,io),0);
+  assert.equal(records[0].measurement.totalTokens,105);
+  assert.equal(records[0].measurement.cacheReadTokens,40);
+  assert.equal(records[0].measurement.source,'client-reported');
+  assert.equal(await runGeminiCli(args,{...io,usageStore:{getCollaboration:async ()=>{throw Error('missing');}}}),1);
+  assert.equal(calls.length,1);
+});
+
+test('copy failures and late images still record usage and expose the recoverable run',async()=>{
+  const api=await import('../src/gemini-tools.js');
+  for(const command of ['consultar','imagen']) {
+    const f=await fixture(), records=[], target=path.join(f.directory,'target');
+    await fs.mkdir(target);await fs.writeFile(path.join(target,'respuesta.md'),'preserve');
+    const tools={ [command]: options=>api[command]({...options,outRoot:f.outRoot,run:f.run(f.ok()),brainDirectory:f.brainDirectory,waitMs:1,pollMs:1}) };
+    let stdout='',stderr='';
+    const code=await runGeminiCli([command,'--prompt','test','--task',CONVERSATION,'--project-root',f.directory,...(command==='consultar'?['--copiar-a',target]:[])],{
+      tools,usageStore:{getCollaboration:async()=>({}),recordUsage:async record=>{records.push(record);return {recorded:true};}},
+      out:s=>{stdout+=s;},err:s=>{stderr+=s;}
+    });
+    assert.equal(code,1);assert.equal(records.length,1);assert.equal(records[0].measurement.totalTokens,100);
+    const result=JSON.parse(stdout);
+    assert.ok(result.directory);assert.equal(result.usageRecord.recorded,true);
+    assert.equal((await api.historial({outRoot:f.outRoot})).runs[0].directory,result.directory);
+    assert.equal(await fs.readFile(path.join(target,'respuesta.md'),'utf8'),'preserve');
+    assert.ok(stderr.length>0);
+  }
+});
+
+test('recovering partial analysis retains its status, evidence and CLI exit code',async()=>{
+  const f=await fixture(),api=await import('../src/gemini-tools.js');
+  const file=path.join(f.directory,'doc.pdf');await fs.writeFile(file,'test');
+  const result=await api.analizar({prompt:'read',files:[file],outRoot:f.outRoot,run:f.run(f.ok({structured_output:{status:'partial',answer:'only page one',filesRead:['input-1.pdf']}}))});
+  const recovered=await api.recuperar({directory:result.directory,outRoot:f.outRoot});
+  assert.equal(recovered.analysis.status,'partial');assert.equal(recovered.analysisVerified,false);
+  assert.equal(recovered.evidence,'model-reported');
+  const code=await runGeminiCli(['recuperar','--directorio',result.directory],{tools:{recuperar:options=>api.recuperar({...options,outRoot:f.outRoot})},out:()=>{},err:()=>{}});
+  assert.equal(code,3);assert.equal(f.calls.length,1);
 });

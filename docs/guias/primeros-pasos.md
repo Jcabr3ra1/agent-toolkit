@@ -122,3 +122,10 @@ La evidencia, los intentos anteriores y los límites están en
 Completar estos pasos no ejecuta automáticamente un equipo, no conecta clientes
 reales ni acredita suscripción, disponibilidad o políticas de consumo. El cierre
 de R2 no publica por sí solo los archivos pendientes ni reemplaza su revisión.
+
+## Instalación y recuperación
+
+Consulta [Consolidación](consolidacion.md) para `doctor`, instalación de skills,
+registro de consumo y cierre a un borrador. Son comandos adicionales a los
+ejemplos ficticios de esta guía; no necesitas llamar a ningún modelo para probar
+`doctor`, las vistas previas, `consumo` o el historial local de Gemini.

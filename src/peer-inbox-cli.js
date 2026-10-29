@@ -1,3 +1,6 @@
+import { closeWithHandoff } from "./peer-handoff.js";
+import fs from "node:fs/promises";
+import { consumptionTable } from "./usage-metrics.js";
 import { agentModels, agentModelsTable } from "./agent-models.js";
 import { DeliveryError, deliverReview, registerReviewer } from "./codex-delivery.js";
 import { LevelAgentsError, levelAgentPlan, levelAgentsTable, writeLevelAgents } from "./level-agents.js";
@@ -7,6 +10,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const EXIT = Object.freeze({ found: 0, failure: 1, usage: 2, timeout: 3 });
 const HELP = `Uso: agent-toolkit-inbox wait --agent <claude|codex> --project-root <ruta>
        [--task <taskId> --review <reviewId>] [--timeout-seconds <1-86400>]
+     agent-toolkit-inbox cierre --project-root <ruta> --task <id> --salida <borrador.md>
+     agent-toolkit-inbox consumo [--project-root <ruta>] [--json]
+     agent-toolkit-inbox medir --project-root <ruta> --task <id> --archivo <medicion.json>
      agent-toolkit-inbox rendimiento [--project-root <ruta>] [--json]
      agent-toolkit-inbox modelos [--json]
      agent-toolkit-inbox agentes [--escribir [--forzar]] [--json]
@@ -87,6 +93,40 @@ function summary(value) {
 
 export async function runPeerInboxCli(argv, { out, err, store = createPeerReviewStore(), now = Date.now,
   sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), intervalMs = 2_000, codexHome, claudeHome, deliveryDirectory, deliver = deliverReview } = {}) {
+  if (argv[0] === "cierre") {
+    const names = { "--project-root": "projectRoot", "--task": "taskId", "--salida": "output" }, options = {};
+    for (let i = 1; i < argv.length; i += 2) {
+      const key = names[argv[i]];
+      if (!key || !argv[i+1] || options[key]) { await err(HELP); return EXIT.usage; }
+      options[key] = argv[i+1];
+    }
+    if (!options.projectRoot || !UUID.test(options.taskId ?? "") || !options.output) { await err(HELP); return EXIT.usage; }
+    try { await out(JSON.stringify(await closeWithHandoff({ store, ...options })) + "\n"); return EXIT.found; }
+    catch { await err("No se pudo cerrar: revisa encargos activos, permisos y que la salida no exista. Si se creó el borrador antes del fallo, consérvalo y consulta el estado.\n"); return EXIT.failure; }
+  }
+  if (argv[0] === "consumo" || argv[0] === "medir") {
+    try {
+      if (argv[0] === "consumo") {
+        const options = parseRendimiento(argv.slice(1));
+        if (!options) { await err(HELP); return EXIT.usage; }
+        const report = await store.consumption(options);
+        await out(options.json ? JSON.stringify(report) + "\n" : consumptionTable(report));
+      } else {
+        const names = { "--project-root": "projectRoot", "--task": "taskId", "--archivo": "file" }, options = {};
+        for (let i = 1; i < argv.length; i += 2) {
+          const key = names[argv[i]];
+          if (!key || !argv[i + 1] || options[key]) { await err(HELP); return EXIT.usage; }
+          options[key] = argv[i + 1];
+        }
+        if (!options.projectRoot || !UUID.test(options.taskId ?? "") || !options.file) { await err(HELP); return EXIT.usage; }
+        const stat = await fs.lstat(options.file);
+        if (!stat.isFile() || stat.size > 8192) throw new Error("measurement file");
+        const measurement = JSON.parse(await fs.readFile(options.file, "utf8"));
+        await out(JSON.stringify(await store.recordUsage({ ...options, measurement })) + "\n");
+      }
+      return EXIT.found;
+    } catch { await err("No se pudo registrar o consultar el consumo. Revisa la tarea y los contadores.\n"); return EXIT.failure; }
+  }
   if (argv[0] === "modelos") {
     if (argv.length > 2 || (argv[1] !== undefined && argv[1] !== "--json")) { await err(HELP); return EXIT.usage; }
     const result = await agentModels({ ...(codexHome && { codexHome }), ...(claudeHome && { claudeHome }) });

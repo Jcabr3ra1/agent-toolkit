@@ -20,6 +20,7 @@ Para una reorganización, utiliza la skill
 - [Guía de comandos de Agent Toolkit](guias/guia-de-comandos.md)
 - [Herramientas de Gemini](guias/herramientas-gemini.md)
 - [Tu primera prueba con Agent Toolkit](guias/primeros-pasos.md)
+- [Instalación, consumo y recuperación](guias/consolidacion.md)
 - [Guía de uso de Agent Toolkit](guias/uso.md)
 
 ## Memoria de proyectos

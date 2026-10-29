@@ -62,6 +62,27 @@ No requiere una instalación global: ejecuta los comandos con `node bin/...`
 desde la carpeta `agent-toolkit`. El paquete es privado y no está publicado en
 npm.
 
+## Instala las skills y comprueba tu equipo
+
+```bash
+node bin/agent-toolkit.js doctor --agent all
+node bin/agent-toolkit.js setup --agent all
+```
+
+`setup` muestra una vista previa. Añade `--apply` para enlazar las skills sin
+reemplazar destinos existentes; devuelve los comandos de registro MCP como pasos
+explícitos. Superpowers se instala aparte y es opcional. Consulta la
+[guía de instalación, consumo y recuperación](docs/guias/consolidacion.md).
+
+La skill global `cerrar-memoria` sirve para todos los proyectos, incluidos Agent
+Toolkit y AVISENS: `/cerrar-memoria` en Claude y `$cerrar-memoria` en Codex.
+Identifica la bóveda y las ramas por su manifiesto y conserva las reglas locales.
+Los proyectos nuevos reutilizan ese cierre; `cerrar-avisens` es un alias compatible.
+
+Gemini aporta consultas, investigación, análisis de texto/imágenes/PDF/vídeo y
+generación de imágenes mediante Antigravity. El audio automático está bloqueado
+tras fallar su validación nativa. Consulta [capacidades y uso](docs/guias/herramientas-gemini.md).
+
 ## Prepara y conecta una memoria
 
 Reemplaza `/ruta/a/mi-proyecto` por la ruta real de tu repositorio. Primero

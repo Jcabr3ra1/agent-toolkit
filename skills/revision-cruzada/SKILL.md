@@ -12,6 +12,20 @@ dos papeles: **iniciar** (agente principal) y **atender** (revisor). Los
 comandos cortos `/programar` (o `$programar`) y `/revisar` (o `$revisar`) eligen
 el papel directamente. Si el usuario no indica cuál, pregunta solo eso.
 
+## Procesos y consumo
+
+Si ya hay un diseño, plan o autorización del usuario, reutilízalo. Superpowers
+es opcional y se instala aparte: cuando esté activo, úsalo para el proceso de
+implementación y reserva esta skill para coordinación, alcance y entrega. No
+repitas fases de planificación ni revisiones equivalentes solo por cargar ambas.
+
+Registra consumo con `record_peer_usage` solo si hay contadores del cliente o una
+medición manual identificada. Un id estable por llamada evita duplicados. No
+copies el total acumulado de una sesión en cada revisión: usa deltas de contadores
+con el mismo origen y rango, o deja el dato desconocido. Si el cliente no expone
+uso, omítelo. Consulta `get_peer_consumption` o `agent-toolkit-inbox consumo`;
+el número de hallazgos y el de tokens miden cosas diferentes.
+
 ## Datos comunes
 
 - `agent`: `claude` si eres Claude Code, `codex` si eres Codex. El otro agente es
@@ -31,8 +45,9 @@ node <toolkit>/bin/agent-toolkit-inbox.js wait --agent <agent> --project-root <p
 ```
 
 `<toolkit>` es la carpeta de Agent Toolkit que usa el MCP, escrita como ruta
-absoluta sin `~` para que coincida con los permisos del cliente; en este equipo,
-`/Users/juan_jaller/programacion/Agent-Toolkit`. Salida: `handoff` (llegó un encargo), `finished`
+absoluta sin `~`. Resuélvela desde la carpeta física de esta skill (dos niveles
+arriba, siguiendo el enlace de instalación), y verifica que coincide con la
+ruta registrada en el MCP. Salida: `handoff` (llegó un encargo), `finished`
 (el encargo esperado tiene informe o terminó), `closed` (colaboración cerrada) o
 `timeout` (código 3). No reclama ni modifica nada.
 
@@ -182,17 +197,21 @@ Un cambio aprobado no está cerrado hasta revisar si afecta a la memoria del
 proyecto. Hazlo cuando el usuario cree el PR, cuando se fusione y al cerrar la
 colaboración:
 
-1. Busca la skill de cierre del proyecto: en AVISENS, `cerrar-avisens` (con
-   `avisens`); en otro proyecto, la que indiquen sus instrucciones. Si existe,
-   aplícala: comprueba el estado del PR y su impacto documental, sin pedir al
-   usuario que repita el contexto.
-2. Si no hay skill de cierre pero el proyecto tiene memoria (un
+1. Usa la skill global `cerrar-memoria` para cualquier proyecto con manifiesto.
+   Obtiene identidad, bóveda y ramas del proyecto y conserva sus reglas locales.
+   Comprueba el estado del PR y su impacto documental sin pedir al usuario que
+   repita el contexto. `cerrar-avisens` es solo un alias de compatibilidad.
+2. Si la skill global no está disponible pero el proyecto tiene memoria (un
    `project-memory.json` o un MCP de memoria), enumera las notas que el cambio
    puede haber dejado desactualizadas y pregunta si las actualizas.
 3. Respeta las reglas de esa memoria: un PR abierto es trabajo en desarrollo y
    no cambia la memoria vigente.
-4. Termina con una línea de estado de la memoria, como pida el proyecto (en
-   AVISENS: `Memoria AVISENS: …`).
+4. Si el usuario pide conservar un traspaso, usa `agent-toolkit-inbox cierre
+   --project-root <raíz> --task <id> --salida <borrador.md>` cuando no queden
+   encargos activos. Escribe un archivo nuevo y cierra la colaboración; no
+   actualiza automáticamente la memoria vigente ni demuestra que se fusionó el PR.
+5. Termina con `Memoria <nombre del proyecto>: <estado real>.`, distinguiendo
+   actualización local, registro pendiente y sincronización comprobada.
 
 ### Delegar por nivel (Claude)
 
@@ -400,7 +419,7 @@ esta tabla:
 | 2 | Añadir pruebas de firma con sufijo inválido y longitud impar | Claude | `sonnet`, `high` |
 | 3 | Pedir a Codex una revisión nueva del diff | Claude → Codex | `gpt-6.1-sol`, `medium` |
 | 4 | Decidir si se hace commit y PR | Tú | — |
-| 5 | Cerrar con la memoria del proyecto (`cerrar-avisens`) | Claude | — |
+| 5 | Cerrar con la memoria del proyecto (`cerrar-memoria`) | Claude | — |
 
 ¿Empiezo por el paso 1?
 ```

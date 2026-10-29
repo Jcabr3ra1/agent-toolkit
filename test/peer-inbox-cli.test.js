@@ -124,3 +124,17 @@ test("rendimiento prints a table of recorded outcomes without using a model", as
   assert.equal(await runPeerInboxCli(["rendimiento", "--otro"], { store: f.store, out: () => {}, err: t => errors.push(t) }), 2);
   assert.match(errors.join(""), /rendimiento \[--project-root/u);
 });
+
+test('consumo CLI preserves unknown usage and medir is idempotent with a supplied measurement', async () => {
+  const f = await fixture();
+  const input = path.join(f.projectRoot,'measurement.json');
+  await fs.writeFile(input, JSON.stringify({ id: 'cli-call', agent: 'codex', phase: 'planning', model: 'example', source: 'manual', totalTokens: 30 }));
+  const invoke = async args => { let output=''; const code=await runPeerInboxCli(args,{ store:f.store,out:t=>{output+=t;},err:()=>{} });return {code, output}; };
+  const argv=['medir','--project-root',f.projectRoot,'--task',f.bound.taskId,'--archivo',input];
+  assert.equal((await invoke(argv)).code,0);
+  assert.equal(JSON.parse((await invoke(argv)).output).recorded,false);
+  const report=JSON.parse((await invoke(['consumo','--project-root',f.projectRoot,'--json'])).output);
+  assert.equal(report.summary.counters.totalTokens.sum,30);
+  assert.equal(report.summary.counters.costUsd.sum,null);
+  assert.equal((await invoke(['consumo','--bad'])).code,2);
+});

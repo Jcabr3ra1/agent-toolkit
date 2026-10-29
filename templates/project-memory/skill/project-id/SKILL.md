@@ -23,6 +23,12 @@ El repositorio definido en el perfil, su código, pruebas, configuración y docu
 
 Al cerrar un cambio estable, consulta `00-INICIO/Mantenimiento de la memoria.md` y determina si alguna nota quedó desactualizada. Una rama abierta no modifica por sí sola la memoria vigente.
 
+Para ejecutar el cierre, usa la skill global `cerrar-memoria` cuando esté
+instalada. Es la misma para todos los proyectos: identifica esta bóveda por
+`project-memory.json` y conserva sus reglas. No crees un comando de cierre
+específico de Project Name. El manifiesto está tres niveles por encima de la
+carpeta física de esta skill (`07-AGENTES/skills/project-id`).
+
 ## Seguridad
 
 - El MCP permanece en modo de solo lectura.

@@ -309,3 +309,24 @@ test("tool results stay compact: no prompts, hashes or history, and completo ret
   assert.equal(decode(await f.call("close_collaboration", f.bound)).state, "closed");
   assert.equal(JSON.stringify(decode(await f.call("start_collaboration", { ...input, projectRoot: f.projectRoot }))).includes("history"), false);
 });
+
+test('MCP usage recording rejects fabricated fields and exposes partial coverage without claiming savings', async () => {
+  const f = await harness();
+  const measurement = { id: 'mcp-call', agent: 'codex', phase: 'review', model: 'example', source: 'client-reported', inputTokens: 50 };
+  assert.equal(decode(await f.call('record_peer_usage', { ...f.bound, measurement })).recorded, true);
+  assert.equal(decode(await f.call('record_peer_usage', { ...f.bound, measurement })).recorded, false);
+  await assert.rejects(f.call('record_peer_usage', { ...f.bound, measurement: { ...measurement, fabricated: true } }));
+  const report = decode(await f.call('get_peer_consumption', { projectRoot: f.projectRoot }));
+  assert.equal(report.summary.counters.inputTokens.sum, 50);
+  assert.equal(report.summary.counters.costUsd.sum, null);
+  assert.equal(report.savingsVerified, false);
+});
+
+test('compact collaboration responses do not repeat saved usage measurements',async()=>{
+  const f=await harness();
+  await f.store.recordUsage({...f.bound,measurement:{id:'measurement-unique',agent:'codex',phase:'review',model:'example',source:'manual',totalTokens:5}});
+  const compact=decode(await f.call('get_collaboration',f.bound));
+  assert.equal(JSON.stringify(compact).includes('measurement-unique'),false);
+  assert.equal(compact.measuredCalls,1);
+  assert.equal(decode(await f.call('get_collaboration',{...f.bound,completo:true})).measurements[0].id,'measurement-unique');
+});

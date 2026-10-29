@@ -1,6 +1,6 @@
 ---
 name: revisar
-description: Atiende como revisor la revisión cruzada entre Claude y Codex. Espera sin gastar tokens los encargos de la otra terminal, revisa en solo lectura lo que te piden y devuelve un informe con veredicto. Úsala solo cuando el usuario escriba /revisar o $revisar.
+description: Atiende como revisor la revisión cruzada entre Claude y Codex. Recibe los encargos de la otra terminal evitando esperas activas cuando el cliente lo permite, revisa en solo lectura lo que te piden y devuelve un informe con veredicto. Úsala solo cuando el usuario escriba /revisar o $revisar.
 ---
 
 # Revisar

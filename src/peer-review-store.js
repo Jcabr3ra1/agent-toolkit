@@ -1,3 +1,4 @@
+import { normalizeMeasurement, summarizeMeasurements } from "./usage-metrics.js";
 import { constants } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -272,6 +273,10 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
 
   async function getCollaboration({ taskId, projectRoot, freshness = true }) {
     const task = await bound(await storage(), taskId, projectRoot);
+    return viewWithFreshness(task, freshness);
+  }
+
+  async function viewWithFreshness(task, freshness) {
     const view = publicTask(task);
     const snapshots = new Map();
     for (const review of view.reviews) {
@@ -459,6 +464,52 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     });
   }
 
+  async function recordUsage({ taskId, projectRoot, measurement }) {
+    let normalized;
+    try { normalized = normalizeMeasurement(measurement); } catch { fail("input"); }
+    return transaction(taskId, projectRoot, task => {
+      const measurements = task.measurements ??= [];
+      const existing = measurements.find(item => item.id === normalized.id);
+      if (existing) {
+        if (JSON.stringify(existing) !== JSON.stringify(normalized)) fail("input");
+        return { recorded: false, id: normalized.id };
+      }
+      if (measurements.length >= 256) fail("limit");
+      measurements.push(normalized);
+      return { recorded: true, id: normalized.id };
+    });
+  }
+
+  async function consumption({ projectRoot } = {}) {
+    const directory = await storage();
+    const root = projectRoot ? (await project(projectRoot)).root : null;
+    const tasks = [], all = [];
+    let unreadableRecords = 0;
+    for (const name of (await fs.readdir(directory)).filter(name => name.endsWith(".json") && UUID.test(name.slice(0, -5)))) {
+      const task = await readable(directory, name.slice(0, -5));
+      if (!task) { unreadableRecords++; continue; }
+      if (root && task.project.root !== root) continue;
+      const records = (task.measurements ?? []).map(normalizeMeasurement);
+      all.push(...records);
+      tasks.push({ taskId: task.id, state: task.state, reviews: task.reviews.length,
+        completedReviews: task.reviews.filter(r => r.state === "completed").length,
+        summary: summarizeMeasurements(records) });
+    }
+    return { projectRoot: root, tasks: tasks.sort((a,b) => a.taskId.localeCompare(b.taskId)),
+      summary: summarizeMeasurements(all), unreadableRecords, evidence: "declared", savingsVerified: false };
+  }
+
+  async function closeWithSnapshot({ taskId, projectRoot, saveSnapshot }) {
+    if (typeof saveSnapshot !== "function") fail("input");
+    return transaction(taskId, projectRoot, async task => {
+      requireOpen(task);
+      if (task.reviews.some(review => ACTIVE.has(review.state))) fail("active");
+      await saveSnapshot(await viewWithFreshness(task, true));
+      task.state = "closed";
+      return { closed: true };
+    });
+  }
+
   async function closeCollaboration({ taskId, projectRoot }) {
     return transaction(taskId, projectRoot, task => {
       task.state = "closed";
@@ -467,5 +518,5 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
   }
 
   return Object.freeze({ startCollaboration, getCollaboration, listCollaborations, findHandoff, publishContext, prepareReview,
-    dispatchReview, requestReview, claimReview, submitReview, recordOutcome, performance, cancelReview, closeCollaboration });
+    dispatchReview, requestReview, claimReview, submitReview, recordOutcome, performance, recordUsage, consumption, cancelReview, closeWithSnapshot, closeCollaboration });
 }
