@@ -19,6 +19,11 @@ siguen siendo pasos explícitos; no se modifica silenciosamente configuración.
 No instales desde un worktree temporal que vayas a borrar.
 
 `doctor` informa Node, dependencias, presencia de CLIs, skills y configuración MCP.
+Con Codex informa además `codexSandbox`: si su sandbox deja escribir en
+`~/.agent-toolkit`, que `$revisar` necesita para registrar la sesión revisora. Si
+falta, imprime el comando que añade `[sandbox_workspace_write] writable_roots`
+sin duplicar la sección; sin ese permiso `registrar` falla con un error de
+escritura (EPERM).
 Que algo esté configurado no demuestra que una sesión nueva lo haya cargado.
 Superpowers es opcional y separado; no lo instala Agent Toolkit. Su estado debe
 consultarse en el gestor de plugins del cliente. Para agentes por nivel, usa

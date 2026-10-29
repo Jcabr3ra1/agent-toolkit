@@ -74,6 +74,11 @@ reemplazar destinos existentes; devuelve los comandos de registro MCP como pasos
 explícitos. Superpowers se instala aparte y es opcional. Consulta la
 [guía de instalación, consumo y recuperación](docs/guias/consolidacion.md).
 
+Si Codex va a revisar, `doctor` comprueba también que su sandbox pueda escribir en
+`~/.agent-toolkit` (lo necesita `$revisar` para registrarse) e imprime el comando
+para permitirlo. El recorrido completo, paso a paso, está en la
+[guía de comandos](docs/guias/guia-de-comandos.md).
+
 La skill global `cerrar-memoria` sirve para todos los proyectos, incluidos Agent
 Toolkit y AVISENS: `/cerrar-memoria` en Claude y `$cerrar-memoria` en Codex.
 Identifica la bóveda y las ramas por su manifiesto y conserva las reglas locales.

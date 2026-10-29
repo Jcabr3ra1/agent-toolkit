@@ -1,130 +1,237 @@
-# Agent Toolkit, sin enredos
+# Guía de Agent Toolkit
 
-Guía rápida · Actualizada el 28 de octubre de 2026.
+Agent Toolkit conecta Claude Code y Codex: una terminal programa, la otra revisa y tú apruebas cada paso. Esta guía parte de cero, justo después de clonar el repositorio. Hay una versión visual en [guia-de-comandos.html](guia-de-comandos.html).
 
-**Estado:** cierre global `cerrar-memoria` instalado para ambos clientes; abre una sesión nueva para cargarlo. Las demás novedades de `codex/toolkit-consolidacion` siguen pendientes de integrar y activar.
-
-## Uso diario
-
-Escribe las skills en el chat del agente: **`/` en Claude Code y `$` en Codex**. Los comandos que empiezan por `node` van en una terminal.
-
-| Quiero… | Claude Code | Codex |
+| Para | Escribe | Dónde |
 | --- | --- | --- |
-| Programar y pedir revisión | `/programar explica la tarea` | `$programar explica la tarea` |
-| Dejar esta sesión como revisora | `/revisar` | `$revisar` |
-| Ver las revisiones pendientes | `/estado` | `$estado` |
-| Usar Gemini | `/gemini explica qué necesitas` | `$gemini explica qué necesitas` |
-| Cerrar y revisar la memoria | `/cerrar-memoria` | `$cerrar-memoria` |
+| Programar | `/programar <tarea>` | en Claude (o `$programar` en Codex) |
+| Revisar | `$revisar` | en Codex (o `/revisar` en Claude) |
+| Ver cómo va | `/estado` | en cualquiera |
+| Cerrar el PR | `/cerrar-memoria` | si el proyecto tiene memoria |
 
-**Para trabajar con dos agentes:** abre ambos en la misma carpeta del proyecto. En el revisor escribe `revisar`; en el principal, `programar` con tu tarea. Aprueba el encargo cuando te lo presente. El principal comprueba el informe y corrige lo necesario.
+En Claude Code las skills empiezan con `/`. En Codex, con `$`. Los comandos de terminal se ejecutan desde la carpeta donde clonaste el repositorio.
 
-El revisor de Codex registra su sesión y termina el turno hasta recibir el aviso. Evita dejarlo consultando la bandeja repetidamente.
+## Antes de empezar
 
-## Gemini: elige lo que necesitas
+| Herramienta | Para qué | Comprueba con |
+| --- | --- | --- |
+| Git | Clonar el repositorio | `git --version` |
+| Node.js 24 | Ejecuta todos los comandos (la versión debe empezar por v24) | `node --version` |
+| Claude Code | Una de las dos terminales | `claude --version` |
+| Codex CLI | La otra terminal | `codex --version` |
 
-Usa **tu suscripción de Antigravity** mediante `agy`, sin clave de API. La skill `gemini` elige el comando; `investigar` e `imagen` siguen como accesos rápidos.
+Opcionales:
 
-| Necesito… | Puedo pedirle al agente… |
-| --- | --- |
-| Una explicación | “Usa Gemini para explicar este concepto” |
-| Buscar con fuentes | “Investiga con Gemini estas alternativas” |
-| Leer archivos | “Analiza con Gemini este PDF y esta imagen” |
-| Crear una imagen | “Genera con Gemini una ilustración de…” |
-| Volver a un resultado | “Muéstrame el historial de Gemini y recupera este resultado” |
+| Herramienta | Para qué | Comprueba con |
+| --- | --- | --- |
+| Antigravity CLI (agy) | Solo para la skill gemini (investigar, analizar, imágenes) | `agy --version` |
+| GitHub CLI (gh) | Solo para actualizar la memoria con project-memory sync | `gh --version` |
 
-Elige los archivos que quieres enviar: **texto, imágenes, PDF o vídeo visual**. Máximo 8 archivos, 20 MiB por archivo y 32 MiB en total. Revisa las conclusiones contra los archivos: el estado «completo» lo declara el modelo.
+Necesitas la sesión iniciada en Claude Code y en Codex. La revisión cruzada necesita los dos.
 
-**Audio bloqueado:** las pruebas dieron transcripciones incorrectas. El vídeo se analiza visualmente; no se transcribe su audio. No hay generación de audio ni vídeo.
+## Instalar (una sola vez)
 
-### Si prefieres la terminal
-
-Ejecuta estos ejemplos desde la raíz del Toolkit. Sustituye las rutas de ejemplo.
+### 1. Clona el repositorio donde quieras
 
 ```sh
-node bin/agent-toolkit-gemini.js consultar --prompt "Explica este concepto"
-node bin/agent-toolkit-gemini.js investigar --prompt "Compara opciones con fuentes"
-node bin/agent-toolkit-gemini.js analizar --prompt "Resume el documento" --archivo /ruta/informe.pdf
-node bin/agent-toolkit-gemini.js imagen --prompt "Una ilustración de un bosque"
-node bin/agent-toolkit-gemini.js historial
-node bin/agent-toolkit-gemini.js recuperar --directorio /ruta/mostrada/en/historial
+git clone https://github.com/Jcabr3ra1/agent-toolkit.git
+cd agent-toolkit
 ```
 
-Cada consulta conserva respuesta, archivos y metadatos en `~/.agent-toolkit/gemini/`. Historial y recuperación no llaman al modelo. Si una imagen tarda, **recupérala antes de volver a generarla**. `--copiar-a /ruta/destino` copia sin sobrescribir.
+Cualquier carpeta sirve. Todos los comandos siguientes se ejecutan desde ella. No la borres ni la muevas después: las skills y el servidor apuntan ahí (si la mueves, repite los pasos 4 y 5).
 
-## Preparar o actualizar la instalación
+### 2. Instala las dependencias y comprueba
 
-Tras integrar las novedades, ejecuta desde un checkout estable del Toolkit, con Node 24 y dependencias instaladas:
+```sh
+npm ci --ignore-scripts
+npm test
+```
+
+`npm test` tarda alrededor de un minuto y debe terminar sin fallos. Es opcional, pero confirma que tu Node y tu copia están bien.
+
+### 3. Revisa qué falta
 
 ```sh
 node bin/agent-toolkit.js doctor --agent all
-node bin/agent-toolkit.js setup --agent all
 ```
 
-`doctor` comprueba la instalación. `setup` muestra qué skills enlazaría, sin escribir. Si la vista previa es correcta:
+Comprueba Node, dependencias, Claude Code, Codex, el servidor, las skills y el permiso de Codex. Al principio es normal que marque pendientes: los resuelven los pasos siguientes.
+
+### 4. Enlaza las skills
 
 ```sh
-node bin/agent-toolkit.js setup --agent all --apply
+node bin/agent-toolkit.js setup --agent all          # vista previa, no escribe
+node bin/agent-toolkit.js setup --agent all --apply  # crea los enlaces
 ```
 
-Si hay destinos distintos, los conserva y señala el conflicto. También muestra los comandos para registrar el MCP si falta. Reinicia Claude Code y Codex después de cambiar skills o MCP.
+Enlaza las skills de esta carpeta en `~/.claude/skills` (Claude) y `~/.agents/skills` (Codex). Nunca reemplaza lo que ya existe: si hay un conflicto, lo indica y no toca nada.
 
-**Superpowers es opcional y se instala aparte.** Ayuda con el proceso de desarrollo; Toolkit aporta coordinación, memoria y herramientas. El plugin `niveles` y los agentes por nivel también se preparan por separado.
-
-### Modelos y agentes por nivel
+### 5. Conecta el servidor en Claude Code y en Codex
 
 ```sh
-node bin/agent-toolkit-inbox.js modelos
-node bin/agent-toolkit-inbox.js agentes
-node bin/agent-toolkit-inbox.js agentes --escribir
+claude mcp add --scope user --transport stdio agent-toolkit-workflow -- node "$PWD/bin/agent-toolkit-mcp.js"
+codex mcp add agent-toolkit-workflow -- node "$PWD/bin/agent-toolkit-mcp.js"
 ```
 
-`modelos` muestra los nombres y niveles vigentes. `agentes` es una vista previa; `--escribir` crea los agentes que faltan en Codex. Para Claude, instala `niveles@agent-toolkit` desde el marketplace `Jcabr3ra1/agent-toolkit`.
+Es el servidor que guarda las revisiones entre las dos terminales. `setup` imprime estos mismos comandos con tu ruta. Si ya existe uno con ese nombre, no lo repitas.
 
-## Qué guarda y cómo ver el consumo
+### 6. Deja que Codex guarde su registro de revisor
 
-| Dato | Dónde queda |
+```sh
+grep -q "^\[sandbox_workspace_write\]" ~/.codex/config.toml 2>/dev/null && echo "Ya tienes la sección: añade la ruta a writable_roots a mano" || printf "\n[sandbox_workspace_write]\nwritable_roots = [\"%s/.agent-toolkit\"]\n" "$HOME" >> ~/.codex/config.toml
+```
+
+Codex ejecuta sus comandos en un sandbox que solo deja escribir en el proyecto, y `$revisar` guarda el id de su sesión en `~/.agent-toolkit`. `doctor` te dice si falta este permiso e imprime el comando con tus rutas.
+
+### 7. Instala el plugin de niveles (solo Claude Code)
+
+```text
+/plugin marketplace add Jcabr3ra1/agent-toolkit
+/plugin install niveles@agent-toolkit
+```
+
+Se escribe *dentro* de Claude Code, no en la terminal. Añade cuatro agentes con modelo y esfuerzo fijos para delegar trabajo sin cambiar `/model`.
+
+### 8. Crea los agentes de nivel de Codex
+
+```sh
+node bin/agent-toolkit-inbox.js agentes            # vista previa, no escribe
+node bin/agent-toolkit-inbox.js agentes --escribir # crea los que falten
+```
+
+Nunca sobrescribe ni borra. Si ya existe uno distinto lo respeta; con `--escribir --forzar` lo aparta como `.anterior-…` antes de crear el nuevo.
+
+### 9. Reinicia Claude Code y Codex y vuelve a revisar
+
+```sh
+node bin/agent-toolkit.js doctor --agent all
+```
+
+Ambos cargan el servidor y las skills al arrancar. Ahora `doctor` no debe mostrar pendientes: termina con código 0.
+
+Para actualizar más adelante: `git pull --ff-only` y `npm ci --ignore-scripts` dentro del repositorio, y reinicia Claude Code y Codex.
+
+## Primer uso
+
+1. **Tú:** Abre dos terminales en la carpeta de tu proyecto. Una con `claude` y otra con `codex`. Debe ser la **misma ruta** en las dos, y es el proyecto en el que vas a trabajar, no Agent Toolkit.
+2. **Codex:** Escribe `$revisar`. Registra su sesión y dice «Registrada; me avisarán». Termina su turno y no gasta tokens esperando. Si no encuentra su sesión, pide el id: en Codex, `/status`.
+3. **Claude:** Escribe `/programar `. Claude puntúa la tarea y elige un nivel (tabla de abajo).
+4. **Tú:** Confirmas el nivel, solo si es Exigente o más. Con Ligero o Normal, Claude sigue solo.
+5. **Claude:** Programa, prueba y se revisa a sí mismo. Delega el código al agente del nivel cuando hace falta.
+6. **Tú:** Apruebas el encargo para Codex. Claude te lo muestra con preguntas, archivos y criterio de aprobación. Nada se envía sin tu OK.
+7. **Codex:** Revisa en solo lectura y entrega un informe. Claude le avisa con `avisar` y Codex lo recibe en su misma sesión.
+8. **Claude:** Verifica cada hallazgo y corrige lo que se sostenga. Máximo dos rondas por cambio.
+9. **Tú:** Pides el commit y el PR. Tú decides el merge. Si el proyecto tiene memoria de Obsidian, `/cerrar-memoria` la pone al día.
+
+Si Claude es el revisor, en su terminal escribe `/revisar`: espera en segundo plano sin gastar tokens y se activa cuando llega el encargo.
+
+### Qué nivel se elige
+
+| Total | Nivel | Claude | Codex |
+| --- | --- | --- | --- |
+| 0–2 | Ligero | `haiku · low` | `gpt-6-luna · low` |
+| 3–4 | Normal | `sonnet · medium` | `gpt-6.1-sol · medium` |
+| 5–6 | Exigente | `sonnet · high` | `gpt-6.1-sol · high` |
+| 7–10 | Alto | `opus · high` | `gpt-6-astra · high` |
+
+El total sale de cinco criterios: riesgo, tamaño, ambigüedad, contexto y tipo de trabajo. Riesgo alto (seguridad, datos, dinero, producción) fija un mínimo de Exigente. Se sube de nivel solo si la corrección falló. Los nombres de Codex salen de `modelos` y pueden cambiar.
+
+## Comandos de terminal
+
+### Instalación (`agent-toolkit`)
+
+| Comando | Para qué |
 | --- | --- |
-| Colaboraciones, informes y mediciones | `~/.agent-toolkit/workflows/peers/` |
-| Resultados de Gemini | `~/.agent-toolkit/gemini/` |
-| Memoria estable del proyecto | Su bóveda en Obsidian |
+| `node bin/agent-toolkit.js doctor --agent all` | Qué falta o qué está mal en la instalación. No cambia nada. |
+| `node bin/agent-toolkit.js setup --agent all [--apply]` | Enlaza las skills. Sin `--apply` es vista previa; nunca reemplaza nada. |
 
-**Guardar una colaboración no actualiza Obsidian.** El cierre puede crear un borrador con contexto, informes y consumo; la memoria vigente se revisa con `cerrar-memoria`, según el estado del trabajo.
+### Revisiones, modelos y consumo (`agent-toolkit-inbox`)
 
-**Un solo comando para todos los proyectos:** `/cerrar-memoria` en Claude o `$cerrar-memoria` en Codex. Identifica la bóveda y las ramas desde `project-memory.json`, también en Agent Toolkit y AVISENS. Para un proyecto nuevo, crea su memoria con `project-memory init` y conéctala con `project-memory connect`; no necesitas inventar otro cierre. `cerrar-avisens` queda como alias del mismo flujo.
+| Comando | Para qué |
+| --- | --- |
+| `node bin/agent-toolkit-inbox.js modelos` | Qué modelos hay y la tabla de niveles vigente. |
+| `node bin/agent-toolkit-inbox.js rendimiento` | Qué modelo y nivel rinden mejor (hallazgos que se sostienen). |
+| `node bin/agent-toolkit-inbox.js consumo --project-root /ruta` | Tokens, caché y tiempo de las llamadas registradas. |
+| `node bin/agent-toolkit-inbox.js agentes [--escribir [--forzar]]` | Crea los agentes de nivel de Codex. Sin `--escribir` es vista previa. |
+| `node bin/agent-toolkit-inbox.js registrar --agent codex --project-root /ruta` | Guarda la sesión de Codex como revisora. Lo ejecuta `$revisar`; añade `--thread ` si no la encuentra. |
+| `node bin/agent-toolkit-inbox.js avisar --project-root /ruta --task <id> --review <id>` | Avisa a Codex de un encargo ya aprobado. Lo ejecuta la skill, no tú. |
+| `node bin/agent-toolkit-inbox.js cierre --project-root /ruta --task <id> --salida /ruta/traspaso.md` | Cierra una colaboración y deja un borrador de traspaso. Exige que no haya encargos activos. |
 
-### Consultar consumo y rendimiento
+### Gemini (opcional, requiere agy) (`agent-toolkit-gemini`)
 
-```sh
-node bin/agent-toolkit-inbox.js consumo --project-root /ruta/proyecto
-node bin/agent-toolkit-inbox.js rendimiento --project-root /ruta/proyecto
-```
+| Comando | Para qué |
+| --- | --- |
+| `node bin/agent-toolkit-gemini.js estado` | Versión de `agy` y modelos disponibles. |
+| `node bin/agent-toolkit-gemini.js consultar --prompt "tu pregunta"` | Una explicación o respuesta directa. |
+| `node bin/agent-toolkit-gemini.js investigar --prompt "tu pregunta"` | Búsqueda web con resumen y fuentes. |
+| `node bin/agent-toolkit-gemini.js analizar --prompt "qué quieres saber" --archivo /ruta/informe.pdf` | Lee texto, imágenes, PDF o vídeo (sin audio). Hasta 8 archivos. |
+| `node bin/agent-toolkit-gemini.js imagen --prompt "descripción"` | Genera una imagen. Sin vídeo ni audio. |
+| `node bin/agent-toolkit-gemini.js historial` | Consultas anteriores. `recuperar --directorio ` trae un resultado sin volver a llamar al modelo. |
 
-`consumo` muestra tokens, caché, tiempo y cobertura de las llamadas registradas. `rendimiento` resume los resultados de las revisiones. **Todavía no hay una comparación controlada que demuestre ahorro de tokens.** Un dato desconocido no equivale a cero.
+### Memoria de proyecto (opcional) (`project-memory`)
 
-### Registrar o cerrar una colaboración
+| Comando | Para qué |
+| --- | --- |
+| `node bin/project-memory.js init <carpeta-nueva> --source <repositorio-del-proyecto> --project-id mi-proyecto --project-name "Mi proyecto"` | Vista previa de una memoria nueva en Obsidian para ese proyecto. `--source` es obligatorio. Con `--apply` la crea. |
+| `node bin/project-memory.js connect <bóveda> --agent claude` | Prepara la conexión de la memoria con Claude (o `--agent codex`). Con `--apply` la aplica. |
+| `node bin/project-memory.js doctor <bóveda>` | Diagnóstico de la bóveda. |
+| `node bin/project-memory.js sync plan <bóveda>` | Qué PR fusionados faltan por registrar en la memoria. |
+| `node bin/project-memory.js sync inspect <bóveda> --pr 42` | Evidencia de un PR concreto, solo lectura. |
+| `node bin/project-memory.js sync record <bóveda> --pr 42 --outcome documentation-updated --reviewed --summary "…" --apply` | Registra un PR. Escribe solo con `--apply` y nunca hace commit ni push. |
 
-Sustituye `UUID` por el id de la colaboración y usa rutas absolutas. La carpeta de salida debe existir.
+`<bóveda>` es la carpeta de memoria de un proyecto, la que contiene `project-memory.json`. Solo `--apply` escribe, y nada hace commit ni push.
 
-```sh
-node bin/agent-toolkit-inbox.js medir --project-root /ruta/proyecto --task UUID --archivo /ruta/medicion.json
-node bin/agent-toolkit-inbox.js cierre --project-root /ruta/proyecto --task UUID --salida /ruta/traspaso-nuevo.md
-```
+## Skills
 
-`medir` recibe una medición del cliente o manual; repetir un id con los mismos datos no duplica consumo. El formato está en `docs/consolidacion.md`. Gemini registra su uso al añadir `--task UUID --project-root /ruta/proyecto` a una consulta; Claude y Codex necesitan aportar sus mediciones.
+| Skill | Para qué |
+| --- | --- |
+| `programar <tarea>` | Esta terminal programa y pide revisión a la otra. |
+| `revisar` | Esta terminal es la revisora. |
+| `estado` | Tabla de las revisiones abiertas, el encargo pendiente y el último veredicto. Solo lectura. |
+| `gemini <lo que necesitas>` | Usa Gemini para explicar, investigar, analizar archivos o generar una imagen. `investigar` e `imagen` son atajos. Requiere `agy`. |
+| `cerrar-memoria` | Tras fusionar un PR, pone al día la memoria de Obsidian del proyecto. Solo si el proyecto tiene `project-memory.json`. |
+| `revision-cruzada` | Reúne todas las reglas de `programar` y `revisar`. Casi nunca la escribes tú. |
+| `differential-review, frontend-design, mcp-builder, web-design-guidelines, ordenar-proyecto` | Skills recomendadas que también instala `setup`: revisión de seguridad de un cambio, diseño de interfaces, crear servidores MCP, pautas web y ordenar archivos. |
 
-`cierre` exige que no haya encargos activos. Crea un archivo nuevo y cierra la colaboración. Después se puede recuperar por su id. Si se creó el borrador pero falló el cierre, consérvalo y consulta el estado antes de repetir.
+La memoria de Obsidian no se actualiza sola: se hace con `/cerrar-memoria` después de fusionar un PR. `cerrar-avisens` es un alias del mismo cierre.
 
 ## Si algo falla
 
-| Problema | Primer paso |
+| Síntoma | Qué hacer |
 | --- | --- |
-| No aparece una skill o un comando nuevo | Ejecuta `doctor` y comprueba qué checkout usa el MCP; reinicia el cliente |
-| La instalación indica conflicto | Revisa las rutas que muestra `setup`; conserva la instalación que corresponda |
-| Codex no recibe la revisión | Escribe `$revisar` en la sesión revisora del mismo proyecto |
-| Gemini no responde o no encuentra el modelo | Ejecuta `node bin/agent-toolkit-gemini.js estado` |
-| Falta una imagen generada | Consulta `historial` y usa `recuperar` |
-| Un análisis dice parcial o no compatible | Revisa los límites y el archivo; no lo tomes como análisis completo |
+| Cambié algo y no se nota | Reinicia Claude Code y Codex. |
+| No sé qué falta | `node bin/agent-toolkit.js doctor --agent all` lo dice, con el comando para arreglarlo. |
+| `node --version` no empieza por v24 | Instala Node.js 24 (por ejemplo con nvm o Homebrew) y repite `npm ci --ignore-scripts`. |
+| `setup` indica un conflicto | Ya tienes una skill con ese nombre. No la reemplaza: revisa la ruta que muestra y decide cuál conservas. |
+| Moví o volví a clonar la carpeta | Repite `setup --apply` y el registro del servidor desde la nueva carpeta. |
+| `$revisar` dice «No se pudo escribir en el registro de Agent Toolkit» | Es el sandbox de Codex. Haz el paso «Deja que Codex guarde su registro de revisor». |
+| `avisar` dice que Codex no se registró | En Codex escribe `$revisar`. |
+| `registrar` no encuentra la sesión | En Codex, `/status` da el id. Luego `registrar … --thread `. |
+| Codex tarda en reaccionar al aviso | Si está en mitad de un turno, el aviso espera a que termine. |
+| Codex no reclama el encargo | Su modelo no coincide con el recomendado. Cámbialo con `/model`. |
+| `agentes` dice «ya existe y es distinto» | Es lo esperado. Usa `--escribir --forzar` si quieres reemplazarlo; queda una copia. |
+| `sync record` dice BLOCKED | Al repositorio le faltan CI o carpetas de área. Añade la fila a mano en el registro de la bóveda. |
+| Gemini no responde o falta una imagen | `agent-toolkit-gemini estado` comprueba `agy`; una imagen tardía se trae con `historial` y `recuperar`. |
 
-Para más detalle, consulta en el repositorio `docs/consolidacion.md`, `docs/herramientas-gemini.md` y `docs/primeros-pasos.md`. Las herramientas internas del MCP las manejan las skills; no necesitas memorizarlas.
+## Más información
 
-Las novedades pasaron 4.632 pruebas automatizadas. Sigue pendiente validar el recorrido completo con sesiones reales de Codex y Claude.
+| Qué | Dónde |
+| --- | --- |
+| Colaboraciones y revisiones | `~/.agent-toolkit/workflows/peers/` |
+| Sesión de Codex registrada | `~/.agent-toolkit/workflows/reviewers/` |
+| Resultados de Gemini | `~/.agent-toolkit/gemini/` |
+| Skills | `~/.claude/skills/ (Claude) y ~/.agents/skills/ (Codex), como enlaces al repositorio` |
+| Agentes de Codex | `~/.codex/agents/` |
+| Memoria de un proyecto | La carpeta que elijas en `project-memory init` (la que contiene `project-memory.json`) |
+
+Límites que conviene recordar:
+
+- El esfuerzo de un agente lo fija su archivo, pero una variable como `CLAUDE_CODE_EFFORT_LEVEL` puede imponerse. El modelo sí se comprobó.
+- El aviso directo a Codex se probó contra una sesión inactiva, no con un encargo real de principio a fin.
+- Los agentes de solo lectura de Codex lo son por instrucción, no por sandbox.
+- Gemini no participa en la revisión cruzada y no genera vídeo ni audio; el audio no se analiza.
+- Probado en macOS con Node 24, clonando en carpetas distintas. No se ha comprobado en Linux ni en Windows.
+- Todavía no hay una medición controlada que demuestre ahorro de tokens.
+- Nada se fusiona, se sube ni se despliega sin tu autorización.
+
+Más detalle: [instalación, consumo y recuperación](consolidacion.md), [herramientas de Gemini](herramientas-gemini.md) y [primeros pasos](primeros-pasos.md).
