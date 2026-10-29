@@ -337,3 +337,65 @@ test("outcomes are recorded once by the sender of a completed review and aggrega
     verdicts: { aprobado: 0, aprobado_con_cambios: 0, requiere_cambios: 1 } }]);
   assert.deepEqual((await f.store.performance({ projectRoot: path.join(f.directory, "otro") }).catch(() => ({ groups: "error" }))).groups, "error");
 });
+
+test("usage survives restart, deduplicates and keeps unknown counters distinct from zero", async () => {
+  const f = await fixture();
+  assert.equal(typeof f.store.recordUsage, "function");
+  const measurement = { id: "call-1", agent: "codex", phase: "review", model: "example-model", source: "client-reported",
+    inputTokens: 100, cacheReadTokens: 80, outputTokens: 20, totalTokens: 120, durationMs: 2000, costUsd: null };
+  assert.equal((await f.store.recordUsage({ ...f.bound, measurement })).recorded, true);
+  assert.equal((await f.store.recordUsage({ ...f.bound, measurement })).recorded, false);
+  await assert.rejects(f.store.recordUsage({ ...f.bound, measurement: { ...measurement, inputTokens: 101 } }));
+  for (const change of [{ inputTokens: -1 }, { totalTokens: Infinity }, { costUsd: -2 }, { source: "verified" }, { secret: "x" }]) {
+    await assert.rejects(f.store.recordUsage({ ...f.bound, measurement: { ...measurement, id: "invalid", ...change } }));
+  }
+  await f.store.recordUsage({ ...f.bound, measurement: { id: "call-2", agent: "claude", phase: "implementation", model: "example-model", source: "manual", outputTokens: 0 } });
+  await f.store.closeCollaboration(f.bound);
+  const fresh = createPeerReviewStore({ root: f.storage });
+  const report = await fresh.consumption({ projectRoot: f.projectRoot });
+  assert.equal(report.tasks.length, 1);
+  assert.equal(report.tasks[0].state, "closed");
+  assert.equal(report.summary.calls, 2);
+  assert.deepEqual(report.summary.counters.inputTokens, { known: 1, missing: 1, sum: 100, complete: false });
+  assert.deepEqual(report.summary.counters.outputTokens, { known: 2, missing: 0, sum: 20, complete: true });
+  assert.equal(report.summary.counters.costUsd.sum, null);
+  assert.equal(report.summary.counters.totalTokens.sum, 120);
+  assert.equal(report.savingsVerified, false);
+});
+
+test("concurrent identical usage records count once and historical tasks have no fabricated usage", async () => {
+  const f = await fixture();
+  assert.equal(typeof f.store.consumption, "function");
+  const empty = await f.store.consumption({ projectRoot: f.projectRoot });
+  assert.equal(empty.tasks[0].summary.calls, 0);
+  assert.equal(empty.summary.counters.totalTokens.sum, null);
+  const measurement = { id: "same-call", agent: "codex", phase: "review", model: "example", source: "manual", totalTokens: 50 };
+  const other = createPeerReviewStore({ root: f.storage });
+  const results = await Promise.all([f.store.recordUsage({ ...f.bound, measurement }), other.recordUsage({ ...f.bound, measurement })]);
+  assert.equal(results.filter(r => r.recorded).length, 1);
+  assert.equal((await other.consumption({ projectRoot: f.projectRoot })).summary.calls, 1);
+});
+
+test('closure snapshot holds the transaction lock and never cancels a concurrently dispatched review', async () => {
+  const f=await fixture(), other=createPeerReviewStore({root:f.storage});
+  const preview=await f.prepare();
+  assert.equal(typeof f.store.closeWithSnapshot,'function');
+  let attempt, settled=false, snapshot;
+  await f.store.closeWithSnapshot({...f.bound,saveSnapshot:async task=>{
+    snapshot=task;
+    attempt=other.dispatchReview(preview,{previewId:'b'.repeat(32)}).then(value=>({value}),error=>({error})).then(value=>{settled=true;return value;});
+    await new Promise(resolve=>setTimeout(resolve,45));
+    assert.equal(settled,false,'concurrent mutation waits for snapshot and close');
+  }});
+  assert.equal((await attempt).error.code,'peer-closed');
+  assert.equal(snapshot.reviews.length,0);
+  assert.equal((await other.getCollaboration(f.bound)).state,'closed');
+});
+
+test('closure refuses active work without saving a snapshot or cancelling the review',async()=>{
+  const f=await fixture(), request=await f.dispatch();let saved=false;
+  assert.equal(typeof f.store.closeWithSnapshot,'function');
+  await assert.rejects(f.store.closeWithSnapshot({...f.bound,saveSnapshot:async()=>{saved=true;}}));
+  assert.equal(saved,false);
+  assert.equal((await f.store.getCollaboration(f.bound)).reviews.find(r=>r.id===request.id).state,'pending');
+});

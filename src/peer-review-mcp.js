@@ -39,9 +39,9 @@ function reviewView(review, { prompt = false, report = true } = {}) {
 }
 
 function taskView(task, { reviews = false } = {}) {
-  const { history, reviews: list, project, context, ...rest } = task;
+  const { history, reviews: list, project, context, measurements = [], ...rest } = task;
   return { ...rest, project: project.name, projectRoot: project.root, ...(reviews && { context, reviews: list.map(review => reviewView(review, { report: !review.outcome })) }),
-    reviewCount: list.length };
+    reviewCount: list.length, measuredCalls: measurements.length };
 }
 
 export function registerPeerReviewTools(server, store = createPeerReviewStore(), { now = Date.now } = {}) {
@@ -189,6 +189,20 @@ export function registerPeerReviewTools(server, store = createPeerReviewStore(),
     level: z.enum(["ligero", "normal", "exigente", "alto", "critico", "maximo"]).optional(),
     principal: REVIEWER.omit({ reason: true }).optional()
   }, args => store.recordOutcome(args));
+
+  const counter = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional();
+  tool("record_peer_usage", "Registra una llamada medida de una colaboración. Usa un id estable por llamada: repetirlo no duplica consumo. Solo datos observados en el cliente o manuales; omite lo desconocido. No inventa precios ni ahorro; no lee conversaciones.", {
+    ...BOUND, measurement: z.object({ id: z.string().min(1).max(100), agent: z.enum(["codex", "claude", "gemini"]),
+      phase: z.enum(["planning", "implementation", "review", "research", "image", "analysis", "other"]),
+      model: z.string().min(1).max(100), source: z.enum(["client-reported", "manual"]),
+      inputTokens: counter, cacheReadTokens: counter, outputTokens: counter, totalTokens: counter, durationMs: counter,
+      costUsd: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable().optional()
+    }).strict()
+  }, args => store.recordUsage(args));
+
+  tool("get_peer_consumption", "Consulta consumo declarado por colaboración, cobertura de cada contador y rondas. null significa desconocido, no cero. No acredita ahorro ni facturación.", {
+    projectRoot: ROOT.optional()
+  }, args => store.consumption(args), true);
 
   tool("cancel_peer_review", "Cancela un encargo pendiente o reclamado. Impide guardar una entrega posterior, pero no interrumpe la sesión nativa del receptor; detén esa sesión manualmente si continúa trabajando. No reintenta ni reasigna el encargo.", REVIEW, args => store.cancelReview(args));
 

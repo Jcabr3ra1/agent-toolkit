@@ -22,5 +22,5 @@ lo envía ni inicia ningún cliente.
 Usa un contrato separado de `agent-task verify` para comprobar las huellas de
 los archivos reales enumerados antes y después del trabajo. El árbol debe
 ejecutar el receptor en modo técnico de solo lectura; estas plantillas solo
-declaran el límite. Consulta la [guía del verificador externo](../../docs/agent-task-external-verifier.md)
-y la [guía de verify](../../docs/agent-task-verify.md).
+declaran el límite. Consulta la [guía del verificador externo](../../docs/agentes/coordinacion/agent-task-external-verifier.md)
+y la [guía de verify](../../docs/agentes/coordinacion/agent-task-verify.md).

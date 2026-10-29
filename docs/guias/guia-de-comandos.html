@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="Cómo instalar y usar Agent Toolkit desde cero: requisitos, instalación, primer uso y comandos.">
+<title>Guía de Agent Toolkit</title>
+<style>
+:root{color-scheme:light dark;--bg:#f7f5fa;--card:#fff;--ink:#1b1722;--muted:#5a5365;--line:#dcd5e6;--accent:#5b2f9e;--accent-ink:#fff;--code-bg:#15111b;--code-ink:#f1ecf7;--tu:#7a4a00;--tu-bg:#fdecc8;--cl:#4a2a85;--cl-bg:#ece3fb;--cx:#0b5b46;--cx-bg:#d9f2e8;--te:#3a3446;--te-bg:#e8e4ee;font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#121016;--card:#1b1822;--ink:#f1ecf7;--muted:#bdb4ca;--line:#37303f;--accent:#b99bf2;--accent-ink:#17111f;--code-bg:#0a080d;--code-ink:#f1ecf7;--tu:#f6d58a;--tu-bg:#4a3510;--cl:#d3bdfa;--cl-bg:#35254f;--cx:#9fe0c6;--cx-bg:#12382d;--te:#d4cde0;--te-bg:#2d2736}}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:64px}
+body{margin:0;background:var(--bg);color:var(--ink);line-height:1.6;font-size:16px}
+code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+code{background:color-mix(in srgb,var(--ink) 9%,transparent);padding:.1em .35em;border-radius:5px;font-size:.9em}
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav{max-width:920px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:4px;overflow-x:auto;white-space:nowrap}
+.logo{font-weight:700;margin-right:auto;padding:14px 12px 14px 0}
+nav a{color:var(--muted);text-decoration:none;padding:14px 10px;font-size:14px}nav a:hover{color:var(--ink)}
+.skip{position:absolute;left:-999px}.skip:focus{left:12px;top:8px;background:var(--accent);color:var(--accent-ink);padding:8px 12px;border-radius:8px;z-index:9}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
+main{max-width:920px;margin:0 auto;padding:8px 20px 40px}
+section{padding:36px 0 8px;border-top:1px solid var(--line)}section.hero{border-top:0;padding-top:40px}
+h1{font-size:clamp(30px,5vw,44px);line-height:1.1;margin:0 0 12px;letter-spacing:-.02em}
+h2{font-size:clamp(22px,3.4vw,28px);margin:0 0 18px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;line-height:1.25}
+h2 small{font-size:14px;font-weight:400;color:var(--muted)}
+h3{font-size:17px;margin:26px 0 10px}h3 small{font-weight:400;color:var(--muted)}
+.lead{font-size:18px;color:var(--muted);margin:0 0 22px;max-width:60ch}
+.note{color:var(--muted);font-size:14px;max-width:70ch}
+.quick{list-style:none;margin:0 0 14px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.quick li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;gap:4px}
+.quick span{font-size:13px;color:var(--muted)}.quick code{background:none;padding:0;font-size:16px;font-weight:600;color:var(--accent)}.quick small{color:var(--muted);font-size:13px}
+.steps{list-style:none;counter-reset:s;margin:0;padding:0;display:grid;gap:14px}
+.steps>li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px 6px;position:relative}
+.steps>li>h3{margin:0 0 10px;font-size:16px}.steps>li>h3::before{content:counter(s) ".";color:var(--accent);margin-right:8px;font-weight:700}
+.steps p{font-size:14px;color:var(--muted);margin:8px 0 12px}
+.cmd{position:relative}
+.cmd pre{margin:0;background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:14px 84px 14px 16px;overflow-x:auto;font-size:13.5px;line-height:1.55}
+.cmd code{background:none;padding:0;font-size:inherit}
+.copy{position:absolute;top:8px;right:8px;min-height:32px;padding:4px 12px;border-radius:8px;border:1px solid #ffffff33;background:#ffffff1a;color:#f1ecf7;font:inherit;font-size:13px;cursor:pointer}
+.copy:hover{background:#ffffff33}.copy.ok{background:#1f7a55;border-color:#1f7a55}
+.flow{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:0}
+.flow li{display:grid;grid-template-columns:86px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.flow li:first-child{padding-top:4px}.flow li:last-child{border-bottom:0}
+.flow{counter-reset:f}.flow li{counter-increment:f}.what{margin:0;font-weight:600}.what::before{content:counter(f) ".";color:var(--accent);font-weight:700;margin-right:8px}.detail{margin:2px 0 0;color:var(--muted);font-size:14.5px}
+.tag{display:inline-block;align-self:start;text-align:center;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px}
+.tag.tu{background:var(--tu-bg);color:var(--tu)}.tag.cl{background:var(--cl-bg);color:var(--cl)}.tag.cx{background:var(--cx-bg);color:var(--cx)}.tag.te{background:var(--te-bg);color:var(--te)}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);margin:0 0 14px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+thead th{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;background:color-mix(in srgb,var(--ink) 4%,transparent)}
+tbody tr:last-child>*{border-bottom:0}tbody th{font-weight:600;white-space:nowrap}
+code.wrap{white-space:normal;word-break:break-word;line-height:1.9}
+.cmds{list-style:none;margin:0 0 6px;padding:0;display:grid;gap:12px}
+.cmds p{margin:6px 2px 0;color:var(--muted);font-size:14.5px}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:12px 0;padding:0 16px}
+summary{cursor:pointer;padding:13px 0;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center}
+summary::before{content:"+";display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;background:color-mix(in srgb,var(--ink) 10%,transparent);flex:none}
+details[open] summary::before{content:"–"}details>*:last-child{margin-bottom:16px}
+.limits{padding-left:20px;margin:0 0 10px;max-width:72ch}.limits li{margin:6px 0}
+footer{max-width:920px;margin:0 auto;padding:10px 20px 50px;color:var(--muted);font-size:13px}
+@media (max-width:600px){.flow li{grid-template-columns:1fr;gap:6px}.tag{justify-self:start}th,td{padding:10px}tbody th{white-space:normal}.cmd pre{padding-right:16px;padding-bottom:50px}.copy{top:auto;bottom:8px}}
+@media print{.top,.copy{display:none}body{background:#fff;color:#000}.cmd pre{background:#f2f2f2;color:#000;border:1px solid #bbb;padding-right:16px}details{break-inside:avoid}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+.callout{border-left:4px solid var(--accent);background:var(--card);padding:12px 16px;border-radius:8px;margin:14px 0;font-size:15px}.callout p{margin:0}
+.req code{white-space:nowrap}
+
+.steps,.cmds{grid-template-columns:minmax(0,1fr)}.steps>li,.cmds>li,.cmd{min-width:0}main{overflow-x:clip}
+.cmd pre{white-space:pre-wrap;overflow-wrap:anywhere}
+</style></head><body>
+<header class="top">
+<a class="skip" href="#contenido">Saltar al contenido</a>
+<nav aria-label="Secciones"><span class="logo">Agent Toolkit</span>
+<a href="#requisitos">Requisitos</a><a href="#empezar">Instalar</a><a href="#diario">Primer uso</a><a href="#terminal">Terminal</a><a href="#skills">Skills</a><a href="#fallos">Si falla</a><a href="#extra">Más</a></nav>
+</header>
+<main id="contenido">
+<section class="hero"><h1>Guía de Agent Toolkit</h1>
+<p class="lead">Agent Toolkit conecta Claude Code y Codex: una terminal programa, la otra revisa y tú apruebas cada paso. Esta guía parte de cero, justo después de clonar el repositorio.</p>
+<ul class="quick" aria-label="Lo que escribirás cada día">
+<li><span>Programar</span><code>/programar &lt;tarea&gt;</code><small>en Claude</small></li>
+<li><span>Revisar</span><code>$revisar</code><small>en Codex</small></li>
+<li><span>Ver cómo va</span><code>/estado</code><small>en cualquiera</small></li>
+<li><span>Cerrar el PR</span><code>/cerrar-memoria</code><small>si hay memoria</small></li>
+</ul>
+<p class="note">En Claude Code las skills empiezan con <code>/</code>. En Codex, con <code>$</code>. Los comandos de terminal se ejecutan desde la carpeta donde clonaste el repositorio.</p></section>
+<section id="requisitos"><h2>Antes de empezar <small>lo que debes tener instalado</small></h2>
+<div class="table-wrap req"><table><thead><tr><th>Herramienta</th><th>Para qué</th><th>Comprueba con</th></tr></thead><tbody><tr><th scope="row">Git</th><td>Clonar el repositorio</td><td><code>git --version</code></td></tr><tr><th scope="row">Node.js 24</th><td>Ejecuta todos los comandos (la versión debe empezar por v24)</td><td><code>node --version</code></td></tr><tr><th scope="row">Claude Code</th><td>Una de las dos terminales</td><td><code>claude --version</code></td></tr><tr><th scope="row">Codex CLI</th><td>La otra terminal</td><td><code>codex --version</code></td></tr></tbody></table></div>
+<h3>Opcionales</h3><div class="table-wrap req"><table><thead><tr><th>Herramienta</th><th>Para qué</th><th>Comprueba con</th></tr></thead><tbody><tr><th scope="row">Antigravity CLI (agy)</th><td>Solo para la skill gemini (investigar, analizar, imágenes)</td><td><code>agy --version</code></td></tr><tr><th scope="row">GitHub CLI (gh)</th><td>Solo para actualizar la memoria con project-memory sync</td><td><code>gh --version</code></td></tr></tbody></table></div>
+<p class="note">Necesitas la sesión iniciada en Claude Code y en Codex. Si solo usas uno de los dos, puedes instalar y probar lo demás, pero la revisión cruzada necesita los dos.</p></section>
+<section id="empezar"><h2>Instalar <small>una sola vez</small></h2><ol class="steps">
+<li><h3>Clona el repositorio donde quieras</h3><div class="cmd"><pre><code>git clone https://github.com/Jcabr3ra1/agent-toolkit.git
+cd agent-toolkit</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Clona el repositorio donde quieras">Copiar</button></div><p>Cualquier carpeta sirve. Todos los comandos siguientes se ejecutan desde ella. No la borres ni la muevas después: las skills y el servidor apuntan ahí (si la mueves, repite los pasos 4 y 5).</p></li>
+<li><h3>Instala las dependencias y comprueba</h3><div class="cmd"><pre><code>npm ci --ignore-scripts
+npm test</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Instala las dependencias y comprueba">Copiar</button></div><p><code>npm test</code> tarda alrededor de un minuto y debe terminar sin fallos. Es opcional, pero confirma que tu Node y tu copia están bien.</p></li>
+<li><h3>Revisa qué falta</h3><div class="cmd"><pre><code>node bin/agent-toolkit.js doctor --agent all</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Revisa qué falta">Copiar</button></div><p>Comprueba Node, dependencias, Claude Code, Codex, el servidor, las skills y el permiso de Codex. Al principio es normal que marque pendientes: los resuelven los pasos siguientes.</p></li>
+<li><h3>Enlaza las skills</h3><div class="cmd"><pre><code>node bin/agent-toolkit.js setup --agent all          # vista previa, no escribe
+node bin/agent-toolkit.js setup --agent all --apply  # crea los enlaces</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Enlaza las skills">Copiar</button></div><p>Enlaza las skills de esta carpeta en <code>~/.claude/skills</code> (Claude) y <code>~/.agents/skills</code> (Codex). Nunca reemplaza lo que ya existe: si hay un conflicto, lo indica y no toca nada.</p></li>
+<li><h3>Conecta el servidor en Claude Code y en Codex</h3><div class="cmd"><pre><code>claude mcp add --scope user --transport stdio agent-toolkit-workflow -- node &quot;$PWD/bin/agent-toolkit-mcp.js&quot;
+codex mcp add agent-toolkit-workflow -- node &quot;$PWD/bin/agent-toolkit-mcp.js&quot;</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Conecta el servidor en Claude Code y en Codex">Copiar</button></div><p>Es el servidor que guarda las revisiones entre las dos terminales. <code>setup</code> imprime estos mismos comandos con tu ruta. Si ya existe uno con ese nombre, no lo repitas.</p></li>
+<li><h3>Deja que Codex guarde su registro de revisor</h3><div class="cmd"><pre><code>grep -q &quot;^\[sandbox_workspace_write\]&quot; ~/.codex/config.toml 2&gt;/dev/null &amp;&amp; echo &quot;Ya tienes la sección: añade la ruta a writable_roots a mano&quot; || printf &quot;\n[sandbox_workspace_write]\nwritable_roots = [\&quot;%s/.agent-toolkit\&quot;]\n&quot; &quot;$HOME&quot; &gt;&gt; ~/.codex/config.toml</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Deja que Codex guarde su registro de revisor">Copiar</button></div><p>Codex ejecuta sus comandos en un sandbox que solo deja escribir en el proyecto, y <code>$revisar</code> guarda el id de su sesión en <code>~/.agent-toolkit</code>. <code>doctor</code> te dice si falta este permiso e imprime el comando con tus rutas.</p></li>
+<li><h3>Instala el plugin de niveles (solo Claude Code)</h3><div class="cmd"><pre><code>/plugin marketplace add Jcabr3ra1/agent-toolkit
+/plugin install niveles@agent-toolkit</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Instala el plugin de niveles (solo Claude Code)">Copiar</button></div><p>Se escribe <em>dentro</em> de Claude Code, no en la terminal. Añade cuatro agentes con modelo y esfuerzo fijos para delegar trabajo sin cambiar <code>/model</code>.</p></li>
+<li><h3>Crea los agentes de nivel de Codex</h3><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js agentes            # vista previa, no escribe
+node bin/agent-toolkit-inbox.js agentes --escribir # crea los que falten</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Crea los agentes de nivel de Codex">Copiar</button></div><p>Nunca sobrescribe ni borra. Si ya existe uno distinto lo respeta; con <code>--escribir --forzar</code> lo aparta como <code>.anterior-…</code> antes de crear el nuevo.</p></li>
+<li><h3>Reinicia Claude Code y Codex y vuelve a revisar</h3><div class="cmd"><pre><code>node bin/agent-toolkit.js doctor --agent all</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Reinicia Claude Code y Codex y vuelve a revisar">Copiar</button></div><p>Ambos cargan el servidor y las skills al arrancar. Ahora <code>doctor</code> no debe mostrar pendientes: termina con código 0.</p></li>
+</ol><div class="callout"><p>Para actualizar más adelante: <code>git pull --ff-only</code> y <code>npm ci --ignore-scripts</code> dentro del repositorio, y reinicia Claude Code y Codex.</p></div></section>
+<section id="diario"><h2>Primer uso <small>una terminal programa y la otra revisa</small></h2><ol class="flow">
+<li><span class="tag tu">Tú</span><div><p class="what">Abre dos terminales en la carpeta de tu proyecto.</p><p class="detail">Una con <code>claude</code> y otra con <code>codex</code>. Debe ser la <strong>misma ruta</strong> en las dos, y es el proyecto en el que vas a trabajar, no Agent Toolkit.</p></div></li>
+<li><span class="tag cx">Codex</span><div><p class="what">Escribe <code>$revisar</code>.</p><p class="detail">Registra su sesión y dice «Registrada; me avisarán». Termina su turno y no gasta tokens esperando. Si no encuentra su sesión, pide el id: en Codex, <code>/status</code>.</p></div></li>
+<li><span class="tag cl">Claude</span><div><p class="what">Escribe <code>/programar &lt;la tarea&gt;</code>.</p><p class="detail">Claude puntúa la tarea y elige un nivel (tabla de abajo).</p></div></li>
+<li><span class="tag tu">Tú</span><div><p class="what">Confirmas el nivel, solo si es Exigente o más.</p><p class="detail">Con Ligero o Normal, Claude sigue solo.</p></div></li>
+<li><span class="tag cl">Claude</span><div><p class="what">Programa, prueba y se revisa a sí mismo.</p><p class="detail">Delega el código al agente del nivel cuando hace falta.</p></div></li>
+<li><span class="tag tu">Tú</span><div><p class="what">Apruebas el encargo para Codex.</p><p class="detail">Claude te lo muestra con preguntas, archivos y criterio de aprobación. Nada se envía sin tu OK.</p></div></li>
+<li><span class="tag cx">Codex</span><div><p class="what">Revisa en solo lectura y entrega un informe.</p><p class="detail">Claude le avisa con <code>avisar</code> y Codex lo recibe en su misma sesión.</p></div></li>
+<li><span class="tag cl">Claude</span><div><p class="what">Verifica cada hallazgo y corrige lo que se sostenga.</p><p class="detail">Máximo dos rondas por cambio.</p></div></li>
+<li><span class="tag tu">Tú</span><div><p class="what">Pides el commit y el PR. Tú decides el merge.</p><p class="detail">Si el proyecto tiene memoria de Obsidian, <code>/cerrar-memoria</code> la pone al día.</p></div></li>
+</ol><p>Si Claude es el revisor, en su terminal escribe <code>/revisar</code>: espera en segundo plano sin gastar tokens y se activa cuando llega el encargo.</p>
+<h3>Qué nivel se elige</h3><div class="table-wrap"><table><thead><tr><th>Total</th><th>Nivel</th><th>Claude</th><th>Codex</th></tr></thead><tbody>
+<tr><td>0–2</td><th scope="row">Ligero</th><td><code>haiku · low</code></td><td><code>gpt-6-luna · low</code></td></tr>
+<tr><td>3–4</td><th scope="row">Normal</th><td><code>sonnet · medium</code></td><td><code>gpt-6.1-sol · medium</code></td></tr>
+<tr><td>5–6</td><th scope="row">Exigente</th><td><code>sonnet · high</code></td><td><code>gpt-6.1-sol · high</code></td></tr>
+<tr><td>7–10</td><th scope="row">Alto</th><td><code>opus · high</code></td><td><code>gpt-6-astra · high</code></td></tr>
+</tbody></table></div><p class="note">El total sale de cinco criterios: riesgo, tamaño, ambigüedad, contexto y tipo de trabajo. Riesgo alto (seguridad, datos, dinero, producción) fija un mínimo de Exigente. Se sube de nivel solo si la corrección falló. Los nombres de Codex salen de <code>modelos</code> y pueden cambiar.</p></section>
+<section id="terminal"><h2>Comandos de terminal <small>desde la carpeta del repositorio</small></h2>
+<h3>Instalación <small><code>agent-toolkit</code></small></h3>
+<ul class="cmds">
+<li><div class="cmd"><pre><code>node bin/agent-toolkit.js doctor --agent all</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit.js doctor --agent all" aria-label="Copiar comando">Copiar</button></div><p>Qué falta o qué está mal en la instalación. No cambia nada.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit.js setup --agent all [--apply]</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit.js setup --agent all [--apply]" aria-label="Copiar comando">Copiar</button></div><p>Enlaza las skills. Sin <code>--apply</code> es vista previa; nunca reemplaza nada.</p></li>
+</ul>
+<h3>Revisiones, modelos y consumo <small><code>agent-toolkit-inbox</code></small></h3>
+<ul class="cmds">
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js modelos</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js modelos" aria-label="Copiar comando">Copiar</button></div><p>Qué modelos hay y la tabla de niveles vigente.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js rendimiento</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js rendimiento" aria-label="Copiar comando">Copiar</button></div><p>Qué modelo y nivel rinden mejor (hallazgos que se sostienen).</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js consumo --project-root /ruta</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js consumo --project-root /ruta" aria-label="Copiar comando">Copiar</button></div><p>Tokens, caché y tiempo de las llamadas registradas.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js agentes [--escribir [--forzar]]</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js agentes [--escribir [--forzar]]" aria-label="Copiar comando">Copiar</button></div><p>Crea los agentes de nivel de Codex. Sin <code>--escribir</code> es vista previa.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js registrar --agent codex --project-root /ruta</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js registrar --agent codex --project-root /ruta" aria-label="Copiar comando">Copiar</button></div><p>Guarda la sesión de Codex como revisora. Lo ejecuta <code>$revisar</code>; añade <code>--thread &lt;id&gt;</code> si no la encuentra.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js avisar --project-root /ruta --task &lt;id&gt; --review &lt;id&gt;</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js avisar --project-root /ruta --task &lt;id&gt; --review &lt;id&gt;" aria-label="Copiar comando">Copiar</button></div><p>Avisa a Codex de un encargo ya aprobado. Lo ejecuta la skill, no tú.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js cierre --project-root /ruta --task &lt;id&gt; --salida /ruta/traspaso.md</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js cierre --project-root /ruta --task &lt;id&gt; --salida /ruta/traspaso.md" aria-label="Copiar comando">Copiar</button></div><p>Cierra una colaboración y deja un borrador de traspaso. Exige que no haya encargos activos.</p></li>
+</ul>
+<h3>Gemini (opcional, requiere agy) <small><code>agent-toolkit-gemini</code></small></h3>
+<ul class="cmds">
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js estado</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js estado" aria-label="Copiar comando">Copiar</button></div><p>Versión de <code>agy</code> y modelos disponibles.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js consultar --prompt "tu pregunta"</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js consultar --prompt &quot;tu pregunta&quot;" aria-label="Copiar comando">Copiar</button></div><p>Una explicación o respuesta directa.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js investigar --prompt "tu pregunta"</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js investigar --prompt &quot;tu pregunta&quot;" aria-label="Copiar comando">Copiar</button></div><p>Búsqueda web con resumen y fuentes.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js analizar --prompt "qué quieres saber" --archivo /ruta/informe.pdf</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js analizar --prompt &quot;qué quieres saber&quot; --archivo /ruta/informe.pdf" aria-label="Copiar comando">Copiar</button></div><p>Lee texto, imágenes, PDF o vídeo (sin audio). Hasta 8 archivos.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js imagen --prompt "descripción"</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js imagen --prompt &quot;descripción&quot;" aria-label="Copiar comando">Copiar</button></div><p>Genera una imagen. Sin vídeo ni audio.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js historial</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js historial" aria-label="Copiar comando">Copiar</button></div><p>Consultas anteriores. <code>recuperar --directorio &lt;ruta&gt;</code> trae un resultado sin volver a llamar al modelo.</p></li>
+</ul>
+<h3>Memoria de proyecto (opcional) <small><code>project-memory</code></small></h3>
+<ul class="cmds">
+<li><div class="cmd"><pre><code>node bin/project-memory.js init &lt;carpeta-nueva&gt; --source &lt;repositorio-del-proyecto&gt; --project-id mi-proyecto --project-name "Mi proyecto"</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js init &lt;carpeta-nueva&gt; --source &lt;repositorio-del-proyecto&gt; --project-id mi-proyecto --project-name &quot;Mi proyecto&quot;" aria-label="Copiar comando">Copiar</button></div><p>Vista previa de una memoria nueva en Obsidian para ese proyecto. <code>--source</code> es obligatorio. Con <code>--apply</code> la crea.</p></li>
+<li><div class="cmd"><pre><code>node bin/project-memory.js connect &lt;bóveda&gt; --agent claude</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js connect &lt;bóveda&gt; --agent claude" aria-label="Copiar comando">Copiar</button></div><p>Prepara la conexión de la memoria con Claude (o <code>--agent codex</code>). Con <code>--apply</code> la aplica.</p></li>
+<li><div class="cmd"><pre><code>node bin/project-memory.js doctor &lt;bóveda&gt;</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js doctor &lt;bóveda&gt;" aria-label="Copiar comando">Copiar</button></div><p>Diagnóstico de la bóveda.</p></li>
+<li><div class="cmd"><pre><code>node bin/project-memory.js sync plan &lt;bóveda&gt;</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js sync plan &lt;bóveda&gt;" aria-label="Copiar comando">Copiar</button></div><p>Qué PR fusionados faltan por registrar en la memoria.</p></li>
+<li><div class="cmd"><pre><code>node bin/project-memory.js sync inspect &lt;bóveda&gt; --pr 42</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js sync inspect &lt;bóveda&gt; --pr 42" aria-label="Copiar comando">Copiar</button></div><p>Evidencia de un PR concreto, solo lectura.</p></li>
+<li><div class="cmd"><pre><code>node bin/project-memory.js sync record &lt;bóveda&gt; --pr 42 --outcome documentation-updated --reviewed --summary "Producto actualizado" --note "01-PRODUCTO/Producto.md" --apply</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js sync record &lt;bóveda&gt; --pr 42 --outcome documentation-updated --reviewed --summary &quot;Producto actualizado&quot; --note &quot;01-PRODUCTO/Producto.md&quot; --apply" aria-label="Copiar comando">Copiar</button></div><p>Registra un PR cuyas notas ya actualizaste: <code>--note</code> es obligatorio (repetible) con <code>documentation-updated</code>. Si no cambió nada, usa <code>--outcome no-documentation-change</code> sin resumen ni notas. Escribe solo con <code>--apply</code> y nunca hace commit ni push.</p></li>
+</ul>
+<p class="note"><code>&lt;bóveda&gt;</code> es la carpeta de memoria de un proyecto, la que contiene <code>project-memory.json</code>. Solo <code>--apply</code> escribe, y nada hace commit ni push.</p></section>
+<section id="skills"><h2>Skills <small>se escriben con / en Claude y con $ en Codex</small></h2><div class="table-wrap"><table><thead><tr><th>Skill</th><th>Para qué</th></tr></thead><tbody>
+<tr><th scope="row"><code>programar &lt;tarea&gt;</code></th><td>Esta terminal programa y pide revisión a la otra.</td></tr>
+<tr><th scope="row"><code>revisar</code></th><td>Esta terminal es la revisora.</td></tr>
+<tr><th scope="row"><code>estado</code></th><td>Tabla de las revisiones abiertas, el encargo pendiente y el último veredicto. Solo lectura.</td></tr>
+<tr><th scope="row"><code>gemini &lt;lo que necesitas&gt;</code></th><td>Usa Gemini para explicar, investigar, analizar archivos o generar una imagen. <code>investigar</code> e <code>imagen</code> son atajos. Requiere <code>agy</code>.</td></tr>
+<tr><th scope="row"><code>cerrar-memoria</code></th><td>Tras fusionar un PR, pone al día la memoria de Obsidian del proyecto. Solo si el proyecto tiene <code>project-memory.json</code>.</td></tr>
+<tr><th scope="row"><code>revision-cruzada</code></th><td>Reúne todas las reglas de <code>programar</code> y <code>revisar</code>. Casi nunca la escribes tú.</td></tr>
+<tr><th scope="row"><code>differential-review, frontend-design, mcp-builder, web-design-guidelines, ordenar-proyecto</code></th><td>Skills recomendadas que también instala <code>setup</code>: revisión de seguridad de un cambio, diseño de interfaces, crear servidores MCP, pautas web y ordenar archivos.</td></tr>
+</tbody></table></div><p class="note">La memoria de Obsidian no se actualiza sola: se hace con <code>/cerrar-memoria</code> después de fusionar un PR.</p></section>
+<section id="fallos"><h2>Si algo falla</h2><div class="table-wrap"><table><thead><tr><th>Síntoma</th><th>Qué hacer</th></tr></thead><tbody>
+<tr><td>Cambié algo y no se nota</td><td>Reinicia Claude Code y Codex.</td></tr>
+<tr><td>No sé qué falta</td><td><code>node bin/agent-toolkit.js doctor --agent all</code> lo dice, con el comando para arreglarlo.</td></tr>
+<tr><td><code>node --version</code> no empieza por v24</td><td>Instala Node.js 24 (por ejemplo con nvm o Homebrew) y repite <code>npm ci --ignore-scripts</code>.</td></tr>
+<tr><td><code>setup</code> indica un conflicto</td><td>Ya tienes una skill con ese nombre. No la reemplaza: revisa la ruta que muestra y decide cuál conservas.</td></tr>
+<tr><td>Abro Codex con <code>--profile &lt;nombre&gt;</code></td><td>Revisa con <code>doctor --agent codex --perfil-codex &lt;nombre&gt;</code>: así evalúa el permiso de ese perfil.</td></tr>
+<tr><td>Moví o volví a clonar la carpeta</td><td>Repite <code>setup --apply</code> y el registro del servidor desde la nueva carpeta.</td></tr>
+<tr><td><code>$revisar</code> dice «No se pudo escribir en el registro de Agent Toolkit»</td><td>Es el sandbox de Codex. Haz el paso «Deja que Codex guarde su registro de revisor».</td></tr>
+<tr><td><code>avisar</code> dice que Codex no se registró</td><td>En Codex escribe <code>$revisar</code>.</td></tr>
+<tr><td><code>registrar</code> no encuentra la sesión</td><td>En Codex, <code>/status</code> da el id. Luego <code>registrar … --thread &lt;id&gt;</code>.</td></tr>
+<tr><td>Codex tarda en reaccionar al aviso</td><td>Si está en mitad de un turno, el aviso espera a que termine.</td></tr>
+<tr><td>Codex no reclama el encargo</td><td>Su modelo no coincide con el recomendado. Cámbialo con <code>/model</code>.</td></tr>
+<tr><td><code>agentes</code> dice «ya existe y es distinto»</td><td>Es lo esperado. Usa <code>--escribir --forzar</code> si quieres reemplazarlo; queda una copia.</td></tr>
+<tr><td><code>sync record</code> dice BLOCKED</td><td>Al repositorio le faltan CI o carpetas de área. Añade la fila a mano en el registro de la bóveda.</td></tr>
+<tr><td>Gemini no responde o falta una imagen</td><td><code>agent-toolkit-gemini estado</code> comprueba <code>agy</code>; una imagen tardía se trae con <code>historial</code> y <code>recuperar</code>.</td></tr>
+</tbody></table></div></section>
+<section id="extra"><h2>Más información</h2><h3>Dónde queda cada cosa</h3><div class="table-wrap"><table><tbody>
+<tr><th scope="row">Colaboraciones y revisiones</th><td><code>~/.agent-toolkit/workflows/peers/</code></td></tr>
+<tr><th scope="row">Sesión de Codex registrada</th><td><code>~/.agent-toolkit/workflows/reviewers/</code></td></tr>
+<tr><th scope="row">Resultados de Gemini</th><td><code>~/.agent-toolkit/gemini/</code></td></tr>
+<tr><th scope="row">Skills</th><td><code>~/.claude/skills/ (Claude) y ~/.agents/skills/ (Codex), como enlaces al repositorio</code></td></tr>
+<tr><th scope="row">Agentes de Codex</th><td><code>~/.codex/agents/</code></td></tr>
+<tr><th scope="row">Memoria de un proyecto</th><td>La carpeta que elijas en <code>project-memory init</code> (la que contiene <code>project-memory.json</code>)</td></tr>
+</tbody></table></div><h3>Límites que conviene recordar</h3><ul class="limits"><li>El esfuerzo de un agente lo fija su archivo, pero una variable como <code>CLAUDE_CODE_EFFORT_LEVEL</code> puede imponerse. El modelo sí se comprobó.</li><li>El aviso directo a Codex se probó contra una sesión inactiva, no con un encargo real de principio a fin.</li><li>Los agentes de solo lectura de Codex lo son por instrucción, no por sandbox.</li><li>Gemini no participa en la revisión cruzada y no genera vídeo ni audio; el audio no se analiza.</li><li>Probado en macOS con Node 24, clonando en carpetas distintas. No se ha comprobado en Linux ni en Windows.</li><li>Todavía no hay una medición controlada que demuestre ahorro de tokens.</li><li>Nada se fusiona, se sube ni se despliega sin tu autorización.</li></ul>
+<details><summary>Herramientas internas del servidor (solo para depurar)</summary><div class="table-wrap"><table><tbody>
+<tr><th scope="row">Revisión cruzada</th><td><code class="wrap">start_collaboration, get_collaboration, publish_peer_context, preview_peer_review, approve_peer_review, request_peer_review, wait_for_peer_handoff, claim_peer_review, submit_peer_review, record_review_outcome, cancel_peer_review, close_collaboration</code></td></tr>
+<tr><th scope="row">Tareas por etapas</th><td><code class="wrap">start_task, get_task, preview_codex_plan, run_codex_plan, preview_claude_proposal, run_claude_proposal, preview_claude_implementation, run_claude_implementation, preview_codex_review, run_codex_review, wait_for_task_activity, cancel_task_execution</code></td></tr>
+</tbody></table></div><p class="note"><code>approve_peer_review</code> es la que te pide permiso: no la pongas en la lista de permitidas ni en modo automático.</p></details>
+<details><summary>Avanzado: agent-task (borradores y verificación manual)</summary><ul class="cmds">
+<li><div class="cmd"><pre><code>node bin/agent-task.js prepare --task t.json --request r.json --catalog c.json --policy p.json</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-task.js prepare --task t.json --request r.json --catalog c.json --policy p.json" aria-label="Copiar comando">Copiar</button></div><p>Prepara un borrador. No usa IA ni consulta cuentas. Hay ejemplos en <code>examples/</code>.</p></li>
+<li><div class="cmd"><pre><code>node bin/agent-task.js verify --contract c.json --expect &lt;sha256&gt; --source &lt;raíz&gt; --handoff &lt;raíz&gt; --phase before</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-task.js verify --contract c.json --expect &lt;sha256&gt; --source &lt;raíz&gt; --handoff &lt;raíz&gt; --phase before" aria-label="Copiar comando">Copiar</button></div><p>Compara las huellas de los archivos listados.</p></li>
+</ul></details></section></main>
+<footer><p>Agent Toolkit · guía para empezar desde cero. Repositorio: <code>github.com/Jcabr3ra1/agent-toolkit</code></p></footer>
+<script>
+document.querySelectorAll('[data-copy]').forEach(function(b){
+  b.addEventListener('click',function(){
+    var box=b.closest('.cmd');var text=b.dataset.text||box.querySelector('code').textContent;
+    var done=function(){var old=b.textContent;b.textContent='Copiado';b.classList.add('ok');setTimeout(function(){b.textContent=old;b.classList.remove('ok')},1500)};
+    if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done,function(){fallback(text,done)})}else{fallback(text,done)}
+  });
+});
+function fallback(text,done){var t=document.createElement('textarea');t.value=text;t.setAttribute('readonly','');t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();try{document.execCommand('copy');done()}catch(e){}document.body.removeChild(t)}
+</script>
+</body></html>

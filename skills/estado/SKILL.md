@@ -32,6 +32,10 @@ Solo lectura: no reclames, envíes, canceles ni cierres nada.
 Si no hay colaboraciones abiertas, dilo en una línea y sugiere `/programar <tarea>` para empezar.
 
 Si el usuario pide el rendimiento de los modelos, ejecuta
-`node /Users/juan_jaller/programacion/Agent-Toolkit/bin/agent-toolkit-inbox.js rendimiento`
+`node <toolkit>/bin/agent-toolkit-inbox.js rendimiento`
 (añade `--project-root <projectRoot>` para limitarlo a este proyecto) y muestra
 su tabla tal cual. No usa ningún modelo ni modifica nada.
+
+Resuelve `<toolkit>` desde la carpeta física de esta skill, dos directorios arriba.
+Para consumo usa `node <toolkit>/bin/agent-toolkit-inbox.js consumo --project-root <raíz>`;
+no confundas rendimiento de hallazgos con ahorro de tokens.
