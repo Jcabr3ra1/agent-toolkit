@@ -49,4 +49,4 @@ fase. No aprueba código, pruebas, Git, modelos ni permiso, y no ve archivos no
 listados. Si un contrato copiara el hash de una entrega incorrecta, verify
 también daría `matched`: la confianza en el contrato es una revisión humana.
 
-Consulta el [contrato y sus límites](../../docs/agent-task-verify.md).
+Consulta el [contrato y sus límites](../../docs/agentes/coordinacion/agent-task-verify.md).

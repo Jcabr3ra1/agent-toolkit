@@ -23,7 +23,7 @@ Los archivos Markdown utilizan estas variables:
 | `{{INTEGRATION_BRANCH}}` | Rama donde se integran cambios, si existe |
 | `{{DATE}}` | Fecha absoluta en formato `AAAA-MM-DD` |
 
-El comando `project-memory init` ya sustituye estas variables al preparar una memoria nueva. Por defecto muestra una vista previa; solo `--apply` crea los archivos. No configura Git, MCP ni enlaces globales. Consulta la [guía de creación](../../docs/project-memory-init.md) y ejecuta `project-memory doctor <destino> --strict` antes de conectar agentes. En una preparación manual, sustituye las variables antes de activar la Skill.
+El comando `project-memory init` ya sustituye estas variables al preparar una memoria nueva. Por defecto muestra una vista previa; solo `--apply` crea los archivos. No configura Git, MCP ni enlaces globales. Consulta la [guía de creación](../../docs/memoria/project-memory-init.md) y ejecuta `project-memory doctor <destino> --strict` antes de conectar agentes. En una preparación manual, sustituye las variables antes de activar la Skill.
 
 ## Estructura de la bóveda
 

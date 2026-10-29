@@ -102,24 +102,26 @@ ya conozcas. La conexión no instala Codex ni Claude Code.
 
 ## Empieza sin tocar un proyecto real
 
-La [guía de primeros pasos](docs/primeros-pasos.md) usa datos ficticios y explica
+La [guía de primeros pasos](docs/guias/primeros-pasos.md) usa datos ficticios y explica
 cómo probar los comandos sin conectar cuentas, modificar un proyecto ni ejecutar
 modelos de IA.
 
 ## Documentación
 
+El [índice de documentación](docs/README.md) reúne las guías y referencias por tema.
+
 | Necesito… | Guía |
 | --- | --- |
-| Probar la herramienta paso a paso | [Primeros pasos](docs/primeros-pasos.md) |
-| Consultar comandos y opciones | [Guía de comandos](docs/guia-de-comandos.md) |
-| Entender el uso completo | [Guía de uso](docs/uso.md) |
-| Crear una memoria | [Project Memory Init](docs/project-memory-init.md) |
-| Conectar Codex o Claude | [Project Memory Connect](docs/project-memory-connect.md) |
-| Diagnosticar una memoria y sus conexiones | [Project Memory Status](docs/project-memory-status.md) |
-| Entender la arquitectura | [Sistema de memoria](docs/project-memory-system.md) |
-| Preparar y comprobar encargos | [Preparar encargos](docs/agent-task-prepare.md) · [Verificar entregas](docs/agent-task-verify.md) |
-| Coordinar revisión entre sesiones | [Flujo de revisión cruzada](docs/peer-review-workflow.md) |
-| Usar las herramientas de Gemini | [Herramientas de Gemini](docs/herramientas-gemini.md) |
+| Probar la herramienta paso a paso | [Primeros pasos](docs/guias/primeros-pasos.md) |
+| Consultar comandos y opciones | [Guía de comandos](docs/guias/guia-de-comandos.md) |
+| Entender el uso completo | [Guía de uso](docs/guias/uso.md) |
+| Crear una memoria | [Project Memory Init](docs/memoria/project-memory-init.md) |
+| Conectar Codex o Claude | [Project Memory Connect](docs/memoria/project-memory-connect.md) |
+| Diagnosticar una memoria y sus conexiones | [Project Memory Status](docs/memoria/project-memory-status.md) |
+| Entender la arquitectura | [Sistema de memoria](docs/memoria/project-memory-system.md) |
+| Preparar y comprobar encargos | [Preparar encargos](docs/agentes/coordinacion/agent-task-prepare.md) · [Verificar entregas](docs/agentes/coordinacion/agent-task-verify.md) |
+| Coordinar revisión entre sesiones | [Flujo de revisión cruzada](docs/agentes/coordinacion/peer-review-workflow.md) |
+| Usar las herramientas de Gemini | [Herramientas de Gemini](docs/guias/herramientas-gemini.md) |
 | Revisar la identidad visual | [Identidad de marca](assets/brand/README.md) |
 
 ## Límites y cuidado de datos
@@ -133,5 +135,5 @@ modelos de IA.
 - Una conexión configurada no garantiza por sí sola que el cliente la haya
   cargado; comprueba el estado y haz una consulta pequeña.
 
-Consulta la [guía de uso](docs/uso.md) para conocer las opciones, límites y
+Consulta la [guía de uso](docs/guias/uso.md) para conocer las opciones, límites y
 procedimientos completos.

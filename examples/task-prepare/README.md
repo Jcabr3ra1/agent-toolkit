@@ -30,4 +30,4 @@ instrucciones y permiso directo antes de entregarlo al receptor. El resumen
 no demuestra autenticación, actualidad de disponibilidad o identidad del modelo
 que responderá. `--show-brief` expone el texto en tu terminal y sus posibles logs.
 
-Consulta el [contrato y sus límites](../../docs/agent-task-prepare.md).
+Consulta el [contrato y sus límites](../../docs/agentes/coordinacion/agent-task-prepare.md).

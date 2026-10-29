@@ -4,7 +4,7 @@ Esta base ayuda a saber qué cliente usas, qué modelos muestra y qué informaci
 falta antes de elegir uno para una tarea. No descubre modelos automáticamente,
 accede a cuentas, realiza llamadas de IA ni cambia configuraciones.
 
-Contrato: [especificación del inventario](../../docs/agent-model-inventory.md).
+Contrato: [especificación del inventario](../../docs/agentes/modelos/agent-model-inventory.md).
 Plantilla: [01-inventario.md](01-inventario.md).
 
 ## Tres cosas que no deben confundirse
@@ -52,7 +52,7 @@ Una declaración explícita del usuario es `user-declaration`; metadata concreta
 del cliente es `client-metadata`. Conservar su alcance sin elevarlo a certeza.
 Oferta genérica y declaración de acceso se registran separadas.
 
-Para una futura conversión autorizada, respetar los [contratos existentes](../../docs/agent-model-selection-contracts.md):
+Para una futura conversión autorizada, respetar los [contratos existentes](../../docs/agentes/modelos/agent-model-selection-contracts.md):
 
 - `availability` pertenece a la solicitud privada, no al catálogo reutilizable.
 - Falta de pruebas puede dejar capacidades verificadas vacías y contexto `null`;
@@ -63,7 +63,7 @@ Para una futura conversión autorizada, respetar los [contratos existentes](../.
 - Un candidato, disponibilidad desconocida/caducada o una contradicción sin
   resolver no se hacen admisibles copiando el formulario a un encargo.
 
-El [selector local](../../docs/agent-model-selector.md) recomienda con datos
+El [selector local](../../docs/agentes/modelos/agent-model-selector.md) recomienda con datos
 de confianza y no ejecuta. Evaluar calidad real y aprobar perfiles requiere una
 etapa separada; el inventario no da permiso para inferencias o aplicación.
 

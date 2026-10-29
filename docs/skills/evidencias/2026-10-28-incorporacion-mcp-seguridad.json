@@ -1,0 +1,152 @@
+{
+  "schemaVersion": "1.0.0",
+  "date": "2026-10-28",
+  "purpose": "Registro de instalación e integridad; no es una certificación de seguridad ni de eficacia",
+  "skills": [
+    {
+      "name": "mcp-builder",
+      "repository": "https://github.com/anthropics/skills",
+      "revision": "b9e19e6f44773509fbdd7001d77ff41a49a486c1",
+      "sourcePath": "skills/mcp-builder",
+      "installedPath": "skills/mcp-builder",
+      "files": [
+        {
+          "path": "LICENSE.txt",
+          "sourcePath": "skills/mcp-builder/LICENSE.txt",
+          "sha256": "bc6b3af2f331cbc7fb0da1344efb2cbe5877a31498b4d70dbc7000f3405a1362"
+        },
+        {
+          "path": "SKILL.md",
+          "sourcePath": "skills/mcp-builder/SKILL.md",
+          "sha256": "0f4592dcb53cf2b5d6b7febee6b4152018b565551a1c29e3c612f57b218ab295"
+        },
+        {
+          "path": "reference/evaluation.md",
+          "sourcePath": "skills/mcp-builder/reference/evaluation.md",
+          "sha256": "8c99479f8a2d22a636c38e274537aac3610879e26f34e0709825077c4576f427"
+        },
+        {
+          "path": "reference/mcp_best_practices.md",
+          "sourcePath": "skills/mcp-builder/reference/mcp_best_practices.md",
+          "sha256": "80fb4369a349447cf18ecdd7494fe7938b6065377e9f08c077cec411093a3007"
+        },
+        {
+          "path": "reference/node_mcp_server.md",
+          "sourcePath": "skills/mcp-builder/reference/node_mcp_server.md",
+          "sha256": "c3ba35a4f599dd53be9c6555ae72c19a7bf412cd5426576c2c08d42755482c66"
+        },
+        {
+          "path": "reference/python_mcp_server.md",
+          "sourcePath": "skills/mcp-builder/reference/python_mcp_server.md",
+          "sha256": "2da52f77e675191014ca2e146a4b95aa04d0ca7dd7e2b100322df15ade685e80"
+        },
+        {
+          "path": "scripts/connections.py",
+          "sourcePath": "skills/mcp-builder/scripts/connections.py",
+          "sha256": "9403668a2041568772082a8b334122c1f88daf0541fb393af4522d0094a47a6e"
+        },
+        {
+          "path": "scripts/evaluation.py",
+          "sourcePath": "skills/mcp-builder/scripts/evaluation.py",
+          "sha256": "49ed1d17cdce5da101b210197740713f49b935c29d4f339542a14b132658e6f7"
+        },
+        {
+          "path": "scripts/example_evaluation.xml",
+          "sourcePath": "skills/mcp-builder/scripts/example_evaluation.xml",
+          "sha256": "9272b348ddcc4b06ba562367ccd0770e018158c0068ac5116d5e34aaeff8777a"
+        },
+        {
+          "path": "scripts/requirements.txt",
+          "sourcePath": "skills/mcp-builder/scripts/requirements.txt",
+          "sha256": "d5d7558b2368ecea9dfeed7d1fbc71ee9e0750bebd1282faa527d528a344c3c7"
+        }
+      ],
+      "installationVerified": true,
+      "sourceReview": "partial-review-with-compatibility-observations",
+      "functionalEvaluation": "pending",
+      "clientLoadedVerified": false,
+      "initialApplication": {
+        "evidencePath": "docs/skills/evidencias/2026-10-28-evaluacion-inicial-mcp-seguridad.md",
+        "scope": "existing-memory-mcp-inspection",
+        "generalEffectivenessVerified": false
+      },
+      "formatValidated": true
+    },
+    {
+      "name": "differential-review",
+      "repository": "https://github.com/trailofbits/skills",
+      "revision": "123037ec8aed26f0d86327cc39137ee5043e5deb",
+      "sourcePath": "plugins/differential-review/skills/differential-review",
+      "installedPath": "skills/differential-review",
+      "files": [
+        {
+          "path": "LICENSE.txt",
+          "sourcePath": "LICENSE",
+          "sha256": "7abe19ec9bb73b36141b999b861d24ad855e808bafe0f81e84cce28556f6c297"
+        },
+        {
+          "path": "SKILL.md",
+          "sourcePath": "plugins/differential-review/skills/differential-review/SKILL.md",
+          "sha256": "f9af6a8193fc1a9f8ca3c54bb8d19095a5f20c9472ca6d014488bbde50b67da0"
+        },
+        {
+          "path": "adversarial.md",
+          "sourcePath": "plugins/differential-review/skills/differential-review/adversarial.md",
+          "sha256": "3cb823f38c6e551cbcf5f72325d2bb219dacdad774072519c31d50d92db19800"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "sourcePath": "plugins/differential-review/skills/differential-review/agents/openai.yaml",
+          "sha256": "0279d56f88dc1a04d4b1941a25fa7672912a3ceb0557b13c38d069908b30ae61"
+        },
+        {
+          "path": "assets/trail-of-bits-mark.svg",
+          "sourcePath": "plugins/differential-review/skills/differential-review/assets/trail-of-bits-mark.svg",
+          "sha256": "4bf74c789b38dcf6ad762c136b6832363d27ae19fbaa9a18ec18d66ecce6ca05"
+        },
+        {
+          "path": "methodology.md",
+          "sourcePath": "plugins/differential-review/skills/differential-review/methodology.md",
+          "sha256": "16b335d24cf2145e3dc4a37f50056550d29db2efa20e6df78fec95ec1e6fb0b4"
+        },
+        {
+          "path": "patterns.md",
+          "sourcePath": "plugins/differential-review/skills/differential-review/patterns.md",
+          "sha256": "52abb18abbc73502a3d3b2f36a7a035adc1db40fd812d1d5424cf065036a06e9"
+        },
+        {
+          "path": "reporting.md",
+          "sourcePath": "plugins/differential-review/skills/differential-review/reporting.md",
+          "sha256": "0016876dc6f158e926448bff1b6f634796757c7afe09dff177cfe30250724fc4"
+        }
+      ],
+      "installationVerified": true,
+      "sourceReview": "partial-review-with-compatibility-observations",
+      "functionalEvaluation": "pending",
+      "clientLoadedVerified": false,
+      "initialApplication": {
+        "evidencePath": "docs/skills/evidencias/2026-10-28-evaluacion-inicial-mcp-seguridad.md",
+        "scope": "single-schema-diff-48af575",
+        "generalEffectivenessVerified": false
+      },
+      "formatValidated": true
+    }
+  ],
+  "technicalChecks": [
+    {
+      "command": "node --test test/memory-mcp-server.test.js test/memory-mcp-policy.test.js",
+      "passed": 82,
+      "failed": 0
+    },
+    {
+      "command": "node --test test/peer-review-mcp.test.js",
+      "passed": 9,
+      "failed": 0
+    },
+    {
+      "scenario": "REVIEWER: ultra, minimal, extreme; dos schemas actuales; sin handlers",
+      "assertionsPassed": 6,
+      "failed": 0
+    }
+  ]
+}

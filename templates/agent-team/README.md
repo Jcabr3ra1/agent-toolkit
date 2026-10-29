@@ -4,9 +4,9 @@ Esta base organiza el trabajo entre Codex y Claude mediante archivos.
 Tú decides cuándo pasar al siguiente agente. No es un ejecutor, un servicio
 de API ni una conexión automática entre tus chats.
 
-Contrato documental: [equipo mediante archivos compartidos](../../docs/agent-team-handoffs.md),
+Contrato documental: [equipo mediante archivos compartidos](../../docs/agentes/coordinacion/agent-team-handoffs.md),
 consolidado junto con esta guía. El historial del piloto permanece separado.
-Adaptación aprobada: [modelos en los traspasos](../../docs/agent-team-model-handoff.md).
+Adaptación aprobada: [modelos en los traspasos](../../docs/agentes/coordinacion/agent-team-model-handoff.md).
 Las reglas del proyecto y los permisos de cada cliente siguen mandando.
 
 ## Las tres plantillas
@@ -38,9 +38,9 @@ la bóveda, una carpeta sincronizada o un repositorio público por defecto.
 
 ## Ayudas locales disponibles
 
-El [preparador](../../docs/agent-task-prepare.md) genera un borrador por destinatario
+El [preparador](../../docs/agentes/coordinacion/agent-task-prepare.md) genera un borrador por destinatario
 a partir de cuatro JSON explícitos. El
-[verificador](../../docs/agent-task-verify.md) compara los archivos listados en un
+[verificador](../../docs/agentes/coordinacion/agent-task-verify.md) compara los archivos listados en un
 contrato fijado. Para consultar su ayuda desde la raíz de Agent-Toolkit, sin
 instalación global:
 
@@ -56,7 +56,7 @@ al siguiente agente: la revisión humana y el permiso del receptor siguen aparte
 
 ## Modelo recomendado y modelo observado
 
-El [selector local](../../docs/agent-model-selector.md) recomienda a partir de
+El [selector local](../../docs/agentes/modelos/agent-model-selector.md) recomienda a partir de
 solicitud, catálogo y política; no guarda informes, ejecuta IA o cambia el CLI.
 Estas plantillas tampoco lo invocan automáticamente. Su bloque se completa
 manualmente o con un borrador del preparador, que luego se revisa; no deja listo
