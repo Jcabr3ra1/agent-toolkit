@@ -31,7 +31,7 @@ async function linkState(source, target) {
   return info.isSymbolicLink() && await fs.readlink(target) === source ? 'installed' : 'conflict';
 }
 export async function setupToolkit({ agent = 'all', apply = false, homeDirectory = os.homedir(), toolkitRoot = TOOLKIT_ROOT,
-  environment = process.env, codexHome = environment.CODEX_HOME ?? path.join(homeDirectory, '.codex') } = {}) {
+  environment = process.env, codexHome = environment.CODEX_HOME ?? path.join(homeDirectory, '.codex'), codexProfile } = {}) {
   const clients = clientsFor(agent);
   const home = await fs.realpath(homeDirectory), root = await fs.realpath(toolkitRoot);
   const names = (await fs.readdir(path.join(root, 'skills'), { withFileTypes: true })).filter(e => e.isDirectory() && /^[a-z0-9-]+$/u.test(e.name)).map(e => e.name).sort();
@@ -58,7 +58,7 @@ export async function setupToolkit({ agent = 'all', apply = false, homeDirectory
     : `claude mcp add --scope user --transport stdio agent-toolkit-workflow -- ${quote(process.execPath)} ${entry}`]));
   return { applied: Boolean(apply && !conflicts.length), skills, conflicts: conflicts.length,
     mcp: { applied: false, registrationCommands: commands }, restartRequired: Boolean(apply && !conflicts.length),
-    ...(clients.includes('codex') && { codexSandbox: await codexSandbox(home, codexHome) }),
+    ...(clients.includes('codex') && { codexSandbox: await codexSandbox(home, codexHome, codexProfile) }),
     superpowers: { included: false, required: false }, codexHome };
 }
 // Codex runs commands in a workspace-write sandbox by default, so `registrar` cannot write its reviewer record
@@ -72,24 +72,56 @@ async function canonical(target) {
     catch { const parent = path.dirname(current); if (parent === current) return path.resolve(target); rest.unshift(path.basename(current)); current = parent; }
   }
 }
-async function codexSandbox(home, codexHome) {
+const PROFILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
+const layer = (base, top) => {
+  const out = { ...base };
+  for (const [key, value] of Object.entries(top)) {
+    out[key] = value && typeof value === 'object' && !Array.isArray(value) && out[key] && typeof out[key] === 'object' && !Array.isArray(out[key])
+      ? layer(out[key], value) : value;
+  }
+  return out;
+};
+const readToml = async file => { const bytes = await boundedConfig(file); return bytes ? getStaticTOMLValue(parseTOML(bytes.toString('utf8'), { tomlVersion: '1.0.0' })) : null; };
+async function codexSandbox(home, codexHome, codexProfile) {
   const state = path.join(home, '.agent-toolkit'), file = path.join(codexHome, 'config.toml');
   const command = `grep -q '^\\[sandbox_workspace_write\\]' ${quote(file)} 2>/dev/null && echo 'Ya existe la sección: añade la ruta a writable_roots a mano' || ` +
     `printf '\\n[sandbox_workspace_write]\\nwritable_roots = [%s]\\n' ${quote(JSON.stringify(state))} >> ${quote(file)}`;
   const unknown = reason => ({ state: 'unknown', writableRoot: state,
     hint: `${reason}: no se puede saber si Codex deja escribir en ${state}. Si $revisar no consigue registrarse, permite esa carpeta.` });
-  let config = {};
-  try { const bytes = await boundedConfig(file); if (bytes) config = getStaticTOMLValue(parseTOML(bytes.toString('utf8'), { tomlVersion: '1.0.0' })); }
-  catch { return { state: 'unreadable', writableRoot: state }; }
+  let config = {}, profileFiles = [];
+  try {
+    config = await readToml(file) ?? {};
+    // `codex --profile <name>` layers $CODEX_HOME/<name>.config.toml over config.toml at launch time.
+    profileFiles = (await fs.readdir(codexHome).catch(() => [])).filter(n => n.endsWith('.config.toml')).map(n => n.slice(0, -12)).filter(n => PROFILE.test(n)).sort();
+  } catch { return { state: 'unreadable', writableRoot: state }; }
   let effective = config;
-  if (config.profile !== undefined) {
+  if (codexProfile !== undefined) {
+    if (!PROFILE.test(codexProfile)) throw new Error('Nombre de perfil de Codex no válido.');
+    let overlay;
+    try { overlay = await readToml(path.join(codexHome, `${codexProfile}.config.toml`)); } catch { return { state: 'unreadable', writableRoot: state }; }
+    if (!overlay) return unknown(`No existe ${codexProfile}.config.toml en ${codexHome}`);
+    effective = layer(config, overlay);
+  } else if (config.profile !== undefined) {
+    // Older layout: a [profiles.<name>] table selected with `profile = "<name>"`.
     const profile = typeof config.profile === 'string' ? config.profiles?.[config.profile] : undefined;
     if (!profile || typeof profile !== 'object') return unknown('El perfil de configuración elegido no se encuentra');
-    effective = { ...config, ...profile };
+    effective = layer(config, profile);
   }
-  if (effective.default_permissions === ':danger-full-access') return { state: 'not-needed', writableRoot: state };
-  if (effective.default_permissions !== undefined || effective.permissions !== undefined) return unknown('Codex usa perfiles de permisos');
+  const result = value => codexProfile === undefined && profileFiles.length
+    ? { ...value, profileFiles, profileHint: `Hay perfiles de Codex (${profileFiles.join(', ')}). Si abres Codex con --profile, revisa con --perfil-codex <nombre>.` }
+    : value;
+  return result(await sandboxState(effective, home, state, file, command, unknown));
+}
+async function sandboxState(effective, home, state, file, command, unknown) {
   const mode = effective.sandbox_mode;
+  // When sandbox_mode is present, Codex uses the legacy options and ignores default_permissions.
+  if (mode === undefined && effective.default_permissions !== undefined) {
+    if (effective.default_permissions === ':danger-full-access') return { state: 'not-needed', writableRoot: state };
+    if (effective.default_permissions === ':read-only') return { state: 'read-only', writableRoot: state,
+      hint: `El perfil de permisos :read-only no deja escribir: $revisar no puede registrarse. Usa sandbox_mode = "workspace-write" con ${state} en writable_roots.` };
+    return unknown('Codex usa un perfil de permisos propio');
+  }
+  if (mode === undefined && effective.permissions !== undefined) return unknown('Codex usa perfiles de permisos');
   if (mode === 'danger-full-access') return { state: 'not-needed', writableRoot: state };
   if (mode === 'read-only') return { state: 'read-only', writableRoot: state,
     hint: `Codex está en solo lectura: $revisar no puede registrarse. Usa sandbox_mode = "workspace-write" con ${state} en writable_roots.` };
@@ -138,8 +170,8 @@ async function executable(name, environment) {
   return false;
 }
 export async function doctorToolkit({ agent = 'all', homeDirectory = os.homedir(), toolkitRoot = TOOLKIT_ROOT, environment = process.env,
-  codexHome = environment.CODEX_HOME ?? path.join(homeDirectory, '.codex') } = {}) {
-  const setup = await setupToolkit({ agent, homeDirectory, toolkitRoot, environment, codexHome });
+  codexHome = environment.CODEX_HOME ?? path.join(homeDirectory, '.codex'), codexProfile } = {}) {
+  const setup = await setupToolkit({ agent, homeDirectory, toolkitRoot, environment, codexHome, codexProfile });
   const clients = {}, mcp = {};
   for (const name of clientsFor(agent)) {
     clients[name] = { available: await executable(name, environment) };

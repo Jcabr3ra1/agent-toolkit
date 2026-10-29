@@ -23,7 +23,11 @@ Con Codex informa además `codexSandbox`: si su sandbox deja escribir en
 `~/.agent-toolkit`, que `$revisar` necesita para registrar la sesión revisora. Si
 falta, imprime el comando que añade `[sandbox_workspace_write] writable_roots`
 sin duplicar la sección; sin ese permiso `registrar` falla con un error de
-escritura (EPERM).
+escritura (EPERM). Si `sandbox_mode` está presente, manda sobre
+`default_permissions`; `:read-only` bloquea el registro. Si abres Codex con
+`--profile <nombre>`, añade `--perfil-codex <nombre>` a `doctor` o `setup` para
+evaluar `<nombre>.config.toml` sobre `config.toml`; sin él, el resultado lista
+los perfiles que encuentra y avisa de que no los evaluó.
 Que algo esté configurado no demuestra que una sesión nueva lo haya cargado.
 Superpowers es opcional y separado; no lo instala Agent Toolkit. Su estado debe
 consultarse en el gestor de plugins del cliente. Para agentes por nivel, usa

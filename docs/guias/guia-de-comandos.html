@@ -169,6 +169,7 @@ node bin/agent-toolkit-inbox.js agentes --escribir # crea los que falten</code><
 <tr><td>No sé qué falta</td><td><code>node bin/agent-toolkit.js doctor --agent all</code> lo dice, con el comando para arreglarlo.</td></tr>
 <tr><td><code>node --version</code> no empieza por v24</td><td>Instala Node.js 24 (por ejemplo con nvm o Homebrew) y repite <code>npm ci --ignore-scripts</code>.</td></tr>
 <tr><td><code>setup</code> indica un conflicto</td><td>Ya tienes una skill con ese nombre. No la reemplaza: revisa la ruta que muestra y decide cuál conservas.</td></tr>
+<tr><td>Abro Codex con <code>--profile &lt;nombre&gt;</code></td><td>Revisa con <code>doctor --agent codex --perfil-codex &lt;nombre&gt;</code>: así evalúa el permiso de ese perfil.</td></tr>
 <tr><td>Moví o volví a clonar la carpeta</td><td>Repite <code>setup --apply</code> y el registro del servidor desde la nueva carpeta.</td></tr>
 <tr><td><code>$revisar</code> dice «No se pudo escribir en el registro de Agent Toolkit»</td><td>Es el sandbox de Codex. Haz el paso «Deja que Codex guarde su registro de revisor».</td></tr>
 <tr><td><code>avisar</code> dice que Codex no se registró</td><td>En Codex escribe <code>$revisar</code>.</td></tr>

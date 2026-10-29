@@ -129,3 +129,39 @@ test('the sandbox check follows the mode, profiles, permission profiles, parent 
   assert.equal((await setupToolkit({ ...f, agent: 'codex', environment })).codexSandbox.state, 'not-needed');
   assert.equal((await doctorToolkit({ ...f, agent: 'codex', environment })).codexSandbox.state, 'not-needed');
 });
+
+test('sandbox_mode takes precedence, :read-only blocks and current profile files are layered or reported', async t => {
+  const f = await fixture(t), { setupToolkit } = await import(moduleUrl);
+  const { runToolkitCli } = await import(new URL('../src/toolkit-cli.js', import.meta.url));
+  const codexHome = path.join(f.homeDirectory, '.codex'), config = path.join(codexHome, 'config.toml');
+  const state = path.join(f.homeDirectory, '.agent-toolkit');
+  await fs.mkdir(codexHome);
+  const check = async (text, extra = {}) => { if (text !== null) await fs.writeFile(config, text); return (await setupToolkit({ ...f, agent: 'codex', codexHome, ...extra })).codexSandbox; };
+  // With sandbox_mode present Codex ignores default_permissions.
+  assert.equal((await check('sandbox_mode = "read-only"\ndefault_permissions = ":danger-full-access"\n')).state, 'read-only');
+  assert.equal((await check(`sandbox_mode = "workspace-write"\ndefault_permissions = ":read-only"\n[sandbox_workspace_write]\nwritable_roots = ${JSON.stringify([state])}\n`)).state, 'allowed');
+  // The built-in :read-only permission profile is known and blocking.
+  const readOnly = await check('default_permissions = ":read-only"\n');
+  assert.equal(readOnly.state, 'read-only');
+  // `codex --profile <name>` layers <name>.config.toml over config.toml.
+  await fs.writeFile(config, 'sandbox_mode = "workspace-write"\n');
+  await fs.writeFile(path.join(codexHome, 'libre.config.toml'), 'sandbox_mode = "danger-full-access"\n');
+  await fs.writeFile(path.join(codexHome, 'estricto.config.toml'), 'sandbox_mode = "read-only"\n');
+  await fs.writeFile(path.join(codexHome, 'roots.config.toml'), `[sandbox_workspace_write]\nwritable_roots = ${JSON.stringify([state])}\n`);
+  const plain = await check(null);
+  assert.deepEqual([plain.state, plain.profileFiles], ['missing', ['estricto', 'libre', 'roots']]);
+  assert.match(plain.profileHint, /--perfil-codex/u);
+  assert.equal((await check(null, { codexProfile: 'libre' })).state, 'not-needed');
+  assert.equal((await check(null, { codexProfile: 'estricto' })).state, 'read-only');
+  const layered = await check(null, { codexProfile: 'roots' });
+  assert.deepEqual([layered.state, 'profileFiles' in layered], ['allowed', false]);
+  assert.equal((await check(null, { codexProfile: 'falta' })).state, 'unknown');
+  await assert.rejects(setupToolkit({ ...f, agent: 'codex', codexHome, codexProfile: '../fuera' }));
+  // The CLI forwards --perfil-codex and rejects bad names; a blocking state makes doctor fail.
+  const run = async argv => { const out = []; const code = await runToolkitCli(argv, { out: t => out.push(t), err: () => {}, options: { ...f, codexHome, environment: { PATH: '' } } }); return { code, json: out.length ? JSON.parse(out.join('')) : null }; };
+  const viaCli = await run(['setup', '--agent', 'codex', '--perfil-codex', 'libre', '--json']);
+  assert.equal(viaCli.json.codexSandbox.state, 'not-needed');
+  assert.equal((await run(['doctor', '--agent', 'codex', '--perfil-codex', '../x'])).code, 2);
+  assert.equal((await run(['doctor', '--agent', 'codex', '--perfil-codex', 'estricto', '--json'])).json.codexSandbox.state, 'read-only');
+  assert.equal((await run(['doctor', '--agent', 'codex', '--perfil-codex', 'estricto', '--json'])).code, 1);
+});

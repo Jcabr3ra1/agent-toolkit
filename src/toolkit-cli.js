@@ -1,12 +1,13 @@
 import { doctorToolkit, setupToolkit } from './toolkit-setup.js';
-const HELP = `Uso: agent-toolkit doctor [--agent codex|claude|all] [--json]
-     agent-toolkit setup [--agent codex|claude|all] [--apply] [--json]
+const HELP = `Uso: agent-toolkit doctor [--agent codex|claude|all] [--perfil-codex <nombre>] [--json]
+     agent-toolkit setup [--agent codex|claude|all] [--perfil-codex <nombre>] [--apply] [--json]
 
 setup prepara enlaces de las skills incluidas; --apply los crea sin reemplazar
 archivos existentes. Imprime los comandos MCP para registrar por separado.
 doctor comprueba instalación local sin iniciar modelos. Reinicia los clientes
 tras registrar el MCP. Con Codex, también indica si su sandbox deja escribir en
-~/.agent-toolkit (lo necesita $revisar) y el comando para permitirlo.
+~/.agent-toolkit (lo necesita $revisar) y el comando para permitirlo. Si abres
+Codex con --profile, indica ese perfil con --perfil-codex.
 Superpowers es un plugin opcional independiente.
 `;
 export async function runToolkitCli(argv, { out, err, options = {} } = {}) {
@@ -18,6 +19,7 @@ export async function runToolkitCli(argv, { out, err, options = {} } = {}) {
     if (seen.has(flag)) { await err(HELP); return 2; } seen.add(flag);
     if (flag === '--agent' && ['codex', 'claude', 'all'].includes(rest[i+1])) parsed.agent = rest[++i];
     else if (flag === '--json') parsed.json = true;
+    else if (flag === '--perfil-codex' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(rest[i+1] ?? '')) parsed.codexProfile = rest[++i];
     else if (flag === '--apply' && command === 'setup') parsed.apply = true;
     else { await err(HELP); return 2; }
   }

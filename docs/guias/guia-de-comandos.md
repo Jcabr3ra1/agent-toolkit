@@ -203,6 +203,7 @@ La memoria de Obsidian no se actualiza sola: se hace con `/cerrar-memoria` despu
 | No sé qué falta | `node bin/agent-toolkit.js doctor --agent all` lo dice, con el comando para arreglarlo. |
 | `node --version` no empieza por v24 | Instala Node.js 24 (por ejemplo con nvm o Homebrew) y repite `npm ci --ignore-scripts`. |
 | `setup` indica un conflicto | Ya tienes una skill con ese nombre. No la reemplaza: revisa la ruta que muestra y decide cuál conservas. |
+| Abro Codex con `--profile <nombre>` | Revisa con `doctor --agent codex --perfil-codex <nombre>`: así evalúa el permiso de ese perfil. |
 | Moví o volví a clonar la carpeta | Repite `setup --apply` y el registro del servidor desde la nueva carpeta. |
 | `$revisar` dice «No se pudo escribir en el registro de Agent Toolkit» | Es el sandbox de Codex. Haz el paso «Deja que Codex guarde su registro de revisor». |
 | `avisar` dice que Codex no se registró | En Codex escribe `$revisar`. |
