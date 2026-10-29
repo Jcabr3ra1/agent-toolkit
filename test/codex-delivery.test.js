@@ -138,3 +138,20 @@ test("the inbox CLI registers, notifies and rejects wrong arguments", async () =
     assert.match(result.errors, /agent-toolkit-inbox registrar/u);
   }
 });
+
+test("a write denied by a sandbox names the cause instead of a generic failure", async () => {
+  const f = await fixture();
+  const errors = [];
+  const code = await runPeerInboxCli(["registrar", "--agent", "codex", "--project-root", f.projectRoot, "--thread", THREAD], {
+    store: f.store, codexHome: f.codexHome, deliveryDirectory: path.join(f.directory, "no-escribible", "reviewers"),
+    out: () => {}, err: t => errors.push(t) });
+  assert.equal(code, 0);
+  const locked = path.join(f.directory, "no-escribible", "reviewers");
+  await fs.chmod(locked, 0o500);
+  try {
+    const denied = await runPeerInboxCli(["registrar", "--agent", "codex", "--project-root", f.projectRoot, "--thread", THREAD], {
+      store: f.store, codexHome: f.codexHome, deliveryDirectory: locked, out: () => {}, err: t => errors.push(t) });
+    assert.equal(denied, 1);
+    assert.match(errors.join(""), /No se pudo escribir en el registro de Agent Toolkit \((EACCES|EPERM)\).*agent-toolkit doctor --agent codex/su);
+  } finally { await fs.chmod(locked, 0o700); }
+});

@@ -5,7 +5,9 @@ const HELP = `Uso: agent-toolkit doctor [--agent codex|claude|all] [--json]
 setup prepara enlaces de las skills incluidas; --apply los crea sin reemplazar
 archivos existentes. Imprime los comandos MCP para registrar por separado.
 doctor comprueba instalación local sin iniciar modelos. Reinicia los clientes
-tras registrar el MCP. Superpowers es un plugin opcional independiente.
+tras registrar el MCP. Con Codex, también indica si su sandbox deja escribir en
+~/.agent-toolkit (lo necesita $revisar) y el comando para permitirlo.
+Superpowers es un plugin opcional independiente.
 `;
 export async function runToolkitCli(argv, { out, err, options = {} } = {}) {
   if (argv.length === 1 && ['--help', '-h'].includes(argv[0])) { await out(HELP); return 0; }
@@ -24,6 +26,7 @@ export async function runToolkitCli(argv, { out, err, options = {} } = {}) {
     await out(JSON.stringify(result, null, parsed.json ? 0 : 2) + '\n');
     return command === 'setup' ? result.conflicts ? 1 : 0
       : result.node.supported && Object.values(result.dependencies).every(Boolean) && Object.values(result.clients).every(c => c.available) &&
-        Object.values(result.mcp).every(m => m.state === 'configured') && result.skills.every(s => s.state === 'installed') ? 0 : 1;
+        Object.values(result.mcp).every(m => m.state === 'configured') && result.skills.every(s => s.state === 'installed') &&
+        (!result.codexSandbox || ['allowed', 'not-needed'].includes(result.codexSandbox.state)) ? 0 : 1;
   } catch { await err('No se pudo inspeccionar o instalar. Revisa rutas, permisos y conflictos; no se reemplazan destinos.\n'); return 1; }
 }

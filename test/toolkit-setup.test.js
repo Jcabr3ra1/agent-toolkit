@@ -60,3 +60,32 @@ test('doctor recognizes complete MCP tables with extra fields without exposing t
   assert.equal(result.mcp.codex.state, 'configured');
   assert.equal(JSON.stringify(result).includes('must-not-leak'), false);
 });
+
+test('setup and doctor report whether the Codex sandbox lets $revisar write its reviewer record', async t => {
+  const f = await fixture(t), { setupToolkit, doctorToolkit } = await import(moduleUrl);
+  const { execFileSync } = await import('node:child_process');
+  const codexHome = path.join(f.homeDirectory, '.codex'), config = path.join(codexHome, 'config.toml');
+  const state = path.join(f.homeDirectory, '.agent-toolkit');
+  const check = async () => (await setupToolkit({ ...f, agent: 'codex', codexHome })).codexSandbox;
+  assert.equal((await setupToolkit({ ...f, agent: 'claude', codexHome })).codexSandbox, undefined);
+  const missing = await check();
+  assert.deepEqual([missing.state, missing.writableRoot], ['missing', state]);
+  await fs.mkdir(codexHome);
+  await fs.writeFile(config, 'model = "x"\n');
+  // The printed command appends the section once and refuses to duplicate it.
+  execFileSync('sh', ['-c', missing.command]);
+  assert.match(execFileSync('sh', ['-c', missing.command], { encoding: 'utf8' }), /Ya existe la sección/u);
+  assert.equal((await fs.readFile(config, 'utf8')).match(/\[sandbox_workspace_write\]/gu).length, 1);
+  assert.equal((await check()).state, 'allowed');
+  assert.equal((await doctorToolkit({ ...f, agent: 'codex', codexHome, environment: { PATH: '' } })).codexSandbox.state, 'allowed');
+  await fs.writeFile(config, '[sandbox_workspace_write]\nwritable_roots = ["~/.agent-toolkit"]\n');
+  assert.equal((await check()).state, 'allowed');
+  await fs.writeFile(config, '[sandbox_workspace_write]\nwritable_roots = ["/otra"]\n');
+  const partial = await check();
+  assert.deepEqual([partial.state, 'command' in partial], ['missing-root', false]);
+  assert.match(partial.hint, /writable_roots/u);
+  await fs.writeFile(config, 'sandbox_mode = "danger-full-access"\n');
+  assert.equal((await check()).state, 'not-needed');
+  await fs.writeFile(config, 'roto = [\n');
+  assert.equal((await check()).state, 'unreadable');
+});

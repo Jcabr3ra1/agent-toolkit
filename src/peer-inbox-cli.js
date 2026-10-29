@@ -152,7 +152,11 @@ export async function runPeerInboxCli(argv, { out, err, store = createPeerReview
       await out(JSON.stringify(result) + "\n");
       return EXIT.found;
     } catch (failure) {
-      await err((failure instanceof DeliveryError || failure instanceof PeerReviewError ? failure.message : "No se pudo completar la operación.") + "\n");
+      // Name the cause: in Codex's sandbox the usual one is a write denied under ~/.agent-toolkit.
+      const denied = ["EPERM", "EACCES", "EROFS"].includes(failure?.code);
+      await err((failure instanceof DeliveryError || failure instanceof PeerReviewError ? failure.message
+        : denied ? `No se pudo escribir en el registro de Agent Toolkit (${failure.code}). Si es Codex, su sandbox no deja escribir en ~/.agent-toolkit: ejecuta agent-toolkit doctor --agent codex.`
+          : `No se pudo completar la operación${typeof failure?.code === "string" ? ` (${failure.code})` : ""}.`) + "\n");
       return EXIT.failure;
     }
   }

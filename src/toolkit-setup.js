@@ -58,7 +58,25 @@ export async function setupToolkit({ agent = 'all', apply = false, homeDirectory
     : `claude mcp add --scope user --transport stdio agent-toolkit-workflow -- ${quote(process.execPath)} ${entry}`]));
   return { applied: Boolean(apply && !conflicts.length), skills, conflicts: conflicts.length,
     mcp: { applied: false, registrationCommands: commands }, restartRequired: Boolean(apply && !conflicts.length),
+    ...(clients.includes('codex') && { codexSandbox: await codexSandbox(home, codexHome) }),
     superpowers: { included: false, required: false }, codexHome };
+}
+// Codex runs commands in a workspace-write sandbox by default, so `registrar` cannot write its reviewer record
+// under ~/.agent-toolkit unless that folder is a writable root. Only reported; the user runs the printed command.
+async function codexSandbox(home, codexHome) {
+  const state = path.join(home, '.agent-toolkit'), file = path.join(codexHome, 'config.toml');
+  const command = `grep -q '^\\[sandbox_workspace_write\\]' ${quote(file)} 2>/dev/null && echo 'Ya existe la sección: añade la ruta a writable_roots a mano' || ` +
+    `printf '\\n[sandbox_workspace_write]\\nwritable_roots = [%s]\\n' ${quote(JSON.stringify(state))} >> ${quote(file)}`;
+  let config = {};
+  try { const bytes = await boundedConfig(file); if (bytes) config = getStaticTOMLValue(parseTOML(bytes.toString('utf8'), { tomlVersion: '1.0.0' })); }
+  catch { return { state: 'unreadable', writableRoot: state }; }
+  if (config.sandbox_mode === 'danger-full-access') return { state: 'not-needed', writableRoot: state };
+  const roots = config.sandbox_workspace_write?.writable_roots;
+  if (Array.isArray(roots) && roots.some(root => typeof root === 'string' && path.resolve(root.replace(/^~(?=$|\/)/u, home)) === state)) {
+    return { state: 'allowed', writableRoot: state };
+  }
+  return config.sandbox_workspace_write ? { state: 'missing-root', writableRoot: state, hint: `Añade ${JSON.stringify(state)} a writable_roots de [sandbox_workspace_write] en ${file}.` }
+    : { state: 'missing', writableRoot: state, command };
 }
 async function boundedConfig(file) {
   const info = await stat(file);
@@ -106,6 +124,7 @@ export async function doctorToolkit({ agent = 'all', homeDirectory = os.homedir(
   }
   return { node: { version: process.version, supported: process.versions.node.split('.')[0] === '24' }, dependencies, clients, mcp,
     skills: setup.skills, registrationCommands: setup.mcp.registrationCommands,
+    ...(setup.codexSandbox && { codexSandbox: setup.codexSandbox }),
     gemini: { available: await executable('agy', environment), provider: 'antigravity', apiFallback: false },
     superpowers: { included: false, required: false, detection: 'check-client-plugin-manager' }, nativeConnectionVerified: false };
 }
