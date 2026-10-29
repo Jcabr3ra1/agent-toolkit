@@ -31,7 +31,7 @@ async function linkState(source, target) {
   return info.isSymbolicLink() && await fs.readlink(target) === source ? 'installed' : 'conflict';
 }
 export async function setupToolkit({ agent = 'all', apply = false, homeDirectory = os.homedir(), toolkitRoot = TOOLKIT_ROOT,
-  codexHome = path.join(homeDirectory, '.codex') } = {}) {
+  environment = process.env, codexHome = environment.CODEX_HOME ?? path.join(homeDirectory, '.codex') } = {}) {
   const clients = clientsFor(agent);
   const home = await fs.realpath(homeDirectory), root = await fs.realpath(toolkitRoot);
   const names = (await fs.readdir(path.join(root, 'skills'), { withFileTypes: true })).filter(e => e.isDirectory() && /^[a-z0-9-]+$/u.test(e.name)).map(e => e.name).sort();
@@ -62,20 +62,48 @@ export async function setupToolkit({ agent = 'all', apply = false, homeDirectory
     superpowers: { included: false, required: false }, codexHome };
 }
 // Codex runs commands in a workspace-write sandbox by default, so `registrar` cannot write its reviewer record
-// under ~/.agent-toolkit unless that folder is a writable root. Only reported; the user runs the printed command.
+// under ~/.agent-toolkit unless that folder is inside a writable root. Only reported; the user runs the printed
+// command. What cannot be evaluated (permission profiles) is reported as unknown instead of asking for a change.
+// Resolves links through the deepest folder that exists, so a root written through a link still matches.
+async function canonical(target) {
+  let current = path.resolve(target), rest = [];
+  while (true) {
+    try { return path.join(await fs.realpath(current), ...rest); }
+    catch { const parent = path.dirname(current); if (parent === current) return path.resolve(target); rest.unshift(path.basename(current)); current = parent; }
+  }
+}
 async function codexSandbox(home, codexHome) {
   const state = path.join(home, '.agent-toolkit'), file = path.join(codexHome, 'config.toml');
   const command = `grep -q '^\\[sandbox_workspace_write\\]' ${quote(file)} 2>/dev/null && echo 'Ya existe la sección: añade la ruta a writable_roots a mano' || ` +
     `printf '\\n[sandbox_workspace_write]\\nwritable_roots = [%s]\\n' ${quote(JSON.stringify(state))} >> ${quote(file)}`;
+  const unknown = reason => ({ state: 'unknown', writableRoot: state,
+    hint: `${reason}: no se puede saber si Codex deja escribir en ${state}. Si $revisar no consigue registrarse, permite esa carpeta.` });
   let config = {};
   try { const bytes = await boundedConfig(file); if (bytes) config = getStaticTOMLValue(parseTOML(bytes.toString('utf8'), { tomlVersion: '1.0.0' })); }
   catch { return { state: 'unreadable', writableRoot: state }; }
-  if (config.sandbox_mode === 'danger-full-access') return { state: 'not-needed', writableRoot: state };
-  const roots = config.sandbox_workspace_write?.writable_roots;
-  if (Array.isArray(roots) && roots.some(root => typeof root === 'string' && path.resolve(root.replace(/^~(?=$|\/)/u, home)) === state)) {
-    return { state: 'allowed', writableRoot: state };
+  let effective = config;
+  if (config.profile !== undefined) {
+    const profile = typeof config.profile === 'string' ? config.profiles?.[config.profile] : undefined;
+    if (!profile || typeof profile !== 'object') return unknown('El perfil de configuración elegido no se encuentra');
+    effective = { ...config, ...profile };
   }
-  return config.sandbox_workspace_write ? { state: 'missing-root', writableRoot: state, hint: `Añade ${JSON.stringify(state)} a writable_roots de [sandbox_workspace_write] en ${file}.` }
+  if (effective.default_permissions === ':danger-full-access') return { state: 'not-needed', writableRoot: state };
+  if (effective.default_permissions !== undefined || effective.permissions !== undefined) return unknown('Codex usa perfiles de permisos');
+  const mode = effective.sandbox_mode;
+  if (mode === 'danger-full-access') return { state: 'not-needed', writableRoot: state };
+  if (mode === 'read-only') return { state: 'read-only', writableRoot: state,
+    hint: `Codex está en solo lectura: $revisar no puede registrarse. Usa sandbox_mode = "workspace-write" con ${state} en writable_roots.` };
+  if (mode !== undefined && mode !== 'workspace-write') return unknown(`sandbox_mode = ${JSON.stringify(mode)} no es conocido`);
+  const roots = effective.sandbox_workspace_write?.writable_roots;
+  const target = await canonical(state);
+  for (const root of Array.isArray(roots) ? roots : []) {
+    if (typeof root !== 'string' || !root) continue;
+    const relative = path.relative(await canonical(root.replace(/^~(?=$|\/)/u, home)), target);
+    if (relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative))) {
+      return { state: 'allowed', writableRoot: state };
+    }
+  }
+  return effective.sandbox_workspace_write ? { state: 'missing-root', writableRoot: state, hint: `Añade ${JSON.stringify(state)} a writable_roots de [sandbox_workspace_write] en ${file}.` }
     : { state: 'missing', writableRoot: state, command };
 }
 async function boundedConfig(file) {
@@ -111,7 +139,7 @@ async function executable(name, environment) {
 }
 export async function doctorToolkit({ agent = 'all', homeDirectory = os.homedir(), toolkitRoot = TOOLKIT_ROOT, environment = process.env,
   codexHome = environment.CODEX_HOME ?? path.join(homeDirectory, '.codex') } = {}) {
-  const setup = await setupToolkit({ agent, homeDirectory, toolkitRoot, codexHome });
+  const setup = await setupToolkit({ agent, homeDirectory, toolkitRoot, environment, codexHome });
   const clients = {}, mcp = {};
   for (const name of clientsFor(agent)) {
     clients[name] = { available: await executable(name, environment) };

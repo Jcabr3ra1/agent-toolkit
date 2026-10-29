@@ -89,3 +89,43 @@ test('setup and doctor report whether the Codex sandbox lets $revisar write its 
   await fs.writeFile(config, 'roto = [\n');
   assert.equal((await check()).state, 'unreadable');
 });
+
+test('the sandbox check follows the mode, profiles, permission profiles, parent roots, links and CODEX_HOME', async t => {
+  const f = await fixture(t), { setupToolkit, doctorToolkit } = await import(moduleUrl);
+  const codexHome = path.join(f.homeDirectory, '.codex'), config = path.join(codexHome, 'config.toml');
+  const state = path.join(f.homeDirectory, '.agent-toolkit');
+  await fs.mkdir(codexHome);
+  const check = async (text, extra = {}) => { await fs.writeFile(config, text); return (await setupToolkit({ ...f, agent: 'codex', codexHome, ...extra })).codexSandbox; };
+  const roots = list => `[sandbox_workspace_write]\nwritable_roots = ${JSON.stringify(list)}\n`;
+  // writable_roots only count in workspace-write; read-only blocks the record whatever the roots say.
+  const readOnly = await check('sandbox_mode = "read-only"\n' + roots([state]));
+  assert.equal(readOnly.state, 'read-only');
+  assert.match(readOnly.hint, /workspace-write/u);
+  assert.equal((await check('sandbox_mode = "workspace-write"\n' + roots([state]))).state, 'allowed');
+  // A parent folder allows it; a sibling that only shares the prefix does not.
+  assert.equal((await check(roots([f.homeDirectory]))).state, 'allowed');
+  assert.equal((await check(roots([path.join(f.homeDirectory, '.agent')]))).state, 'missing-root');
+  // The same folder reached through a link counts.
+  const link = path.join(f.root, 'enlace-home');
+  await fs.symlink(f.homeDirectory, link);
+  assert.equal((await check(roots([path.join(link, '.agent-toolkit')]))).state, 'allowed');
+  // The selected configuration profile overrides the top level.
+  assert.equal((await check(`profile = "trabajo"\n[profiles.trabajo]\nsandbox_mode = "danger-full-access"\n`)).state, 'not-needed');
+  assert.equal((await check(`profile = "trabajo"\nsandbox_mode = "danger-full-access"\n[profiles.trabajo]\nsandbox_mode = "read-only"\n`)).state, 'read-only');
+  assert.equal((await check(`profile = "trabajo"\n[profiles.trabajo]\nsandbox_mode = "workspace-write"\n[profiles.trabajo.sandbox_workspace_write]\nwritable_roots = ${JSON.stringify([state])}\n`)).state, 'allowed');
+  const missingProfile = await check('profile = "otro"\n');
+  assert.deepEqual([missingProfile.state, 'command' in missingProfile], ['unknown', false]);
+  // Permission profiles: full access is understood; anything else is reported as unknown, not as a change to make.
+  assert.equal((await check('default_permissions = ":danger-full-access"\n')).state, 'not-needed');
+  const custom = await check('default_permissions = "revisor"\n[permissions.revisor]\nnetwork = false\n');
+  assert.deepEqual([custom.state, 'command' in custom], ['unknown', false]);
+  assert.equal((await check('sandbox_mode = "otro-modo"\n')).state, 'unknown');
+  // setup and doctor read the same configuration when CODEX_HOME is set.
+  const other = path.join(f.root, 'codex-home');
+  await fs.mkdir(other);
+  await fs.writeFile(path.join(other, 'config.toml'), 'sandbox_mode = "danger-full-access"\n');
+  await fs.writeFile(config, 'model = "x"\n');
+  const environment = { PATH: '', CODEX_HOME: other };
+  assert.equal((await setupToolkit({ ...f, agent: 'codex', environment })).codexSandbox.state, 'not-needed');
+  assert.equal((await doctorToolkit({ ...f, agent: 'codex', environment })).codexSandbox.state, 'not-needed');
+});

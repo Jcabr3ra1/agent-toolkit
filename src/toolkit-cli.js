@@ -27,6 +27,6 @@ export async function runToolkitCli(argv, { out, err, options = {} } = {}) {
     return command === 'setup' ? result.conflicts ? 1 : 0
       : result.node.supported && Object.values(result.dependencies).every(Boolean) && Object.values(result.clients).every(c => c.available) &&
         Object.values(result.mcp).every(m => m.state === 'configured') && result.skills.every(s => s.state === 'installed') &&
-        (!result.codexSandbox || ['allowed', 'not-needed'].includes(result.codexSandbox.state)) ? 0 : 1;
+        (!result.codexSandbox || ['allowed', 'not-needed', 'unknown'].includes(result.codexSandbox.state)) ? 0 : 1;
   } catch { await err('No se pudo inspeccionar o instalar. Revisa rutas, permisos y conflictos; no se reemplazan destinos.\n'); return 1; }
 }

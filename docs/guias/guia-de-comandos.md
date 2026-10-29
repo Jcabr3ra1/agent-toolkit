@@ -115,7 +115,7 @@ Para actualizar más adelante: `git pull --ff-only` y `npm ci --ignore-scripts` 
 
 1. **Tú:** Abre dos terminales en la carpeta de tu proyecto. Una con `claude` y otra con `codex`. Debe ser la **misma ruta** en las dos, y es el proyecto en el que vas a trabajar, no Agent Toolkit.
 2. **Codex:** Escribe `$revisar`. Registra su sesión y dice «Registrada; me avisarán». Termina su turno y no gasta tokens esperando. Si no encuentra su sesión, pide el id: en Codex, `/status`.
-3. **Claude:** Escribe `/programar `. Claude puntúa la tarea y elige un nivel (tabla de abajo).
+3. **Claude:** Escribe `/programar <la tarea>`. Claude puntúa la tarea y elige un nivel (tabla de abajo).
 4. **Tú:** Confirmas el nivel, solo si es Exigente o más. Con Ligero o Normal, Claude sigue solo.
 5. **Claude:** Programa, prueba y se revisa a sí mismo. Delega el código al agente del nivel cuando hace falta.
 6. **Tú:** Apruebas el encargo para Codex. Claude te lo muestra con preguntas, archivos y criterio de aprobación. Nada se envía sin tu OK.
@@ -153,7 +153,7 @@ El total sale de cinco criterios: riesgo, tamaño, ambigüedad, contexto y tipo 
 | `node bin/agent-toolkit-inbox.js rendimiento` | Qué modelo y nivel rinden mejor (hallazgos que se sostienen). |
 | `node bin/agent-toolkit-inbox.js consumo --project-root /ruta` | Tokens, caché y tiempo de las llamadas registradas. |
 | `node bin/agent-toolkit-inbox.js agentes [--escribir [--forzar]]` | Crea los agentes de nivel de Codex. Sin `--escribir` es vista previa. |
-| `node bin/agent-toolkit-inbox.js registrar --agent codex --project-root /ruta` | Guarda la sesión de Codex como revisora. Lo ejecuta `$revisar`; añade `--thread ` si no la encuentra. |
+| `node bin/agent-toolkit-inbox.js registrar --agent codex --project-root /ruta` | Guarda la sesión de Codex como revisora. Lo ejecuta `$revisar`; añade `--thread <id>` si no la encuentra. |
 | `node bin/agent-toolkit-inbox.js avisar --project-root /ruta --task <id> --review <id>` | Avisa a Codex de un encargo ya aprobado. Lo ejecuta la skill, no tú. |
 | `node bin/agent-toolkit-inbox.js cierre --project-root /ruta --task <id> --salida /ruta/traspaso.md` | Cierra una colaboración y deja un borrador de traspaso. Exige que no haya encargos activos. |
 
@@ -166,7 +166,7 @@ El total sale de cinco criterios: riesgo, tamaño, ambigüedad, contexto y tipo 
 | `node bin/agent-toolkit-gemini.js investigar --prompt "tu pregunta"` | Búsqueda web con resumen y fuentes. |
 | `node bin/agent-toolkit-gemini.js analizar --prompt "qué quieres saber" --archivo /ruta/informe.pdf` | Lee texto, imágenes, PDF o vídeo (sin audio). Hasta 8 archivos. |
 | `node bin/agent-toolkit-gemini.js imagen --prompt "descripción"` | Genera una imagen. Sin vídeo ni audio. |
-| `node bin/agent-toolkit-gemini.js historial` | Consultas anteriores. `recuperar --directorio ` trae un resultado sin volver a llamar al modelo. |
+| `node bin/agent-toolkit-gemini.js historial` | Consultas anteriores. `recuperar --directorio <ruta>` trae un resultado sin volver a llamar al modelo. |
 
 ### Memoria de proyecto (opcional) (`project-memory`)
 
@@ -177,7 +177,7 @@ El total sale de cinco criterios: riesgo, tamaño, ambigüedad, contexto y tipo 
 | `node bin/project-memory.js doctor <bóveda>` | Diagnóstico de la bóveda. |
 | `node bin/project-memory.js sync plan <bóveda>` | Qué PR fusionados faltan por registrar en la memoria. |
 | `node bin/project-memory.js sync inspect <bóveda> --pr 42` | Evidencia de un PR concreto, solo lectura. |
-| `node bin/project-memory.js sync record <bóveda> --pr 42 --outcome documentation-updated --reviewed --summary "…" --apply` | Registra un PR. Escribe solo con `--apply` y nunca hace commit ni push. |
+| `node bin/project-memory.js sync record <bóveda> --pr 42 --outcome documentation-updated --reviewed --summary "Producto actualizado" --note "01-PRODUCTO/Producto.md" --apply` | Registra un PR cuyas notas ya actualizaste: `--note` es obligatorio (repetible) con `documentation-updated`. Si no cambió nada, usa `--outcome no-documentation-change` sin resumen ni notas. Escribe solo con `--apply` y nunca hace commit ni push. |
 
 `<bóveda>` es la carpeta de memoria de un proyecto, la que contiene `project-memory.json`. Solo `--apply` escribe, y nada hace commit ni push.
 
@@ -206,7 +206,7 @@ La memoria de Obsidian no se actualiza sola: se hace con `/cerrar-memoria` despu
 | Moví o volví a clonar la carpeta | Repite `setup --apply` y el registro del servidor desde la nueva carpeta. |
 | `$revisar` dice «No se pudo escribir en el registro de Agent Toolkit» | Es el sandbox de Codex. Haz el paso «Deja que Codex guarde su registro de revisor». |
 | `avisar` dice que Codex no se registró | En Codex escribe `$revisar`. |
-| `registrar` no encuentra la sesión | En Codex, `/status` da el id. Luego `registrar … --thread `. |
+| `registrar` no encuentra la sesión | En Codex, `/status` da el id. Luego `registrar … --thread <id>`. |
 | Codex tarda en reaccionar al aviso | Si está en mitad de un turno, el aviso espera a que termine. |
 | Codex no reclama el encargo | Su modelo no coincide con el recomendado. Cámbialo con `/model`. |
 | `agentes` dice «ya existe y es distinto» | Es lo esperado. Usa `--escribir --forzar` si quieres reemplazarlo; queda una copia. |
@@ -233,5 +233,23 @@ Límites que conviene recordar:
 - Probado en macOS con Node 24, clonando en carpetas distintas. No se ha comprobado en Linux ni en Windows.
 - Todavía no hay una medición controlada que demuestre ahorro de tokens.
 - Nada se fusiona, se sube ni se despliega sin tu autorización.
+
+### Avanzado
+
+Herramientas internas del servidor (solo para depurar):
+
+| Grupo | Herramientas |
+| --- | --- |
+| Revisión cruzada | `start_collaboration, get_collaboration, publish_peer_context, preview_peer_review, approve_peer_review, request_peer_review, wait_for_peer_handoff, claim_peer_review, submit_peer_review, record_review_outcome, cancel_peer_review, close_collaboration` |
+| Tareas por etapas | `start_task, get_task, preview_codex_plan, run_codex_plan, preview_claude_proposal, run_claude_proposal, preview_claude_implementation, run_claude_implementation, preview_codex_review, run_codex_review, wait_for_task_activity, cancel_task_execution` |
+
+`approve_peer_review` es la que te pide permiso: no la pongas en la lista de permitidas ni en modo automático.
+
+`agent-task` (borradores y verificación manual):
+
+| Comando | Para qué |
+| --- | --- |
+| `node bin/agent-task.js prepare --task t.json --request r.json --catalog c.json --policy p.json` | Prepara un borrador. No usa IA ni consulta cuentas. Hay ejemplos en `examples/`. |
+| `node bin/agent-task.js verify --contract c.json --expect <sha256> --source <raíz> --handoff <raíz> --phase before` | Compara las huellas de los archivos listados. |
 
 Más detalle: [instalación, consumo y recuperación](consolidacion.md), [herramientas de Gemini](herramientas-gemini.md) y [primeros pasos](primeros-pasos.md).
