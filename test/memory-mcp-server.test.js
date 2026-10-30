@@ -180,7 +180,8 @@ for (const roots of [undefined, [], "foreign"])
     await assert.rejects(client.request({ method: "initialize", params: { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "repeat", version: "1" } } }, InitializeResultSchema), /RG_ALREADY_INITIALIZED/);
     assert.equal(await fs.readFile(f.note, "utf8"), "Fixture note.\n");
     await client.close(); assert.throws(() => process.kill(pid, 0), e => e.code === "ESRCH");
-    assert.equal(stderr, "");
+    assert.equal(stderr, process.platform === 'win32' && process.env.AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS !== '1'
+      ? 'Windows: no se verifican propietario ni modos POSIX; se usan los permisos del usuario.\n' : '');
   });
 
 test("RG transport boundary, fragmentation and valid batching", async () => {
@@ -245,6 +246,6 @@ test("RG cleanup failure is reported, never silently marked successful", async t
 for (const args of [[], ["--manifest", "relative.json"], ["--manifest", "/fictitious", "--backend", "private-sentinel"], ["--manifest", "/fictitious"]])
   test("RG CLI rejects invalid startup " + JSON.stringify(args), () => {
     const r = spawnSync(process.execPath, [bin, ...args], { encoding: "utf8" });
-    assert.equal(r.status, 2); assert.equal(r.stdout, ""); assert.match(r.stderr, /^project-memory-mcp: RG_[A-Z_]+\n$/);
+    assert.equal(r.status, 2); assert.equal(r.stdout, ""); assert.match(r.stderr.replace(/^Windows: no se verifican propietario ni modos POSIX; se usan los permisos del usuario.\n/u, ''), /^project-memory-mcp: RG_[A-Z_]+\n$/);
     assert.doesNotMatch(r.stderr, /fictitious|private-sentinel|Error:/);
   });

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -14,6 +15,7 @@ async function fixture(t) {
   return { root, homeDirectory, toolkitRoot };
 }
 const moduleUrl = new URL('../src/toolkit-setup.js', import.meta.url);
+const directoryLinkType = process.platform === 'win32' ? 'junction' : 'dir';
 test('setup preview writes nothing; apply links both clients and repeating preserves links', async t => {
   const f = await fixture(t);
   assert.equal(await fs.access(moduleUrl).then(() => true, () => false), true, 'setup module exists');
@@ -26,6 +28,28 @@ test('setup preview writes nothing; apply links both clients and repeating prese
   assert.equal(await fs.realpath(path.join(f.homeDirectory, '.agents/skills/example')), path.join(f.toolkitRoot, 'skills/example'));
   assert.equal((await setupToolkit({ ...f, agent: 'all', apply: true })).skills.every(s => s.state === 'installed'), true);
 });
+
+test('setup recognizes an equivalent directory link and keeps its source intact', async t => {
+  const f = await fixture(t), { setupToolkit } = await import(moduleUrl);
+  const target = path.join(f.homeDirectory, '.agents', 'skills', 'example');
+  const source = path.join(f.toolkitRoot, 'skills', 'example');
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.symlink(process.platform === 'win32' ? source.toUpperCase() : path.relative(path.dirname(target), source), target, directoryLinkType);
+  const before = await fs.readlink(target);
+  const result = await setupToolkit({ ...f, agent: 'codex', apply: true });
+  assert.equal(result.skills[0].state, 'installed');
+  assert.equal(await fs.readlink(target), before);
+  assert.match(await fs.readFile(path.join(source, 'SKILL.md'), 'utf8'), /name: example/u);
+});
+
+test('doctor finds client executables using platform PATH extensions', async t => {
+  const f = await fixture(t), { doctorToolkit } = await import(moduleUrl);
+  const bin = path.join(f.root, 'bin');
+  await fs.mkdir(bin);
+  await fs.writeFile(path.join(bin, process.platform === 'win32' ? 'codex.cmd' : 'codex'), '', { mode: 0o755 });
+  const result = await doctorToolkit({ ...f, agent: 'codex', environment: { PATH: bin, PATHEXT: '.EXE;.CMD' } });
+  assert.equal(result.clients.codex.available, true);
+});
 test('setup preserves occupied targets and rejects symlink parents without modifying unrelated files', async t => {
   const f = await fixture(t);
   assert.equal(await fs.access(moduleUrl).then(() => true, () => false), true);
@@ -36,7 +60,7 @@ test('setup preserves occupied targets and rejects symlink parents without modif
   assert.equal(blocked.applied, false);
   assert.equal(blocked.skills[0].state, 'conflict');
   assert.equal(await fs.readFile(path.join(f.homeDirectory, '.agents/skills/example/mine'), 'utf8'), 'keep');
-  await fs.symlink(f.root, path.join(f.homeDirectory, '.claude'));
+  await fs.symlink(f.root, path.join(f.homeDirectory, '.claude'), directoryLinkType);
   await assert.rejects(setupToolkit({ ...f, agent: 'claude', apply: true }));
 });
 test('doctor reports missing dependencies and optional Superpowers without creating configuration', async t => {
@@ -63,7 +87,6 @@ test('doctor recognizes complete MCP tables with extra fields without exposing t
 
 test('setup and doctor report whether the Codex sandbox lets $revisar write its reviewer record', async t => {
   const f = await fixture(t), { setupToolkit, doctorToolkit } = await import(moduleUrl);
-  const { execFileSync } = await import('node:child_process');
   const codexHome = path.join(f.homeDirectory, '.codex'), config = path.join(codexHome, 'config.toml');
   const state = path.join(f.homeDirectory, '.agent-toolkit');
   const check = async () => (await setupToolkit({ ...f, agent: 'codex', codexHome })).codexSandbox;
@@ -73,8 +96,8 @@ test('setup and doctor report whether the Codex sandbox lets $revisar write its 
   await fs.mkdir(codexHome);
   await fs.writeFile(config, 'model = "x"\n');
   // The printed command appends the section once and refuses to duplicate it.
-  execFileSync('sh', ['-c', missing.command]);
-  assert.match(execFileSync('sh', ['-c', missing.command], { encoding: 'utf8' }), /Ya existe la sección/u);
+  assert.equal(execSync(missing.command, { encoding: 'utf8' }), '');
+  assert.equal(execSync(missing.command, { encoding: 'utf8' }), 'Ya existe la sección: añade la ruta a writable_roots a mano\n');
   assert.equal((await fs.readFile(config, 'utf8')).match(/\[sandbox_workspace_write\]/gu).length, 1);
   assert.equal((await check()).state, 'allowed');
   assert.equal((await doctorToolkit({ ...f, agent: 'codex', codexHome, environment: { PATH: '' } })).codexSandbox.state, 'allowed');
@@ -107,7 +130,7 @@ test('the sandbox check follows the mode, profiles, permission profiles, parent 
   assert.equal((await check(roots([path.join(f.homeDirectory, '.agent')]))).state, 'missing-root');
   // The same folder reached through a link counts.
   const link = path.join(f.root, 'enlace-home');
-  await fs.symlink(f.homeDirectory, link);
+  await fs.symlink(f.homeDirectory, link, directoryLinkType);
   assert.equal((await check(roots([path.join(link, '.agent-toolkit')]))).state, 'allowed');
   // The selected configuration profile overrides the top level.
   assert.equal((await check(`profile = "trabajo"\n[profiles.trabajo]\nsandbox_mode = "danger-full-access"\n`)).state, 'not-needed');

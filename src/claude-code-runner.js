@@ -3,6 +3,8 @@ import { spawn as nodeSpawn, spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { IS_WINDOWS, warnPlatformPermissions } from "./platform.js";
+import { resolveCliInvocation } from "./cli-executable.js";
 import { StringDecoder } from "node:string_decoder";
 
 const MAX_PROMPT_BYTES = 48_000;
@@ -108,48 +110,43 @@ function versionAtLeast(actual, minimum) {
 
 function filteredEnvironment(source, executable) {
   const result = {};
-  for (const key of ["HOME", "TMPDIR", "LANG", "LC_ALL", "CLAUDE_CONFIG_DIR", "USER"]) {
+  for (const key of ["HOME", "TMPDIR", "LANG", "LC_ALL", "CLAUDE_CONFIG_DIR", "USER", ...(IS_WINDOWS ? ["SystemRoot", "SYSTEMROOT", "WINDIR", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"] : [])]) {
     const value = source[key];
     if (typeof value === "string" && value.length > 0 && !/[\u0000-\u001f\u007f]/u.test(value)) result[key] = value;
   }
-  const systemPath = process.platform === "darwin" ? "/usr/bin:/bin:/usr/sbin:/sbin" : "/usr/bin:/bin";
-  result.PATH = [...new Set([path.dirname(executable), ...systemPath.split(path.delimiter)])].join(path.delimiter);
+  const systemPaths = IS_WINDOWS
+    ? [source.SystemRoot ?? source.SYSTEMROOT ?? source.WINDIR].filter(value => typeof value === "string" && path.isAbsolute(value) && !/[\u0000-\u001f\u007f]/u.test(value)).map(value => path.join(value, "System32"))
+    : (process.platform === "darwin" ? "/usr/bin:/bin:/usr/sbin:/sbin" : "/usr/bin:/bin").split(path.delimiter);
+  if (IS_WINDOWS) {
+    const programFiles = source.ProgramFiles ?? process.env.ProgramFiles;
+    if (typeof programFiles === "string" && path.isAbsolute(programFiles) && !/[\u0000-\u001f\u007f]/u.test(programFiles)) {
+      systemPaths.push(path.join(programFiles, "Git", "cmd"));
+    }
+  }
+  result.PATH = [...new Set([path.dirname(executable), ...systemPaths])].join(path.delimiter);
   result.NO_COLOR = "1";
   return result;
 }
 
 async function resolveExecutable(sourcePath, io, environment) {
-  if (sourcePath) {
-    const absolute = path.resolve(sourcePath);
-    let stat;
-    try { stat = await io.stat(absolute); } catch { reject("claude-client-not-found"); }
-    if (!stat.isFile() || !(stat.mode & 0o111)) reject("claude-client-not-found");
-    return absolute;
-  }
-  const searchPath = environment.PATH ?? process.env.PATH ?? "";
-  for (const directory of searchPath.split(path.delimiter)) {
-    if (!directory || !path.isAbsolute(directory)) continue;
-    const candidate = path.join(directory, "claude");
-    try {
-      const resolved = await io.realpath(candidate);
-      const stat = await io.stat(resolved);
-      if (stat.isFile() && (stat.mode & 0o111) && !(stat.mode & 0o022)) return resolved;
-    } catch {}
-  }
-  reject("claude-client-not-found");
+  try { return await resolveCliInvocation({ name: "claude", override: sourcePath, environment, fileIo: io }); }
+  catch { reject("claude-client-not-found"); }
 }
 
 async function validateProjectRoot(value, io, home) {
+  warnPlatformPermissions();
   if (!safeText(value, 4096, true) || !path.isAbsolute(value) || path.normalize(value) !== value) reject("claude-project-root-invalid");
   let canonical;
+  let canonicalHome;
   let stat;
   try {
-    canonical = await io.realpath(value);
+    canonical = path.normalize(await io.realpath(value));
+    canonicalHome = path.normalize(await io.realpath(home));
     stat = await io.lstat(canonical);
   } catch { reject("claude-project-root-invalid"); }
   const root = path.parse(canonical).root;
-  if (canonical === root || canonical === home || canonical === path.join(home, ".claude") || canonical === path.join(home, ".codex") ||
-      !stat.isDirectory() || stat.isSymbolicLink() || process.getuid && stat.uid !== process.getuid() || (stat.mode & 0o022)) {
+  if (canonical === root || canonical === canonicalHome || canonical === path.join(canonicalHome, ".claude") || canonical === path.join(canonicalHome, ".codex") ||
+      !stat.isDirectory() || stat.isSymbolicLink() || (!IS_WINDOWS && ((typeof process.getuid === "function" && stat.uid !== process.getuid()) || (stat.mode & 0o022)))) {
     reject("claude-project-root-invalid");
   }
   return canonical;
@@ -497,13 +494,13 @@ export function createClaudeCodeRunner(dependencies = {}) {
   }));
   const inspectWorkspace = dependencies.inspectWorkspace ?? ((cwd, env) => inspectGitWorkspace(cwd, env));
 
-  async function inspectClient(executable) {
+  async function inspectClient({ executable, argsPrefix }) {
     const env = filteredEnvironment(environment, executable);
     let versionResult;
     let authResult;
     try {
-      versionResult = syncRun(executable, ["--version"], env);
-      authResult = syncRun(executable, ["auth", "status", "--json"], env);
+      versionResult = syncRun(executable, [...argsPrefix, "--version"], env);
+      authResult = syncRun(executable, [...argsPrefix, "auth", "status", "--json"], env);
     } catch { reject("claude-client-preflight-failed"); }
     if (versionResult?.error || versionResult?.status !== 0 || typeof versionResult.stdout !== "string" ||
         authResult?.error || ![0, 1].includes(authResult?.status) || typeof authResult.stdout !== "string" ||
@@ -536,12 +533,13 @@ export function createClaudeCodeRunner(dependencies = {}) {
     model = validateModel(model);
     effort = validateEffort(effort);
     const cwd = await validateProjectRoot(projectRoot, io, home);
-    const executable = await resolveExecutable(dependencies.claudePath, io, environment);
-    const client = await inspectClient(executable);
+    const invocation = await resolveExecutable(dependencies.claudePath, io, environment);
+    const { executable, argsPrefix } = invocation;
+    const client = await inspectClient(invocation);
     const prompt = stage === "claude-implementation"
       ? implementationPrompt({ task, plan, proposal, proposalSha256, projectWrite })
       : buildProposalPrompt({ task, plan });
-    const args = claudeArgs({ model, effort, stage: projectWrite ? stage : "claude-proposal" });
+    const args = [...argsPrefix, ...claudeArgs({ model, effort, stage: projectWrite ? stage : "claude-proposal" })];
     const workspace = projectWrite ? await inspectWorkspace(cwd, client.env) : null;
     const workspaceReady = !projectWrite || writableWorkspace(workspace, cwd);
     const allowed = client.auth.loggedIn && client.auth.authMethod === "claude.ai" && workspaceReady;
@@ -599,9 +597,11 @@ export function createClaudeCodeRunner(dependencies = {}) {
         typeof preview.command.cwd !== "string" || typeof preview.command.stdin !== "string") reject("claude-preview-invalid");
     const cwd = await validateProjectRoot(preview.command.cwd, io, home);
     if (cwd !== preview.command.cwd) reject("claude-project-root-changed");
-    const executable = await resolveExecutable(dependencies.claudePath, io, environment);
-    if (executable !== preview.command.executable) reject("claude-client-changed");
-    const client = await inspectClient(executable);
+    const invocation = await resolveExecutable(dependencies.claudePath, io, environment);
+    const { executable, argsPrefix } = invocation;
+    if (executable !== preview.command.executable || argsPrefix.some((arg, index) => preview.command.args[index] !== arg) ||
+        (argsPrefix.length === 0 && preview.command.args[0] !== "--print")) reject("claude-client-changed");
+    const client = await inspectClient(invocation);
     if (!client.auth.loggedIn || client.auth.authMethod !== "claude.ai") reject("claude-auth-changed");
     if (preview.stage === "claude-implementation" && preview.limits?.projectWrite === true) {
       const workspace = await inspectWorkspace(cwd, client.env);

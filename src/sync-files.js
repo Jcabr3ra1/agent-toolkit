@@ -6,6 +6,12 @@ import path from "node:path";
 export const SYNC_LEDGER = "00-INICIO/Registro de sincronización.md";
 export const syncWriteLockPath = (vault) => path.join(vault, "00-INICIO/.project-memory-sync-record.lock");
 export const hashBytes = (value) => createHash("sha256").update(value).digest("hex");
+// Git paths always use '/', while path.relative returns native separators.
+export const relativeGitPath = (root, file) => path.relative(root, file).split(path.sep).join("/");
+// Only textual worktree comparisons tolerate Git's LF/CRLF conversion. Hashes,
+// snapshots and comparisons between HEAD and the index remain byte-exact.
+export const normalizeSyncText = (text) => text.replaceAll("\r\n", "\n");
+export const sameSyncText = (left, right) => normalizeSyncText(left) === normalizeSyncText(right);
 export class SyncFileError extends Error {
   constructor(code, message, status = "conflict") { super(message); this.code = code; this.status = status; }
 }

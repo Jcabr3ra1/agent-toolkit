@@ -123,7 +123,8 @@ test("an unsafe file replacement marks a claimed review stale without storing th
   const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "codex" });
   const file = path.join(f.projectRoot, "src/app.js");
   await fs.unlink(file);
-  await fs.symlink(path.join(f.directory, "unavailable.txt"), file);
+  await fs.symlink(process.platform === "win32" ? f.directory : path.join(f.directory, "unavailable.txt"), file,
+    process.platform === "win32" ? "junction" : "file");
   const rejected = await f.store.submitReview({ ...f.bound, reviewId: request.id, agent: "codex", claimToken: claim.claimToken, content: "UNSAFE_REPLACEMENT_REPORT" });
   assert.equal(rejected.state, "stale");
   assert.equal(rejected.saved, false);
@@ -152,8 +153,9 @@ test("path scope rejects escapes, private folders, symlinks, hard links and over
   }
   const outside = path.join(f.directory, "outside.txt");
   await fs.writeFile(outside, "PRIVATE_OUTSIDE_CONTENT");
-  await fs.symlink(outside, path.join(f.projectRoot, "link.txt"));
-  await fs.symlink(f.directory, path.join(f.projectRoot, "external"));
+  await fs.symlink(process.platform === "win32" ? f.directory : outside, path.join(f.projectRoot, "link.txt"),
+    process.platform === "win32" ? "junction" : "file");
+  await fs.symlink(f.directory, path.join(f.projectRoot, "external"), process.platform === "win32" ? "junction" : "dir");
   await fs.link(outside, path.join(f.projectRoot, "hard.txt"));
   for (const name of ["link.txt", "external/outside.txt", "hard.txt"]) await assert.rejects(f.prepare({ paths: [name] }), { code: "peer-files" });
   await fs.writeFile(path.join(f.projectRoot, "large.bin"), Buffer.alloc(PEER_LIMITS.fileBytes + 1));
@@ -180,22 +182,25 @@ test("cancellation and closing prevent late reports without pretending to stop a
   assert.deepEqual((await f.store.listCollaborations({ projectRoot: f.projectRoot })).tasks, []);
 });
 
-test("storage is private, rejects linked records, and never removes an existing lock", async () => {
+test("storage is private, rejects linked records, and never removes an existing lock", async t => {
   const f = await fixture();
   const record = path.join(f.storage, f.task.id + ".json");
-  assert.equal((await fs.stat(f.storage)).mode & 0o777, 0o700);
-  assert.equal((await fs.stat(record)).mode & 0o777, 0o600);
+  await t.test("POSIX storage modes are private", { skip: process.platform === "win32" ? "Windows does not implement POSIX permission bits." : false }, async () => {
+    assert.equal((await fs.stat(f.storage)).mode & 0o777, 0o700);
+    assert.equal((await fs.stat(record)).mode & 0o777, 0o600);
+    await fs.chmod(record, 0o644);
+    await assert.rejects(f.store.getCollaboration(f.bound), { code: "peer-storage" });
+    await fs.chmod(record, 0o600);
+  });
   const lock = record + ".lock";
   await fs.mkdir(lock);
   const impatient = createPeerReviewStore({ root: f.storage, lockTimeoutMs: 20 });
   await assert.rejects(impatient.publishContext({ ...f.bound, expectedRevision: 1, author: "claude", content: "No" }), { code: "peer-busy" });
   assert.equal((await fs.stat(lock)).isDirectory(), true);
   await fs.rmdir(lock);
-  await fs.chmod(record, 0o644);
-  await assert.rejects(f.store.getCollaboration(f.bound), { code: "peer-storage" });
-  await fs.chmod(record, 0o600);
   await fs.rename(record, record + ".backup");
-  await fs.symlink(record + ".backup", record);
+  await fs.symlink(process.platform === "win32" ? f.directory : record + ".backup", record,
+    process.platform === "win32" ? "junction" : "file");
   await assert.rejects(f.store.getCollaboration(f.bound), { code: "peer-storage" });
   await fs.unlink(record);
   await fs.link(record + ".backup", record);

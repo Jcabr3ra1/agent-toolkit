@@ -29,7 +29,7 @@ test("a prompt and a model are validated before anything runs", async () => {
   await assert.rejects(fs.access(f.outRoot));
 });
 
-test("research runs read-only in a private empty folder and keeps the answer", async () => {
+test("research runs read-only in a private empty folder and keeps the answer", async t => {
   const f = await fixture();
   const result = await investigar({ prompt: "¿Qué hay de nuevo en Node?", outRoot: f.outRoot, run: f.run(f.ok()) });
   const [call] = f.calls;
@@ -39,7 +39,9 @@ test("research runs read-only in a private empty folder and keeps the answer", a
   assert.deepEqual(call.args.slice(2), ["--model", "gemini-4-argon-medium", "--mode", "plan", "--output-format", "json", "--print-timeout", "600s"]);
   assert.equal(call.cwd, result.directory);
   assert.equal(path.dirname(path.dirname(call.cwd)), await fs.realpath(f.outRoot));
-  assert.equal((await fs.stat(call.cwd)).mode & 0o777, 0o700);
+  await t.test("POSIX run folder is private", { skip: process.platform === "win32" ? "Windows does not implement POSIX permission bits." : false }, async () => {
+    assert.equal((await fs.stat(call.cwd)).mode & 0o777, 0o700);
+  });
   assert.equal(await fs.readFile(result.files[0], "utf8"), "Respuesta con fuentes https://ejemplo.org");
   assert.equal(JSON.parse(await fs.readFile(path.join(call.cwd, "meta.json"), "utf8")).conversationId, CONVERSATION);
   assert.equal(result.response.includes("fuentes"), true);
@@ -127,7 +129,7 @@ test('image artifact ids and symlinks cannot escape the conversation directory',
   const artifacts = path.join(f.brainDirectory, CONVERSATION);
   await fs.mkdir(artifacts, { recursive: true });
   const secret = path.join(f.directory, 'private'); await fs.writeFile(secret, 'PRIVATE');
-  await fs.symlink(secret, path.join(artifacts, 'bad.png'));
+  await fs.symlink(process.platform === 'win32' ? f.directory : secret, path.join(artifacts, 'bad.png'), process.platform === 'win32' ? 'junction' : 'file');
   await assert.rejects(imagen({ prompt: 'x', outRoot: f.outRoot, brainDirectory: f.brainDirectory,
     waitMs: 1, pollMs: 1, run: f.run(f.ok()) }));
 });
@@ -155,11 +157,21 @@ test('analysis copies only explicit inputs and rejects invalid or linked files b
     }) });
   assert.equal(result.analysis.status, 'completed');
   assert.equal(f.calls[0].args[1].includes(f.directory), false);
-  const linked = path.join(f.directory, 'linked.txt'); await fs.symlink(file, linked);
+  const linked = path.join(f.directory, 'linked.txt');
+  await fs.symlink(process.platform === 'win32' ? f.directory : file, linked, process.platform === 'win32' ? 'junction' : 'file');
   for (const files of [[], [linked], [path.join(f.directory, 'absent.pdf')], [f.directory]]) {
     await assert.rejects(api.analizar({ prompt: 'x', files, outRoot: f.outRoot, run: f.run(f.ok()) }));
   }
   assert.equal(f.calls.length, 1);
+});
+
+test('analysis rejects hard-linked inputs before invoking agy', async () => {
+  const f = await fixture(), api = await import('../src/gemini-tools.js');
+  const file = path.join(f.directory, 'selected.txt'), linked = path.join(f.directory, 'hard.txt');
+  await fs.writeFile(file, 'private input');
+  await fs.link(file, linked);
+  await assert.rejects(api.analizar({ prompt: 'x', files: [linked], outRoot: f.outRoot, run: f.run(f.ok()) }));
+  assert.equal(f.calls.length, 0);
 });
 
 test('unsupported media is reported honestly; no successful analysis without verified structured output', async () => {

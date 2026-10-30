@@ -15,10 +15,10 @@ test("RG manifest resolves vault against manifest, never cwd", async t => {
   const policy = await loadMemoryPolicy(f.manifestPath);
   assert.equal(policy.root, f.root); assert.ok(Object.isFrozen(policy));
   assert.deepEqual(await fs.readFile(f.manifestPath), before);
-  assert.equal((await fs.lstat(f.manifestPath)).mode & 0o7777, 0o600);
+  if (process.platform !== 'win32') assert.equal((await fs.lstat(f.manifestPath)).mode & 0o7777, 0o600);
 });
 for (const kind of ["malformed", "duplicate-key", "unknown-field", "write-mode", "credential", "wide-root", "home-root", "overlap", "linked-manifest", "linked-root", "writable-root", "writable-manifest", "hardlinked-manifest", "oversize"])
-  test("RG manifest rejects " + kind, async t => {
+  test("RG manifest rejects " + kind, { skip: process.platform === 'win32' && ['linked-manifest','writable-root','writable-manifest'].includes(kind) ? 'POSIX file symlinks and mode permissions' : false }, async t => {
     const f = await memoryFixture(t); let target = f.manifestPath;
     if (kind === "malformed") await fs.writeFile(target, "{");
     if (kind === "duplicate-key") await fs.writeFile(target, '{"project":{},"project":{}}');
@@ -29,7 +29,7 @@ for (const kind of ["malformed", "duplicate-key", "unknown-field", "write-mode",
     if (kind === "home-root") await f.save({ ...f.manifest, memory: { ...f.manifest.memory, vaultPath: f.base } });
     if (kind === "overlap") await f.save({ ...f.manifest, source: { ...f.manifest.source, repositoryPath: f.root } });
     if (kind === "linked-manifest") { target = path.join(f.base, "alias.json"); await fs.symlink(f.manifestPath, target); }
-    if (kind === "linked-root") { await fs.rename(f.root, f.root + "-real"); await fs.symlink(f.root + "-real", f.root); }
+    if (kind === "linked-root") { await fs.rename(f.root, f.root + "-real"); await fs.symlink(f.root + '-real', f.root, process.platform === 'win32' ? 'junction' : 'dir'); }
     if (kind === "writable-root") await fs.chmod(f.root, 0o777);
     if (kind === "writable-manifest") await fs.chmod(target, 0o666);
     if (kind === "hardlinked-manifest") await fs.link(target, target + "-copy");
@@ -38,17 +38,17 @@ for (const kind of ["malformed", "duplicate-key", "unknown-field", "write-mode",
   });
 test("RG rejects unsupported platform without reading a manifest", async () => {
   let touched = 0;
-  await assert.rejects(loadMemoryPolicy("/fictitious/manifest.json", { platform: "win32", io: { lstat() { touched++; } } }), code("RG_PLATFORM_UNSUPPORTED"));
+  await assert.rejects(loadMemoryPolicy("/fictitious/manifest.json", { platform: "freebsd", io: { lstat() { touched++; } } }), code("RG_PLATFORM_UNSUPPORTED"));
   assert.equal(touched, 0);
 });
 test("RG source alias is checked physically for overlap", async t => {
   const f = await memoryFixture(t), alias = path.join(f.base, "source-alias");
-  await fs.symlink(f.root, alias);
+  await fs.symlink(f.root, alias, process.platform === 'win32' ? 'junction' : 'dir');
   await f.save({ ...f.manifest, source: { ...f.manifest.source, repositoryPath: alias } });
   await assert.rejects(loadMemoryPolicy(f.manifestPath), code("RG_ROOT_DENIED"));
 });
 for (const kind of ["outside", "sibling", "traversal", "relative", "control", "symlink", "symlink-parent", "hardlink", "directory", "fifo", "credential", "git", "obsidian", "writable", "unreadable"])
-  test("RG rejects unsafe read " + kind + " before content IO", async t => {
+  test("RG rejects unsafe read " + kind + " before content IO", { skip: process.platform === 'win32' && ['symlink','fifo','writable','unreadable'].includes(kind) ? 'POSIX file symlinks, FIFO and mode permissions' : false }, async t => {
     const f = await memoryFixture(t), policy = await loadMemoryPolicy(f.manifestPath);
     let file = f.note, opens = 0;
     if (kind === "outside") file = path.join(f.source, "outside.md");
@@ -57,7 +57,7 @@ for (const kind of ["outside", "sibling", "traversal", "relative", "control", "s
     if (kind === "relative") file = "notes/state.md";
     if (kind === "control") file += "\n";
     if (kind === "symlink") { file = path.join(f.root, "alias.md"); await fs.symlink(f.note, file); }
-    if (kind === "symlink-parent") { await fs.symlink(path.dirname(f.note), path.join(f.root, "alias")); file = path.join(f.root, "alias/state.md"); }
+    if (kind === "symlink-parent") { await fs.symlink(path.dirname(f.note), path.join(f.root, 'alias'), process.platform === 'win32' ? 'junction' : 'dir'); file = path.join(f.root, "alias/state.md"); }
     if (kind === "hardlink") await fs.link(f.note, f.note + "-copy");
     if (kind === "directory") file = f.root;
     if (kind === "fifo") { file = path.join(f.root, "pipe"); execFileSync("mkfifo", [file]); }
@@ -75,7 +75,7 @@ for (const [name, args] of [["write_file", { path: "/outside", content: "x" }], 
   ["read_multiple_files", { paths: Array(101).fill("/outside") }], ["list_allowed_directories", { path: "/outside" }]])
   test("RG closed schema " + name + " " + JSON.stringify(args).slice(0, 70), async () => {
     let metadata = 0;
-    await assert.rejects(validateMemoryCall({ root: "/fictitious/vault", uid: process.getuid() }, name, args, { io: { lstat() { metadata++; } } }));
+    await assert.rejects(validateMemoryCall({ root: "/fictitious/vault", uid: process.getuid?.() }, name, args, { io: { lstat() { metadata++; } } }));
     assert.equal(metadata, 0);
   });
 test("RG file and batch size limits checked before content IO", async t => {
@@ -104,4 +104,22 @@ test("RG outgoing content and size rejection without raw error propagation", () 
   assert.throws(() => checkMemoryResult({ content: [{ type: "text", text: "password=fictional-secret-value" }] }), code("RG_CONTENT_DENIED"));
   assert.throws(() => checkMemoryResult({ content: [{ type: "resource_link", uri: "https://invalid.example" }] }), code("RG_BACKEND_PROTOCOL"));
   assert.throws(() => checkMemoryResult({ content: [{ type: "text", text: "a".repeat(LIMIT.responseBytes) }] }), code("RG_RESPONSE_LIMIT"));
+});
+
+test('RG private Windows path components and NTFS streams are denied before content IO', async t => {
+  const f = await memoryFixture(t), policy = await loadMemoryPolicy(f.manifestPath);
+  for (const relative of ['.env', '.git/config', '.codex/session.json', '.aws/credentials']) {
+    const file = await f.put(relative);
+    await assert.rejects(validateMemoryCall(policy, 'read_text_file', { path: file }), code('RG_PATH_DENIED'));
+  }
+  if (process.platform === 'win32') for (const file of [f.note + ':secret', String.raw`\\.\pipe\agent`]) {
+    let metadata = 0;
+    await assert.rejects(validateMemoryCall(policy, 'read_text_file', { path: file }, { io: { lstat() { metadata++; throw Error(); } } }), code('RG_PATH_DENIED'));
+    assert.equal(metadata, 0);
+  }
+});
+
+test('RG Windows home aliases remain forbidden despite path casing', {skip: process.platform !== 'win32'}, async t => {
+  const f = await memoryFixture(t);
+  await assert.rejects(loadMemoryPolicy(f.manifestPath, {home: f.root.toUpperCase()}), code('RG_ROOT_DENIED'));
 });

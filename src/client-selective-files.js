@@ -1,3 +1,4 @@
+import { IS_WINDOWS, warnPlatformPermissions } from './platform.js';
 import fs from "node:fs/promises";
 import path from "node:path";
 import { constants } from "node:fs";
@@ -47,7 +48,7 @@ export function createSelectiveFileReader(schema, configuration, authorization, 
     return identities;
   }
   function allowed(st) {
-    if (!st.isFile() || st.isSymbolicLink() || st.uid !== uid || st.nlink !== 1 || st.mode & 0o022) fail("selective-file-unsafe");
+    if (!st.isFile() || st.isSymbolicLink() || (!IS_WINDOWS && st.uid !== uid) || st.nlink !== 1 || (!IS_WINDOWS && st.mode & 0o022)) fail("selective-file-unsafe");
     if (st.size > cfg.limits.maxBytes) fail("selective-file-limit");
   }
   return Object.freeze({ async run(...args) {
@@ -62,7 +63,8 @@ export function createSelectiveFileReader(schema, configuration, authorization, 
       if (!p || !p.live || p.used || p.binding !== hash(cfg)) fail("selective-permit-unavailable");
       p.used = true; claimed = true;
       if (args.length) fail("selective-input-forbidden");
-      if (!Number.isInteger(uid)) fail("selective-owner-unavailable");
+      if (!IS_WINDOWS && !Number.isInteger(uid)) fail("selective-owner-unavailable");
+      warnPlatformPermissions();
       const budget = () => { if (!p.live || dependencies.signal?.aborted) fail("selective-canceled"); if (clock() - began >= cfg.timeoutMs) fail("selective-deadline"); };
       for (const source of cfg.sources) {
         activeSource = source.sourceId; budget();

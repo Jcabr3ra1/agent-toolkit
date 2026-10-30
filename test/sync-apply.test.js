@@ -14,6 +14,8 @@ import { collectMemoryNotes, validateNoteText, validateVirtualMemory } from "../
 
 const NOTE = "03-IMPLEMENTACION/Contrato.md", SECOND = "03-IMPLEMENTACION/Operación.md", MERGE = "b".repeat(40), HEAD = "a".repeat(40);
 const DATE = "2026-10-01T14:00:00Z";
+const posixPermissions = { skip: process.platform === "win32" ? "Windows no conserva modos POSIX como 0640." : false };
+const posixSymlinks = { skip: process.platform === "win32" ? "Crear symlinks en Windows exige privilegios o Developer Mode." : false };
 function git(dir, ...args) { return execFileSync("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
 function fixture(t, options = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "project-memory-apply-")));
@@ -22,7 +24,7 @@ function fixture(t, options = {}) {
   for (const dir of [source, path.join(vault, "00-INICIO"), path.join(vault, "03-IMPLEMENTACION")]) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(source, "source.txt"), "Fuente inalterada.\n");
   const ledgerPath = path.join(vault, SYNC_LEDGER), manifestPath = path.join(vault, "project-memory.json"), proposalPath = path.join(root, "proposal.json");
-  fs.writeFileSync(ledgerPath, `# Registro\n\n| Cambio | Estado | Fecha | Resultado | Commit de memoria |\n| --- | --- | --- | --- | --- |\n${options.row ?? ""}\n`);
+  fs.writeFileSync(ledgerPath, options.ledger ?? `# Registro\n\n| Cambio | Estado | Fecha | Resultado | Commit de memoria |\n| --- | --- | --- | --- | --- |\n${options.row ?? ""}\n`);
   const original = options.original ?? "# Contrato\n\n## Interfaz\n\nContexto estable.\n";
   fs.writeFileSync(path.join(vault, NOTE), original);
   fs.writeFileSync(path.join(vault, SECOND), options.second ?? "# Operación\n\n[[Contrato#Interfaz]]\n");
@@ -38,6 +40,7 @@ function fixture(t, options = {}) {
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   for (const dir of [source, vault]) {
     git(dir, "init", "-b", "main"); git(dir, "config", "user.name", "Fixture"); git(dir, "config", "user.email", "fixture@example.invalid");
+    if (options.autocrlf !== undefined) git(dir, "config", "core.autocrlf", String(options.autocrlf));
   }
   git(source, "add", "--", "source.txt"); git(source, "commit", "-m", "fixture");
   git(vault, "add", "--", NOTE, SECOND, SYNC_LEDGER, "project-memory.json"); git(vault, "commit", "-m", "fixture");
@@ -46,7 +49,7 @@ function fixture(t, options = {}) {
   git(vault, "config", "branch.main.remote", "origin"); git(vault, "config", "branch.main.merge", "refs/heads/main");
   const proposal = { schemaVersion: "1.0.0", projectId: manifest.project.id, repository: "owner/project", reviewBranch: "develop", pr: 42, mergeCommit: MERGE,
     memoryHead: git(vault, "rev-parse", "HEAD").trim(), manifestSha256: hashBytes(fs.readFileSync(manifestPath)),
-    notes: [{ path: NOTE, beforeSha256: hashBytes(Buffer.from(original)), content: options.content ?? original.replace("estable", "actualizado"), sourcePaths: ["frontend/Page.tsx"] }] };
+    notes: [{ path: NOTE, beforeSha256: hashBytes(Buffer.from(git(vault, "show", `HEAD:${NOTE}`))), content: options.content ?? original.replace("estable", "actualizado"), sourcePaths: ["frontend/Page.tsx"] }] };
   const save = () => fs.writeFileSync(proposalPath, JSON.stringify(proposal)); save();
   const calls = [], context = {
     clock: () => Date.parse(DATE),
@@ -77,7 +80,7 @@ function fixture(t, options = {}) {
       const preview = await applyMemorySync({ ...input, ...extra, apply: false }, context);
       return applyMemorySync({ ...input, ...extra, apply: true, reviewed: true, expect: preview.planId }, { ...context, ...override });
     },
-    secondProposal: () => { proposal.notes.push({ path: SECOND, beforeSha256: hashBytes(fs.readFileSync(path.join(vault, SECOND))), content: "# Operación\n\n[[Contrato#Interfaz]]\n\nNuevo contexto.\n", sourcePaths: ["frontend/Page.tsx"] }); save(); },
+    secondProposal: () => { proposal.notes.push({ path: SECOND, beforeSha256: hashBytes(Buffer.from(git(vault, "show", `HEAD:${SECOND}`))), content: "# Operación\n\n[[Contrato#Interfaz]]\n\nNuevo contexto.\n", sourcePaths: ["frontend/Page.tsx"] }); save(); },
     commit: (...files) => { git(vault, "add", "--", ...files); git(vault, "commit", "-m", "fixture update"); } };
 }
 function snapshot(root) {
@@ -85,7 +88,7 @@ function snapshot(root) {
   const walk = (dir) => { for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(full);
-    else result[path.relative(root, full)] = entry.isSymbolicLink() ? { link: fs.readlinkSync(full) } : { hash: hashBytes(fs.readFileSync(full)), mode: fs.statSync(full).mode & 0o777 };
+    else result[path.relative(root, full).split(path.sep).join("/")] = entry.isSymbolicLink() ? { link: fs.readlinkSync(full) } : { hash: hashBytes(fs.readFileSync(full)), mode: fs.statSync(full).mode & 0o777 };
   } }; walk(root); return result;
 }
 async function blocked(f, code, extra = {}, context = {}) {
@@ -100,15 +103,21 @@ test("apply preview valida la propuesta sin cambiar memoria, Git, fuente ni prop
   assert.deepEqual(snapshot(f.root), before); assert(f.calls.every((c) => c.command === "gh" && ["pr", "api"].includes(c.args[0])));
 });
 test("apply cambia solo notas, conserva permisos y reintenta como unchanged sin reescribir", async (t) => {
-  const f = fixture(t); f.secondProposal(); fs.chmodSync(path.join(f.vault, NOTE), 0o640);
+  const f = fixture(t); f.secondProposal();
+  const mode = fs.statSync(path.join(f.vault, NOTE)).mode & 0o777;
   const before = snapshot(f.root), preview = await f.preview(), r = await f.apply();
   assert.equal(r.status, "applied"); assert.equal(r.wrote, true); assert.deepEqual(r.applied, [NOTE, SECOND]);
   const after = snapshot(f.root);
   for (const n of f.proposal.notes) { assert.equal(fs.readFileSync(path.join(f.vault, n.path), "utf8"), n.content); delete before[`memory/${n.path}`]; delete after[`memory/${n.path}`]; }
-  assert.deepEqual(after, before); assert.equal(fs.statSync(path.join(f.vault, NOTE)).mode & 0o777, 0o640);
+  assert.deepEqual(after, before); assert.equal(fs.statSync(path.join(f.vault, NOTE)).mode & 0o777, mode);
   const stat = fs.statSync(path.join(f.vault, NOTE)), repeated = await f.preview(); assert.equal(repeated.planId, preview.planId);
   const noop = await f.apply(); assert.equal(noop.status, "unchanged"); assert.equal(noop.wrote, false);
   assert.equal(fs.statSync(path.join(f.vault, NOTE)).ino, stat.ino); assert.equal(fs.statSync(path.join(f.vault, NOTE)).mtimeMs, stat.mtimeMs);
+});
+test("apply conserva modos POSIX específicos", posixPermissions, async (t) => {
+  const f = fixture(t); fs.chmodSync(path.join(f.vault, NOTE), 0o640);
+  assert.equal((await f.apply()).status, "applied");
+  assert.equal(fs.statSync(path.join(f.vault, NOTE)).mode & 0o777, 0o640);
 });
 test("apply funciona con doctor real antes y después de satisfacer una nota", async (t) => {
   const f = fixture(t); const r = await f.apply({}, { diagnoseMemory }); assert.equal(r.status, "applied");
@@ -168,7 +177,7 @@ test("apply no revela stderr del proveedor", async (t) => {
 for (const invalid of ["../other.md", "/tmp/a.md", "03-IMPLEMENTACION/*.md", SYNC_LEDGER, "07-AGENTES/skills/avisens/SKILL.md", "03-IMPLEMENTACION/.config.md"]) {
   test(`apply excluye ruta ${invalid}`, async (t) => { const f = fixture(t); f.proposal.notes[0].path = invalid; f.save(); await blocked(f); });
 }
-test("apply rechaza symlinks de nota, propuesta y padres", async (t) => {
+test("apply rechaza symlinks de nota, propuesta y padres", posixSymlinks, async (t) => {
   for (const kind of ["note", "proposal", "parent"]) {
     const f = fixture(t), destination = kind === "note" ? path.join(f.vault, NOTE) : kind === "proposal" ? f.proposalPath : path.join(f.vault, "03-IMPLEMENTACION");
     fs.renameSync(destination, destination + ".real"); fs.symlinkSync(destination + ".real", destination);
@@ -183,6 +192,30 @@ test("apply preserva BOM, CRLF y rechaza cambiar el estilo", async (t) => {
   const f = fixture(t, { original: "\uFEFF# Contrato\r\n\r\n## Interfaz\r\n\r\nContexto estable.\r\n" });
   assert.equal((await f.apply()).status, "applied"); assert(fs.readFileSync(path.join(f.vault, NOTE), "utf8").startsWith("\uFEFF"));
   const g = fixture(t); g.proposal.notes[0].content = g.proposal.notes[0].content.replaceAll("\n", "\r\n"); g.save(); await blocked(g, "note-style");
+});
+test("apply acepta checkout CRLF con blob LF y conserva el pin exacto de Git", async (t) => {
+  const original = "\uFEFF# Contrato\r\n\r\n## Interfaz\r\n\r\nContexto estable.\r\n";
+  const ledger = "# Registro\r\n\r\n| Cambio | Estado | Fecha | Resultado | Commit de memoria |\r\n| --- | --- | --- | --- | --- |\r\n";
+  const f = fixture(t, { original, ledger, autocrlf: true });
+  assert.equal(git(f.vault, "status", "--porcelain"), "");
+  const blob = Buffer.from(git(f.vault, "show", `HEAD:${NOTE}`));
+  assert.notEqual(hashBytes(blob), hashBytes(Buffer.from(original)));
+  assert.equal(f.proposal.notes[0].beforeSha256, hashBytes(blob));
+  const report = await f.apply(); assert.equal(report.status, "applied");
+  assert.equal(fs.readFileSync(path.join(f.vault, NOTE), "utf8"), f.proposal.notes[0].content);
+  assert.equal((await f.preview()).status, "unchanged");
+});
+test("apply no normaliza el hash beforeSha256 a los bytes CRLF del checkout", async (t) => {
+  const f = fixture(t, { original: "# Contrato\r\n\r\n## Interfaz\r\n\r\nContexto estable.\r\n", autocrlf: true });
+  f.proposal.notes[0].beforeSha256 = hashBytes(fs.readFileSync(path.join(f.vault, NOTE))); f.save();
+  await blocked(f, "note-version");
+});
+test("apply exige staging byte-exacto aunque solo difieran los saltos de línea", async (t) => {
+  const f = fixture(t, { autocrlf: true });
+  git(f.vault, "config", "core.autocrlf", "false");
+  fs.writeFileSync(path.join(f.vault, NOTE), fs.readFileSync(path.join(f.vault, NOTE), "utf8").replaceAll("\n", "\r\n"));
+  git(f.vault, "add", "--", NOTE);
+  await blocked(f, "note-version");
 });
 for (const content of ["# Contrato\n\n## Otro título\n", "# Contrato\n\n## Interfaz\n\n## Interfaz\n", "# Contrato\n\n[[Ausente]]\n", "# Contrato\n\n[Sección](Contrato.md#ausente)\n", "# Contrato\n\n[nota][ref]\n\n[ref]: ausente.md\n"]) {
   test(`apply valida enlaces entrantes, salientes y fragmentos: ${JSON.stringify(content)}`, async (t) => { await blocked(fixture(t, { content })); });
@@ -321,7 +354,7 @@ test("apply detecta una nota ignorada añadida durante GitHub", async (t) => {
   options.onQuery = () => { if (!changed) { changed = true; fs.writeFileSync(path.join(f.vault, "03-IMPLEMENTACION/Extra.md"), "# Extra\n"); } };
   await assert.rejects(f.preview(), (e) => e.code === "concurrent-change");
 });
-test("apply no interpreta glob de Git ni acepta nota regular con índice simbólico", async (t) => {
+test("apply no interpreta glob de Git ni acepta nota regular con índice simbólico", posixSymlinks, async (t) => {
   const f = fixture(t), full = path.join(f.vault, NOTE), original = fs.readFileSync(full);
   fs.unlinkSync(full); fs.symlinkSync(path.join(f.vault, SECOND), full); f.commit(NOTE);
   fs.unlinkSync(full); fs.writeFileSync(full, original); f.proposal.memoryHead = git(f.vault, "rev-parse", "HEAD").trim(); f.save();
@@ -389,7 +422,7 @@ for (const operation of ["fchmodSync", "fsyncSync"]) {
     assert.equal(r.wrote, false); assert.deepEqual(snapshot(f.root), before);
   });
 }
-test("apply verifica permisos del temporal y no confía en una preparación defectuosa", async (t) => {
+test("apply verifica permisos del temporal y no confía en una preparación defectuosa", posixPermissions, async (t) => {
   const f = fixture(t), before = snapshot(f.root), r = await f.apply({}, { fileOperations: { fchmodSync() {} } });
   assert.equal(r.status, "conflict"); assert.equal(r.wrote, false); assert.deepEqual(snapshot(f.root), before);
 });

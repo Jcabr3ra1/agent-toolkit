@@ -1,3 +1,4 @@
+import { isPortableAbsolutePath, toGitPath } from './platform.js';
 import path from "node:path";
 import { createHash } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -17,7 +18,7 @@ const canonical = v => v === null || typeof v !== "object" ? JSON.stringify(v) :
 export const taskHash = v => createHash("sha256").update(canonical(v)).digest("hex");
 const control = /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/u;
 const pathKey = s => s.normalize("NFC").toLowerCase();
-const credentialReference = s => isCredentialPath(s) || /(?:^|\/)(?:\.(?:credentials?|secrets?)(?:\.[^/]*)?)(?:\/|$)/i.test(s) || /\.keychain(?:-db)?$/i.test(s);
+const credentialReference = value => { const s = toGitPath(value); return isCredentialPath(s) || /(?:^|\/)(?:\.(?:credentials?|secrets?)(?:\.[^/]*)?)(?:\/|$)/i.test(s) || /\.keychain(?:-db)?$/i.test(s); };
 export function taskRelativePath(s, dot = false) {
   return typeof s === "string" && (dot && s === "." || s.length > 0 && s.length <= 512 && s === s.trim() &&
     !/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069\\:*?\[\]<>|`]/u.test(s) &&
@@ -48,7 +49,7 @@ function semanticReasons(t, r) {
   const invalid = [], blocked = [], add = (list, code) => { if (!list.includes(code)) list.push(code); };
   if (["projectId", "taskId", "revision", "role", "mode"].some(k => t.identity[k] !== r[k])) add(invalid, "task-identity-conflict");
   const root = t.base.repositoryRoot;
-  if (!path.isAbsolute(root) || path.normalize(root) !== root || /[\x00-\x1f]/.test(root) || credentialReference(root)) add(invalid, "task-path-invalid");
+  if (!isPortableAbsolutePath(root) || /[\x00-\x1f]/.test(root) || credentialReference(root)) add(invalid, "task-path-invalid");
   const checkPaths = (entries, key = "path") => {
     const seen = new Set(); for (const e of entries) {
       if (!taskRelativePath(e[key]) || seen.has(pathKey(e[key]))) add(invalid, "task-path-invalid");

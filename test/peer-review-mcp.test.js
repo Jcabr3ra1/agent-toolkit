@@ -143,7 +143,7 @@ test("two stdio MCP processes exchange visible-session handoffs both ways withou
       return { action: "accept", content: { decision: "approve" } };
     });
     const transport = new StdioClientTransport({ command: process.execPath, args: [entry], cwd: path.dirname(entry),
-      env: { PATH: `${clientsDirectory}${path.delimiter}/usr/bin:/bin`, HOME: os.homedir(), AGENT_TOOLKIT_WORKFLOW_DIR: workflowRoot }, stderr: "pipe" });
+      env: { PATH: `${clientsDirectory}${path.delimiter}/usr/bin:/bin`, HOME: os.homedir(), AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS: "1", AGENT_TOOLKIT_WORKFLOW_DIR: workflowRoot }, stderr: "pipe" });
     transport.stderr?.on("data", chunk => diagnostics.push(String(chunk)));
     t.after(async () => { await client.close().catch(() => {}); await transport.close().catch(() => {}); });
     await client.connect(transport);

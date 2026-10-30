@@ -8,7 +8,7 @@ import { inspectMemorySync } from "./sync-inspect.js";
 import { parseGitHubRepository, validateAutomation } from "./sync.js";
 import { appendLedgerRecord, parseWritableLedger } from "./sync-ledger.js";
 import { containsSensitiveData, isCredentialPath } from "./sensitive-data.js";
-import { syncWriteLockPath } from "./sync-files.js";
+import { relativeGitPath, sameSyncText, syncWriteLockPath } from "./sync-files.js";
 
 export const RECORD_LIMITS = Object.freeze({ ledger: 1024 * 1024, note: 1024 * 1024,
   notes: 20, totalNotes: 5 * 1024 * 1024, manifest: 1024 * 1024, git: 5 * 1024 * 1024 });
@@ -100,8 +100,12 @@ async function prepareAndRecord(input, context) {
   const git = gitState(vault);
   requireTrackedLedger(vault);
   validateTrackedFlags(vault);
-  if (!unchanged && (gitRead(vault, ["show", `HEAD:${LEDGER_PATH}`]) !== ledgerFile.text
-    || gitRead(vault, ["show", `:${LEDGER_PATH}`]) !== ledgerFile.text)) fail("dirty-ledger", "El registro debe estar limpio tanto en HEAD como en staging.", "conflict");
+  if (!unchanged) {
+    const ledgerHead = gitRead(vault, ["show", `HEAD:${LEDGER_PATH}`]);
+    const ledgerIndex = gitRead(vault, ["show", `:${LEDGER_PATH}`]);
+    if (!sameSyncText(ledgerHead, ledgerFile.text)
+      || ledgerIndex !== ledgerHead) fail("dirty-ledger", "El registro debe estar limpio tanto en HEAD como en staging.", "conflict");
+  }
   validateChanges(git.changes, input, unchanged, vault, ledgerFile.text, existing, repository);
   validateDiffs(vault, input.notes, git.changes);
   // Discount only a diagnosed dirty-tree warning after exact-path validation.
@@ -324,11 +328,11 @@ function validateChanges(changes, input, unchanged, vault, content, existing, re
       const base = gitRead(vault, ["show", `HEAD:${LEDGER_PATH}`]);
       let parsed;
       try { parsed = parseWritableLedger(base, repository); } catch { fail("dirty-ledger", "El registro tiene cambios locales ajenos.", "conflict"); }
-      if (parsed.records.has(input.pr) || appendLedgerRecord(parsed, {
+      if (parsed.records.has(input.pr) || !sameSyncText(appendLedgerRecord(parsed, {
         repository, pr: input.pr, date: existing.date, result: existing.result
-      }) !== content) fail("dirty-ledger", "El registro tiene cambios locales ajenos.", "conflict");
+      }), content)) fail("dirty-ledger", "El registro tiene cambios locales ajenos.", "conflict");
       const staged = gitRead(vault, ["show", `:${LEDGER_PATH}`]);
-      if (staged !== base && staged !== content) fail("dirty-ledger", "El registro tiene cambios ajenos en staging.", "conflict");
+      if (staged !== base && !sameSyncText(staged, content)) fail("dirty-ledger", "El registro tiene cambios ajenos en staging.", "conflict");
       continue;
     }
     if (!input.notes.includes(change.path) || ![" M", "M ", "MM", "A ", "AM", "??"].includes(change.state)) {
@@ -387,12 +391,15 @@ function applyRecord(plan, context) {
   const temporary = path.join(parent, `.project-memory-sync-record-${randomUUID()}.tmp`);
   let lockFd, tempFd, lockIdentity, tempIdentity, wrote = false, primary, cleanupFailed = false;
   const io = context.fileOperations ?? fs;
-  const ignored = [lockPath, temporary].map((file) => path.relative(vault, file));
+  const ignored = [lockPath, temporary].map((file) => relativeGitPath(vault, file));
   try {
     assertNoSymlinks(parent);
     try { lockFd = fs.openSync(lockPath, "wx", 0o600); lockIdentity = fs.fstatSync(lockFd); }
     catch { fail("record-locked", "Otra ejecución o un bloqueo pendiente impide registrar; no se borrará.", "conflict"); }
     fs.writeSync(lockFd, `${randomUUID()}\n`);
+    // The exclusive pathname is the cooperative lock. Closing its handle also
+    // lets Windows expose replacements so inode checks can preserve foreign locks.
+    fs.closeSync(lockFd); lockFd = undefined;
     assertSnapshot(before, captureState(vault, files, ignored));
     tempFd = fs.openSync(temporary, "wx", ledgerFile.mode);
     tempIdentity = fs.fstatSync(tempFd);

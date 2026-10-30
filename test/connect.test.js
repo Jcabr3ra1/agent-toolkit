@@ -9,6 +9,8 @@ import { runCli } from "../src/cli.js";
 import { connectMemory, READ_TOOLS, WRITE_TOOLS } from "../src/connect.js";
 import { initializeMemory } from "../src/init.js";
 
+const directoryLinkType = process.platform === "win32" ? "junction" : "dir";
+
 test("connect muestra una vista previa sin modificar el equipo", async (context) => {
   const fixture = createFixture(context);
   const calls = [];
@@ -131,6 +133,63 @@ test("connect configura Claude con permisos explícitos", async (context) => {
   }
 });
 
+test("connect ejecuta el bin npm con Node sin ejecutar el shim CMD", {
+  skip: process.platform !== "win32" ? "Windows npm shim resolution; POSIX uses native executable spawning." : false
+}, async (context) => {
+  const fixture = createFixture(context, "memory space & %PATH% (copy)");
+  const bin = path.join(fixture.root, "node_modules", ".bin");
+  const packageDirectory = path.join(fixture.root, "node_modules", "@anthropic-ai", "claude-code");
+  const script = path.join(packageDirectory, "cli.cjs");
+  const log = path.join(fixture.root, "arguments.json");
+  fs.mkdirSync(bin, { recursive: true });
+  fs.mkdirSync(packageDirectory, { recursive: true });
+  fs.writeFileSync(path.join(packageDirectory, "package.json"), JSON.stringify({ name: "@anthropic-ai/claude-code", bin: { claude: "cli.cjs" } }));
+  fs.writeFileSync(script, `if (process.argv[3] === 'get') process.exit(1); require('node:fs').writeFileSync(${JSON.stringify(log)}, JSON.stringify(process.argv.slice(2)));`);
+  fs.writeFileSync(path.join(bin, "claude.cmd"), '@echo The CMD shim must never execute 1>&2\r\n@exit /b 99\r\n');
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${bin}${path.delimiter}${previousPath ?? ""}`;
+  try {
+    const report = await connectMemory(
+      { targetPath: fixture.memory, agentId: "claude", apply: true },
+      { homeDirectory: fixture.home }
+    );
+    assert.equal(report.status, "connected");
+    const args = JSON.parse(fs.readFileSync(log, "utf8"));
+    assert.deepEqual(args.slice(0, 2), ["mcp", "add"]);
+    assert.equal(args.at(-1), fs.realpathSync(fixture.memory));
+    fs.writeFileSync(path.join(packageDirectory, "blocked.cmd"), '@exit /b 99\r\n');
+    fs.writeFileSync(path.join(packageDirectory, "package.json"), JSON.stringify({ name: "@anthropic-ai/claude-code", bin: { claude: "blocked.cmd" } }));
+    await assert.rejects(connectMemory(
+      { targetPath: fixture.memory, agentId: "claude", apply: true },
+      { homeDirectory: fixture.home }
+    ), /\.js.*\.cjs.*\.mjs/u);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+  }
+});
+
+test("connect reconoce el enlace y MCP canónicos aunque cambie el caso en Windows", async (context) => {
+  const fixture = createFixture(context);
+  const source = fs.realpathSync(path.join(fixture.memory, "07-AGENTES/skills/demo-project"));
+  const target = path.join(fixture.home, ".agents/skills/demo-project");
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  const linkSource = process.platform === "win32" ? source.toUpperCase() : path.relative(path.dirname(target), source);
+  fs.symlinkSync(linkSource, target, directoryLinkType);
+  const before = fs.readlinkSync(target);
+  const vault = fs.realpathSync(fixture.memory);
+  const report = await connectMemory(
+    { targetPath: fixture.memory, agentId: "codex", apply: true },
+    {
+      homeDirectory: fixture.home,
+      runCommand() { return codexServerOutput(process.platform === "win32" ? vault.toUpperCase() : vault, true); }
+    }
+  );
+  assert.equal(report.status, "unchanged");
+  assert.equal(fs.readlinkSync(target), before);
+  assert.equal(fs.statSync(path.join(source, "SKILL.md")).isFile(), true);
+});
+
 test("connect rechaza agentes distintos de Codex y Claude", async (context) => {
   const fixture = createFixture(context);
 
@@ -147,6 +206,7 @@ test("un enlace de Skill diferente detiene toda la aplicación", async (context)
   const fixture = createFixture(context);
   const target = path.join(fixture.home, ".agents/skills/demo-project");
   fs.mkdirSync(target, { recursive: true });
+  fs.writeFileSync(path.join(target, "keep.txt"), "keep");
   let addWasCalled = false;
 
   const report = await connectMemory(
@@ -164,13 +224,14 @@ test("un enlace de Skill diferente detiene toda la aplicación", async (context)
 
   assert.equal(report.status, "conflict");
   assert.equal(addWasCalled, false);
+  assert.equal(fs.readFileSync(path.join(target, "keep.txt"), "utf8"), "keep");
 });
 
 test("un enlace de Skill roto se trata como conflicto", async (context) => {
   const fixture = createFixture(context);
   const target = path.join(fixture.home, ".agents/skills/demo-project");
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  fs.symlinkSync(path.join(fixture.root, "missing-skill"), target, "dir");
+  fs.symlinkSync(path.join(fixture.root, "missing-skill"), target, directoryLinkType);
 
   const report = await connectMemory(
     { targetPath: fixture.memory, agentId: "codex" },
@@ -216,6 +277,7 @@ test("revierte la Skill y el MCP nuevo si falla la política", async (context) =
     fs.existsSync(path.join(fixture.home, ".agents/skills/demo-project")),
     false
   );
+  assert.equal(fs.statSync(path.join(fixture.memory, "07-AGENTES/skills/demo-project/SKILL.md")).isFile(), true);
 });
 
 test("un MCP homónimo diferente es conflicto", async (context) => {
@@ -250,10 +312,10 @@ test("la CLI exige seleccionar un agente compatible", async (context) => {
   assert.match(io.stderr.join("\n"), /--agent debe ser/);
 });
 
-function createFixture(context) {
+function createFixture(context, memoryName = "memory") {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "project-memory-connect-"));
   const source = path.join(root, "source");
-  const memory = path.join(root, "memory");
+  const memory = path.join(root, memoryName);
   const home = path.join(root, "home");
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
 

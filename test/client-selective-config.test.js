@@ -120,7 +120,8 @@ async function setup(t, first = '{"hooks":{},"disableAllHooks":true,"apiKeyHelpe
   return { sources, limits: limits(), aggregateBytes: 2097152, timeoutMs: 30000 };
 }
 const reader = (cfg, deps = {}, p = createSelectiveReadPermit(cfg)) => createSelectiveFileReader(schema, cfg, p, deps);
-const localTest = (name, fn) => test(name, { timeout: 10000 }, fn);
+const localTest = (name, fn) => test(name, { timeout: 10000,
+  skip: process.platform === 'win32' && /stops on (symlink|writable)|read-only public mode/u.test(name) ? 'POSIX file symlinks or mode bits require POSIX permissions' : false }, fn);
 localTest("SC wrapper reads two files incrementally, no writes or whole-file functions", async t => {
   const cfg = await setup(t); let reads = 0, writes = 0;
   const read = reader(cfg, { io: { readFile: async () => { throw Error("whole read"); }, writeFile: async () => { writes++; throw Error("no write"); }, open: async (...a) => {
@@ -223,7 +224,7 @@ localTest("SC revocation during stream discards that source, no fallback", async
 });
 localTest("SC source descriptor identity mismatch blocks observations", async t => {
   const cfg = await setup(t); const r = await reader(cfg, { io: { open: async (...a) => {
-    const h = await fs.open(...a), stat = h.stat.bind(h); h.stat = async () => { const s = await stat(); s.ino++; return s; }; return h;
+    const h = await fs.open(...a), stat = h.stat.bind(h); h.stat = async () => { const s = await stat(); s.ino = 0; return s; }; return h;
   } } }).run(); assert.equal(r.report.state, "blocked"); assert.ok(r.report.reasons.includes("selective-file-changed"));
 });
 localTest("SC wrapper allows read-only public mode but never repairs original permissions", async t => {

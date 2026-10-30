@@ -46,13 +46,15 @@ test("the reviewer's session is found only when it is the one active session of 
   await assert.rejects(findCodexThread({ projectRoot: f.projectRoot, codexHome: f.codexHome }), { message: /Hay 2 sesiones de Codex activas.*--thread/u });
 });
 
-test("registering stores the thread privately and rejects bad input", async () => {
+test("registering stores the thread privately and rejects bad input", async t => {
   const f = await fixture();
   await f.session(THREAD, f.projectRoot);
   const result = await registerReviewer({ projectRoot: f.projectRoot, codexHome: f.codexHome, directory: f.registry });
   assert.deepEqual(result, { registered: true, thread: THREAD, projectRoot: f.projectRoot });
   const [file] = await fs.readdir(f.registry);
-  assert.equal((await fs.stat(path.join(f.registry, file))).mode & 0o777, 0o600);
+  await t.test("POSIX reviewer record is private", { skip: process.platform === "win32" ? "Windows does not implement POSIX permission bits." : false }, async () => {
+    assert.equal((await fs.stat(path.join(f.registry, file))).mode & 0o777, 0o600);
+  });
   assert.equal(JSON.parse(await fs.readFile(path.join(f.registry, file), "utf8")).thread, THREAD);
   assert.equal((await fs.readdir(f.registry)).length, 1);
   await registerReviewer({ projectRoot: f.projectRoot, thread: OTHER, directory: f.registry });
@@ -139,7 +141,7 @@ test("the inbox CLI registers, notifies and rejects wrong arguments", async () =
   }
 });
 
-test("a write denied by a sandbox names the cause instead of a generic failure", async () => {
+test("a write denied by a sandbox names the cause instead of a generic failure", { skip: process.platform === "win32" ? "This denial fixture requires POSIX directory write permission bits." : false }, async () => {
   const f = await fixture();
   const errors = [];
   const code = await runPeerInboxCli(["registrar", "--agent", "codex", "--project-root", f.projectRoot, "--thread", THREAD], {

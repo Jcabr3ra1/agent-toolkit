@@ -330,14 +330,14 @@ localTest("AD report schema is closed and cannot turn observation into readiness
 
 // Only in-memory filesystem/transport doubles below. No paths are opened or spawned.
 function reviewBoundaryFixture({ size = 65537, growth = false, shortRead = null, truncated = false, late = false, signalError = "EPERM" } = {}) {
-  const root = "/synthetic-auth-review", artifact = root + "/artifact", entry = root + "/entry";
-  const parent = root + "/workspaces", workspace = parent + "/owned", uid = process.getuid();
+  const root = path.resolve("/synthetic-auth-review"), artifact = path.join(root,"artifact"), entry = path.join(root,"entry");
+  const parent = path.join(root,"workspaces"), workspace = path.join(parent,"owned"), uid = process.getuid?.() ?? 1000;
   const zeroBlock = Buffer.alloc(65536), digest = createHash("sha256");
   for (let offset = 0; offset < size; offset += zeroBlock.length) digest.update(zeroBlock.subarray(0, Math.min(zeroBlock.length, size - offset)));
   const cfg = { source: "synthetic-fixture", recipe: "auth-status-v1", version: "fictitious-review",
     artifact: { path: artifact, dev: 1, ino: 3, uid, mode: 0o500, size, mtimeMs: 1, ctimeMs: 1, sha256: digest.digest("hex") },
     entryLink: { path: entry, dev: 1, ino: 4, uid, mode: 0o777, size: artifact.length, mtimeMs: 1, ctimeMs: 1 },
-    workspaceParent: { path: parent, dev: 1, ino: 2, uid, mode: 0o700 }, excludedRoots: [root + "/excluded"],
+    workspaceParent: { path: parent, dev: 1, ino: 2, uid, mode: 0o700 }, excludedRoots: [path.join(root,"excluded")],
     identityReview: { state: "reviewed", bindingSha256: "0".repeat(64), evidenceSha256: "1".repeat(64) },
     startupReview: { state: "reviewed", bindingSha256: "0".repeat(64), evidenceSha256: "2".repeat(64), effectsEnumerated: true, unresolvedEffects: false },
     limits: { processTimeoutMs: 100, totalTimeoutMs: 2500, graceMs: 20, confirmationMs: 20, maxOutputBytes: 32768, maxErrorBytes: 32768, permitLifetimeMs: 60000 } };
