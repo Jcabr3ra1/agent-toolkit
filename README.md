@@ -39,37 +39,68 @@ entregarlo.
 La biblioteca incluye además perfiles de exploración, análisis, arquitectura,
 documentación, tutoría y revisión de calidad.
 
-## Inicio rápido
+## Instalación directa desde GitHub
 
-Necesitas acceso al repositorio privado y **Node.js 24.x**. Desde una terminal:
+Recomendado: **Node.js 24.x** (el paquete admite Node >=24), npm y Git.
+Necesitas acceso al repositorio privado y Git autenticado con tu cuenta
+(por ejemplo, mediante Git Credential Manager). No incluyas tokens en URLs.
 
-```bash
+```powershell
+npm install -g github:Jcabr3ra1/agent-toolkit
+agent-toolkit --help
+project-memory --help
+agent-task --help
+```
+
+## Instalación desde GitHub Packages
+
+Cuando el dueño haya publicado la versión privada en GitHub Packages, configura
+el archivo de usuario `$HOME/.npmrc` en Windows con estas líneas:
+
+```ini
+@jcabr3ra1:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+Define `GITHUB_PACKAGES_TOKEN` en tu entorno con un personal access token
+(classic) de GitHub con `read:packages` y acceso al paquete privado. Si tu
+organización usa SSO, autoriza el token para esa organización. No guardes tokens
+reales en el repositorio ni compartas tu archivo de usuario `.npmrc`.
+
+```powershell
+npm install -g @jcabr3ra1/agent-toolkit
+agent-toolkit doctor --agent all
+```
+
+El scope usa minúsculas. No está publicado en el registro público de npm.
+Los comandos globales funcionan desde cualquier directorio. La instalación no
+usa `postinstall` ni configura los agentes automáticamente.
+
+## Modo desarrollo (clonado y npm link)
+
+```powershell
 git clone https://github.com/Jcabr3ra1/agent-toolkit.git
 cd agent-toolkit
-node --version
 npm ci --ignore-scripts
+npm link
+npm test
 ```
 
-`node --version` debe mostrar una versión 24.x. Instala las dependencias desde
-la raíz del repositorio y comprueba las herramientas:
-
-```bash
-node bin/project-memory.js --help
-node bin/agent-task.js --help
-```
-
-No requiere una instalación global: ejecuta los comandos con `node bin/...`
-desde la carpeta `agent-toolkit`. El paquete es privado y no está publicado en
-npm.
+También puedes ejecutar `node bin/<cli>.js` desde el clon. Para desvincularlo:
+`npm uninstall -g @jcabr3ra1/agent-toolkit`.
+`npm pack` ejecuta `prepack` y genera automáticamente una copia del lock en
+`assets/runtime/package-lock.json` para el verificador experimental; no la edites.
+El paquete usa `UNLICENSED`; las licencias de recursos de terceros se conservan.
 
 ## Instala las skills y comprueba tu equipo
 
 ```bash
-node bin/agent-toolkit.js doctor --agent all
-node bin/agent-toolkit.js setup --agent all
+agent-toolkit doctor --agent all
+agent-toolkit setup --agent all
 ```
 
-`setup` muestra una vista previa. Añade `--apply` para enlazar las skills sin
+`setup` muestra una vista previa. Los enlaces apuntan a las skills de la instalación
+actual; tras desinstalarla dejan de funcionar. Añade `--apply` para enlazar las skills sin
 reemplazar destinos existentes; devuelve los comandos de registro MCP como pasos
 explícitos. Superpowers se instala aparte y es opcional. Consulta la
 [guía de instalación, consumo y recuperación](docs/guias/consolidacion.md).
@@ -94,7 +125,7 @@ Reemplaza `/ruta/a/mi-proyecto` por la ruta real de tu repositorio. Primero
 prepara una memoria en **vista previa**; este comando no escribe archivos:
 
 ```bash
-node bin/project-memory.js init ../memoria-mi-proyecto \
+project-memory init ../memoria-mi-proyecto \
   --project-id mi-proyecto \
   --project-name "Mi Proyecto" \
   --source /ruta/a/mi-proyecto
@@ -105,21 +136,21 @@ repite el mismo comando añadiendo `--apply` para crear la memoria. Después,
 compruébala:
 
 ```bash
-node bin/project-memory.js doctor ../memoria-mi-proyecto
+project-memory doctor ../memoria-mi-proyecto
 ```
 
 Para preparar una conexión de solo lectura con Codex, primero revisa su vista
 previa:
 
 ```bash
-node bin/project-memory.js connect ../memoria-mi-proyecto --agent codex
+project-memory connect ../memoria-mi-proyecto --agent codex
 ```
 
 Si el plan es correcto, repítelo con `--apply`:
 
 ```bash
-node bin/project-memory.js connect ../memoria-mi-proyecto --agent codex --apply
-node bin/project-memory.js status ../memoria-mi-proyecto
+project-memory connect ../memoria-mi-proyecto --agent codex --apply
+project-memory status ../memoria-mi-proyecto
 ```
 
 Para Claude, cambia `codex` por `claude`. Después de aplicar la conexión,

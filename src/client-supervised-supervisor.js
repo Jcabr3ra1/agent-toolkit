@@ -7,8 +7,8 @@ import { claimSupervisedPermit } from "./client-supervised-permit.js";
 import { createSupervisedProtocol } from "./client-supervised-protocol.js";
 import { createSupervisedContract, hash, monotonicMs, zeroMetrics, errorCode, fail } from "./client-supervised-contract.js";
 
-const script = fileURLToPath(new URL("../testing/supervised/fixture.cjs", import.meta.url));
-const childScript = fileURLToPath(new URL("../testing/supervised/child.cjs", import.meta.url));
+const script = fileURLToPath(new URL("./runtime-fixtures/supervised/fixture.cjs", import.meta.url));
+const childScript = fileURLToPath(new URL("./runtime-fixtures/supervised/child.cjs", import.meta.url));
 
 /** Trusted fixture runner, not a native subscription runner. */
 export function createSupervisedSupervisor(schema, dependencies = {}) {

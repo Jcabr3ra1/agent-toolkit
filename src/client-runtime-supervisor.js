@@ -9,7 +9,7 @@ import { copyBytes, ParseFailure } from "./client-output-json.js";
 import { copyInertJson, hash } from "./client-runtime-core.js";
 
 export const FIXTURES = Object.freeze(["success", "split-utf8", "silent", "blocked-stdin", "failure", "stdout-overflow", "stderr-overflow", "long-line", "event-overflow", "invalid-utf8", "forbidden-event", "duplicate-json", "after-terminal", "unterminated", "incomplete", "ignore-term", "parent-child", "child-after-parent", "stderr-invalid", "environment", "closed-stdin"]);
-const script = fileURLToPath(new URL("../testing/runtime-supervisor/fixture.cjs", import.meta.url));
+const script = fileURLToPath(new URL("./runtime-fixtures/runtime-supervisor/fixture.cjs", import.meta.url));
 export const monotonicMs = () => Number(process.hrtime.bigint() / 1_000_000n);
 const reason = e => e instanceof ParseFailure ? e.code : "fixture-local-error";
 
