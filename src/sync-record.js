@@ -8,7 +8,7 @@ import { inspectMemorySync } from "./sync-inspect.js";
 import { parseGitHubRepository, validateAutomation } from "./sync.js";
 import { appendLedgerRecord, parseWritableLedger } from "./sync-ledger.js";
 import { containsSensitiveData, isCredentialPath } from "./sensitive-data.js";
-import { sameNativePath, relativeGitPath, sameSyncText, syncWriteLockPath } from "./sync-files.js";
+import { sameGitRoot, relativeGitPath, sameSyncText, syncWriteLockPath } from "./sync-files.js";
 
 export const RECORD_LIMITS = Object.freeze({ ledger: 1024 * 1024, note: 1024 * 1024,
   notes: 20, totalNotes: 5 * 1024 * 1024, manifest: 1024 * 1024, git: 5 * 1024 * 1024 });
@@ -293,7 +293,7 @@ function gitRead(vault, args) {
 
 function gitState(vault, ignored = []) {
   const root = gitRead(vault, ["rev-parse", "--show-toplevel"]).trim();
-  if (!sameNativePath(fs.realpathSync(root), vault)) fail("git-root", "La bóveda debe tener su propio repositorio Git.", "conflict");
+  if (!sameGitRoot(root, vault)) fail("git-root", "La bóveda debe tener su propio repositorio Git.", "conflict");
   const head = gitRead(vault, ["rev-parse", "HEAD"]).trim();
   const raw = gitRead(vault, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
   const changes = [];

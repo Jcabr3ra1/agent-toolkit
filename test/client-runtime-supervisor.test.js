@@ -143,11 +143,16 @@ localTest("C2-07/12: entradas rechazadas conservan el ledger real y sus recursos
     assert.deepEqual(await fs.readdir(taskDirectory(root)), ["ledger.json"], name);
   }
   // Preserve the original shared-identity adversary too: request() aliases these
-  // identities, so this changes the reservation and reaches the store boundary.
+  // identities, so this changes the reservation identity and reaches the store
+  // boundary. The store authorization keeps its own copy of the original
+  // identity, so the store refuses it as unauthorized before inspecting the
+  // transition.
   const sharedIdentity = request(root); sharedIdentity.authorization.identity.taskId = "other";
+  assert.equal(sharedIdentity.reservation.identity.taskId, "other");
+  assert.notEqual(sharedIdentity.reservation.authorization.identity.taskId, "other");
   const r = check(await run(sharedIdentity));
   assert.equal(r.state, "not-started"); assert.equal(r.fixtureExecuted, false); assert.equal(r.process, null); assert.equal(spawns, 0);
-  assert.equal(r.storage.state, "blocked"); assert.deepEqual(r.reasons, ["store-transition-identity-mismatch"]);
+  assert.equal(r.storage.state, "blocked"); assert.deepEqual(r.reasons, ["store-not-authorized"]);
   assert.deepEqual(await fs.readFile(file), before);
   assert.deepEqual(await fs.readdir(taskDirectory(root)), ["ledger.json"]);
 });
