@@ -3,8 +3,8 @@
 ## Preparar el repositorio
 
 ```bash
-git clone https://github.com/Jcabr3ra1/agent-toolkit.git
-cd agent-toolkit
+git clone https://github.com/Jcabr3ra1/nexakit.git
+cd nexakit
 npm ci --ignore-scripts
 npm link --ignore-scripts
 ```

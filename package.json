@@ -50,7 +50,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Jcabr3ra1/agent-toolkit.git"
+    "url": "git+https://github.com/Jcabr3ra1/nexakit.git"
   },
   "files": [
     "bin/",

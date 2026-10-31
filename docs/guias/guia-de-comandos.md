@@ -34,8 +34,8 @@ Necesitas la sesión iniciada en Claude Code y en Codex. La revisión cruzada ne
 ### 1. Clona el repositorio donde quieras
 
 ```sh
-git clone https://github.com/Jcabr3ra1/agent-toolkit.git
-cd agent-toolkit
+git clone https://github.com/Jcabr3ra1/nexakit.git
+cd nexakit
 ```
 
 Cualquier carpeta sirve. Todos los comandos siguientes se ejecutan desde ella. No la borres ni la muevas después: las skills y el servidor apuntan ahí (si la mueves, repite los pasos 4 y 5).
@@ -97,7 +97,7 @@ Codex ejecuta sus comandos en un sandbox que solo deja escribir en el proyecto, 
 ### 7. Instala el plugin de niveles (solo Claude Code)
 
 ```text
-/plugin marketplace add Jcabr3ra1/agent-toolkit
+/plugin marketplace add Jcabr3ra1/nexakit
 /plugin install niveles@agent-toolkit
 ```
 

@@ -4,9 +4,22 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripVTControlCharacters } from 'node:util';
 import { test } from 'node:test';
 
 const TOOLKIT_ROOT = fileURLToPath(new URL('../', import.meta.url));
+
+test('terminal assertions match visible labels while retaining raw color output', async () => {
+  const tty = createFakeTty();
+  tty.output.write('\x1b[2J\x1b[H\x1b[1m[Enter / s]\x1b[22m confirmar e instalar');
+  assert.equal(tty.getFrame(), '[Enter / s] confirmar e instalar');
+  assert.match(tty.getOutput(), /\x1b\[1m/u);
+  await tty.waitFor(/\[Enter \/ s\] confirmar e instalar/u);
+  const nextFrame = tty.waitFor(/Skills opcionales/u);
+  tty.output.write('\x1b[2J\x1b[H\x1b[35mSkills opcionales\x1b[39m');
+  await nextFrame;
+  assert.equal(tty.getFrame(), 'Skills opcionales');
+});
 
 function createFakeTty({ columns = 100 } = {}) {
   const input = new EventEmitter();
@@ -26,8 +39,8 @@ function createFakeTty({ columns = 100 } = {}) {
   output.write = chunk => {
     buffer += String(chunk);
     frame = String(chunk).includes('\x1b[2J\x1b[H')
-      ? String(chunk).split('\x1b[2J\x1b[H').at(-1)
-      : frame + String(chunk);
+      ? stripVTControlCharacters(String(chunk).split('\x1b[2J\x1b[H').at(-1))
+      : frame + stripVTControlCharacters(String(chunk));
     for (let i = waiters.length - 1; i >= 0; i--) {
       if (waiters[i].regex.test(frame)) {
         const w = waiters.splice(i, 1)[0];

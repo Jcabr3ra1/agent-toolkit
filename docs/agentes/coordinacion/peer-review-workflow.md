@@ -144,7 +144,7 @@ modelo y esfuerzo fijos en su definición: `niveles:nivel-ligero` (`haiku`,
 (`sonnet`, `high`) y `niveles:nivel-alto` (`opus`, `high`). Instálalo una vez:
 
 ```text
-/plugin marketplace add Jcabr3ra1/agent-toolkit
+/plugin marketplace add Jcabr3ra1/nexakit
 /plugin install niveles@agent-toolkit
 ```
 
