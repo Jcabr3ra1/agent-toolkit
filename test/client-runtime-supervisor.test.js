@@ -331,7 +331,7 @@ localTest("C2-12: APIs instrumentadas no intentan red y spawn solo usa programa 
   const failNetwork = () => { network++; throw Error("must not network"); };
   for (const [object, key] of [[http, "request"], [https, "request"], [net, "connect"], [net, "createConnection"], [globalThis, "fetch"]]) t.mock.method(object, key, failNetwork);
   const r = check(await coordinator(root, { supervisor: { spawn: (exe, args, opts) => {
-    starts++; assert.equal(exe, process.execPath); assert.match(args[0], /testing\/runtime-supervisor\/fixture\.cjs$/);
+    starts++; assert.equal(exe, process.execPath); assert.match(args[0], /src[\\/]runtime-fixtures[\\/]runtime-supervisor[\\/]fixture\.cjs$/);
     assert.deepEqual(args.slice(1), ["success"]); assert.deepEqual(Object.keys(opts.env).sort(), ["LANG", "LC_ALL"]); return spawn(exe, args, opts);
   } } })(request(root)));
   assert.equal(r.state, "completed"); assert.equal(network, 0); assert.equal(starts, 1);
