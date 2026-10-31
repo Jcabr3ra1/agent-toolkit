@@ -17,7 +17,11 @@ const NOTE = "03-IMPLEMENTACION/Contrato.md", SECOND = "03-IMPLEMENTACION/Operac
 const DATE = "2026-10-01T14:00:00Z";
 const posixPermissions = { skip: process.platform === "win32" ? "Windows no conserva modos POSIX como 0640." : false };
 const fileSymlinks = { skip: fileSymlinkSkipReason() };
-function git(dir, ...args) { return execFileSync("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
+function git(dir, ...args) {
+  // Fixture commits must not start background maintenance that creates/removes
+  // .git/objects/maintenance.lock between strict filesystem snapshots.
+  return execFileSync("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+}
 function fixture(t, options = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "project-memory-apply-")));
   const owner = fs.lstatSync(root);
