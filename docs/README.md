@@ -1,6 +1,9 @@
-# Documentación de Agent Toolkit
+# Documentación de NexaKit
 
-Empieza por [Primeros pasos](guias/primeros-pasos.md). Para consultar una operación,
+Empieza por la [guía interactiva de NexaKit](guias/guia-de-comandos.html): abre el
+archivo HTML en tu navegador para seguir la instalación, preparar Obsidian y
+copiar comandos adaptados a tu proyecto. También puedes probar los
+[primeros pasos sin conectar cuentas](guias/primeros-pasos.md). Para consultar una operación,
 usa la [guía de comandos](guias/guia-de-comandos.md) o la
 [guía de uso](guias/uso.md).
 
@@ -17,9 +20,10 @@ Para una reorganización, utiliza la skill
 
 ## Guías de uso
 
+- [Guía interactiva: inicio, Obsidian, agentes y comandos (HTML)](guias/guia-de-comandos.html)
 - [Desarrollo local, pruebas y empaquetado de NexaKit](guias/desarrollo.md)
 
-- [Guía de comandos de Agent Toolkit](guias/guia-de-comandos.md)
+- [Guía de comandos de NexaKit](guias/guia-de-comandos.md)
 - [Herramientas de Gemini](guias/herramientas-gemini.md)
 - [Tu primera prueba con Agent Toolkit](guias/primeros-pasos.md)
 - [Instalación, consumo y recuperación](guias/consolidacion.md)

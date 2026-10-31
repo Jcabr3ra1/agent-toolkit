@@ -1,12 +1,12 @@
-# Guía de Agent Toolkit
+# Guía de NexaKit
 
-Agent Toolkit conecta Claude Code y Codex: una terminal programa, la otra revisa y tú apruebas cada paso. Esta guía parte de cero, justo después de clonar el repositorio. Hay una versión visual en [guia-de-comandos.html](guia-de-comandos.html).
+NexaKit conecta Claude Code y Codex: una terminal programa, la otra revisa y tú apruebas cada paso. Esta referencia parte de cero, justo después de clonar el repositorio. Para seguir el inicio, crear una memoria y abrirla en Obsidian, usa la [guía interactiva con comandos copiables](guia-de-comandos.html); abre ese archivo HTML en tu navegador.
 
 | Para | Escribe | Dónde |
 | --- | --- | --- |
 | Programar | `/programar <tarea>` | en Claude (o `$programar` en Codex) |
 | Revisar | `$revisar` | en Codex (o `/revisar` en Claude) |
-| Ver cómo va | `/estado` | en cualquiera |
+| Ver cómo va | `/estado` en Claude, `$estado` en Codex | en el chat del agente |
 | Cerrar el PR | `/cerrar-memoria` | si el proyecto tiene memoria |
 
 En Claude Code las skills empiezan con `/`. En Codex, con `$`. Los comandos de terminal se ejecutan desde la carpeta donde clonaste el repositorio.

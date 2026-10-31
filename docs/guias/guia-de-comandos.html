@@ -1,216 +1,522 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="light dark">
-<meta name="description" content="Cómo instalar y usar Agent Toolkit desde cero: requisitos, instalación, primer uso y comandos.">
-<title>Guía de Agent Toolkit</title>
-<style>
-:root{color-scheme:light dark;--bg:#f7f5fa;--card:#fff;--ink:#1b1722;--muted:#5a5365;--line:#dcd5e6;--accent:#5b2f9e;--accent-ink:#fff;--code-bg:#15111b;--code-ink:#f1ecf7;--tu:#7a4a00;--tu-bg:#fdecc8;--cl:#4a2a85;--cl-bg:#ece3fb;--cx:#0b5b46;--cx-bg:#d9f2e8;--te:#3a3446;--te-bg:#e8e4ee;font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#121016;--card:#1b1822;--ink:#f1ecf7;--muted:#bdb4ca;--line:#37303f;--accent:#b99bf2;--accent-ink:#17111f;--code-bg:#0a080d;--code-ink:#f1ecf7;--tu:#f6d58a;--tu-bg:#4a3510;--cl:#d3bdfa;--cl-bg:#35254f;--cx:#9fe0c6;--cx-bg:#12382d;--te:#d4cde0;--te-bg:#2d2736}}
-*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:64px}
-body{margin:0;background:var(--bg);color:var(--ink);line-height:1.6;font-size:16px}
-code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-code{background:color-mix(in srgb,var(--ink) 9%,transparent);padding:.1em .35em;border-radius:5px;font-size:.9em}
-.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-nav{max-width:920px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:4px;overflow-x:auto;white-space:nowrap}
-.logo{font-weight:700;margin-right:auto;padding:14px 12px 14px 0}
-nav a{color:var(--muted);text-decoration:none;padding:14px 10px;font-size:14px}nav a:hover{color:var(--ink)}
-.skip{position:absolute;left:-999px}.skip:focus{left:12px;top:8px;background:var(--accent);color:var(--accent-ink);padding:8px 12px;border-radius:8px;z-index:9}
-:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:4px}
-main{max-width:920px;margin:0 auto;padding:8px 20px 40px}
-section{padding:36px 0 8px;border-top:1px solid var(--line)}section.hero{border-top:0;padding-top:40px}
-h1{font-size:clamp(30px,5vw,44px);line-height:1.1;margin:0 0 12px;letter-spacing:-.02em}
-h2{font-size:clamp(22px,3.4vw,28px);margin:0 0 18px;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;line-height:1.25}
-h2 small{font-size:14px;font-weight:400;color:var(--muted)}
-h3{font-size:17px;margin:26px 0 10px}h3 small{font-weight:400;color:var(--muted)}
-.lead{font-size:18px;color:var(--muted);margin:0 0 22px;max-width:60ch}
-.note{color:var(--muted);font-size:14px;max-width:70ch}
-.quick{list-style:none;margin:0 0 14px;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
-.quick li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:grid;gap:4px}
-.quick span{font-size:13px;color:var(--muted)}.quick code{background:none;padding:0;font-size:16px;font-weight:600;color:var(--accent)}.quick small{color:var(--muted);font-size:13px}
-.steps{list-style:none;counter-reset:s;margin:0;padding:0;display:grid;gap:14px}
-.steps>li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px 6px;position:relative}
-.steps>li>h3{margin:0 0 10px;font-size:16px}.steps>li>h3::before{content:counter(s) ".";color:var(--accent);margin-right:8px;font-weight:700}
-.steps p{font-size:14px;color:var(--muted);margin:8px 0 12px}
-.cmd{position:relative}
-.cmd pre{margin:0;background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:14px 84px 14px 16px;overflow-x:auto;font-size:13.5px;line-height:1.55}
-.cmd code{background:none;padding:0;font-size:inherit}
-.copy{position:absolute;top:8px;right:8px;min-height:32px;padding:4px 12px;border-radius:8px;border:1px solid #ffffff33;background:#ffffff1a;color:#f1ecf7;font:inherit;font-size:13px;cursor:pointer}
-.copy:hover{background:#ffffff33}.copy.ok{background:#1f7a55;border-color:#1f7a55}
-.flow{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:0}
-.flow li{display:grid;grid-template-columns:86px 1fr;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
-.flow li:first-child{padding-top:4px}.flow li:last-child{border-bottom:0}
-.flow{counter-reset:f}.flow li{counter-increment:f}.what{margin:0;font-weight:600}.what::before{content:counter(f) ".";color:var(--accent);font-weight:700;margin-right:8px}.detail{margin:2px 0 0;color:var(--muted);font-size:14.5px}
-.tag{display:inline-block;align-self:start;text-align:center;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px}
-.tag.tu{background:var(--tu-bg);color:var(--tu)}.tag.cl{background:var(--cl-bg);color:var(--cl)}.tag.cx{background:var(--cx-bg);color:var(--cx)}.tag.te{background:var(--te-bg);color:var(--te)}
-.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);margin:0 0 14px}
-table{border-collapse:collapse;width:100%;font-size:15px}
-th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
-thead th{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;background:color-mix(in srgb,var(--ink) 4%,transparent)}
-tbody tr:last-child>*{border-bottom:0}tbody th{font-weight:600;white-space:nowrap}
-code.wrap{white-space:normal;word-break:break-word;line-height:1.9}
-.cmds{list-style:none;margin:0 0 6px;padding:0;display:grid;gap:12px}
-.cmds p{margin:6px 2px 0;color:var(--muted);font-size:14.5px}
-details{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:12px 0;padding:0 16px}
-summary{cursor:pointer;padding:13px 0;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center}
-summary::before{content:"+";display:inline-grid;place-items:center;width:22px;height:22px;border-radius:6px;background:color-mix(in srgb,var(--ink) 10%,transparent);flex:none}
-details[open] summary::before{content:"–"}details>*:last-child{margin-bottom:16px}
-.limits{padding-left:20px;margin:0 0 10px;max-width:72ch}.limits li{margin:6px 0}
-footer{max-width:920px;margin:0 auto;padding:10px 20px 50px;color:var(--muted);font-size:13px}
-@media (max-width:600px){.flow li{grid-template-columns:1fr;gap:6px}.tag{justify-self:start}th,td{padding:10px}tbody th{white-space:normal}.cmd pre{padding-right:16px;padding-bottom:50px}.copy{top:auto;bottom:8px}}
-@media print{.top,.copy{display:none}body{background:#fff;color:#000}.cmd pre{background:#f2f2f2;color:#000;border:1px solid #bbb;padding-right:16px}details{break-inside:avoid}}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-
-.callout{border-left:4px solid var(--accent);background:var(--card);padding:12px 16px;border-radius:8px;margin:14px 0;font-size:15px}.callout p{margin:0}
-.req code{white-space:nowrap}
-
-.steps,.cmds{grid-template-columns:minmax(0,1fr)}.steps>li,.cmds>li,.cmd{min-width:0}main{overflow-x:clip}
-
-/* Commands never wrap (a break after a hyphen would split --options); long ones scroll, and the button sits below so it never covers text. */
-.cmd pre{white-space:pre;overflow-x:auto;padding:14px 16px}
-.copy{position:static;display:block;margin:8px 0 0 auto;min-height:34px;padding:4px 14px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
-.copy:hover{background:color-mix(in srgb,var(--ink) 8%,var(--card))}
-.copy.ok{background:#1f7a55;border-color:#1f7a55;color:#fff}
-@media (max-width:600px){.cmd pre{padding:14px 16px}.copy{top:auto;bottom:auto}}
-</style></head><body>
-<header class="top">
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Aprende a iniciar NexaKit, elegir skills, crear tu memoria en Obsidian y conectarla con Claude Code y Codex. Guía con comandos copiables.">
+  <title>NexaKit · Del primer comando a tu memoria conectada</title>
+  <style>
+    :root { --bg:#111015; --surface:#19171f; --raised:#211e2a; --line:#35303f; --text:#eeebf5; --muted:#aaa3b8; --accent:#c4b5fd; --purple:#7c3aed; --green:#a2d9bb; --mono:ui-monospace,"Cascadia Code","SFMono-Regular",Consolas,monospace; font-family:"Segoe UI Variable", "Segoe UI", sans-serif; color-scheme:dark; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; scroll-padding-top:100px; }
+    body { margin:0; background:var(--bg); color:var(--text); font-size:16px; line-height:1.65; }
+    a { color:var(--accent); text-underline-offset:4px; }
+    button,input,select { font:inherit; }
+    button,a,input,select { -webkit-tap-highlight-color:transparent; }
+    button { cursor:pointer; }
+    button:disabled { cursor:default; }
+    :focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
+    [hidden] { display:none !important; }
+    code,kbd,pre { font-family:var(--mono); }
+    code { font-size:.86em; overflow-wrap:anywhere; }
+    p code,li code { color:#d6cbf7; background:#ffffff08; padding:2px 5px; border-radius:4px; }
+    h1,h2,h3,p { margin-top:0; }
+    h1 { font-size:clamp(40px,5vw,68px); line-height:1.07; letter-spacing:-.05em; font-weight:650; margin-bottom:24px; max-width:760px; }
+    h2 { font-size:32px; letter-spacing:-.035em; line-height:1.2; font-weight:620; margin-bottom:14px; }
+    h3 { font-size:19px; line-height:1.4; margin:28px 0 10px; font-weight:600; }
+    p { max-width:70ch; }
+    .muted,.section-intro { color:var(--muted); }
+    .section-intro { font-size:17px; margin-bottom:30px; }
+    .skip { position:fixed; top:-100px; left:20px; z-index:20; padding:10px 16px; background:var(--accent); color:var(--bg); }
+    .skip:focus { top:12px; }
+    .topbar { height:76px; padding:0 36px; display:flex; align-items:center; gap:20px; position:sticky; top:0; z-index:10; background:#111015f2; border-bottom:1px solid var(--line); backdrop-filter:blur(12px); }
+    .brand { display:flex; gap:11px; align-items:center; color:var(--text); text-decoration:none; font-size:21px; font-weight:650; letter-spacing:-.04em; }
+    .brand svg { width:29px; height:32px; }
+    .topbar .subtitle { border-left:1px solid var(--line); padding-left:20px; color:var(--muted); font-size:14px; }
+    .toplinks { display:flex; align-items:center; gap:22px; margin-left:auto; font-size:14px; }
+    .toplinks a { color:var(--muted); text-decoration:none; }
+    .toplinks a:hover { color:var(--text); }
+    .layout { max-width:1480px; margin:auto; display:grid; grid-template-columns:260px minmax(0,1fr); }
+    aside { padding:28px 26px 24px 32px; position:sticky; top:76px; height:calc(100vh - 76px); display:flex; flex-direction:column; border-right:1px solid var(--line); overflow-y:auto; }
+    .nav-caption { font-size:13px; color:var(--muted); margin:0 0 18px 10px; }
+    .route { list-style:none; padding:0; margin:0; }
+    .route a { display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius:7px; color:var(--muted); text-decoration:none; font-size:14px; line-height:1.35; margin-bottom:3px; }
+    .route a:hover { color:var(--text); background:#ffffff05; }
+    .route a[aria-current] { color:var(--accent); background:#7c3aed1c; }
+    .nav-num { flex:none; font:12px var(--mono); width:23px; height:23px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; }
+    .route a.done .nav-num { color:var(--green); border-color:#a2d9bb66; }
+    .sidebar-tools { border-top:1px solid var(--line); margin-top:20px; padding-top:14px; }
+    .sidebar-tools a { display:block; color:var(--muted); text-decoration:none; padding:7px 10px; font-size:14px; }
+    .sidebar-tools a:hover { color:var(--text); }
+    .progress-box { margin-top:auto; padding:20px 10px 0; }
+    .progress-label { font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:8px; }
+    .progress-label span:last-child { white-space:nowrap; }
+    progress { width:100%; height:4px; border:0; border-radius:4px; display:block; margin:12px 0 10px; background:var(--line); accent-color:var(--accent); }
+    progress::-webkit-progress-bar { background:var(--line); border-radius:4px; }
+    progress::-webkit-progress-value { background:var(--accent); border-radius:4px; }
+    .reset { border:0; padding:4px 0; background:none; color:var(--muted); font-size:12px; text-decoration:underline; text-underline-offset:3px; }
+    main { padding:54px clamp(28px,5vw,82px) 0; min-width:0; max-width:1160px; }
+    .hero { padding-bottom:54px; }
+    .hero .lead { font-size:19px; line-height:1.7; color:var(--muted); max-width:600px; margin-bottom:26px; }
+    .hero-label { display:flex; gap:9px; align-items:center; color:var(--accent); font-size:13px; margin-bottom:23px; }
+    .hero-label::before { content:""; width:7px; height:7px; border-radius:50%; background:var(--accent); }
+    .button { display:inline-flex; justify-content:center; align-items:center; gap:10px; border:1px solid var(--line); border-radius:7px; padding:10px 17px; background:var(--surface); color:var(--text); font-size:14px; font-weight:600; text-decoration:none; min-height:44px; }
+    .button.primary { background:var(--accent); color:#211636; border-color:var(--accent); }
+    .button:hover { filter:brightness(1.12); }
+    .hero-actions { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .map { display:grid; grid-template-columns:1fr auto 1fr auto 1fr; align-items:center; gap:14px; border:1px solid var(--line); padding:22px 24px; border-radius:10px; margin-top:36px; background:var(--surface); }
+    .map strong { font-size:14px; display:block; font-weight:600; }
+    .map span { font-size:12px; color:var(--muted); }
+    .map .connector { color:var(--accent); font-size:20px; }
+    .section { padding:42px 0; border-top:1px solid var(--line); }
+    .section-head { display:flex; gap:16px; align-items:flex-start; }
+    .step-number { width:34px; height:34px; display:grid; place-items:center; flex:none; border:1px solid #c4b5fd55; border-radius:8px; font:14px var(--mono); color:var(--accent); margin-top:2px; }
+    .step-meta { display:block; margin-bottom:7px; font-size:12px; color:var(--muted); }
+    .section-head h2 { margin-top:0; }
+    .requirements { list-style:none; padding:0; margin:24px 0; display:flex; flex-wrap:wrap; gap:8px; }
+    .requirements li { padding:5px 11px; background:var(--surface); border:1px solid var(--line); border-radius:5px; font-size:13px; color:var(--muted); }
+    .command { border:1px solid var(--line); background:#0d0c10; border-radius:8px; overflow:hidden; margin:14px 0 18px; min-width:0; }
+    .command-top { padding:9px 15px; display:flex; align-items:center; justify-content:space-between; gap:12px; background:#1c1923; border-bottom:1px solid var(--line); }
+    .command-label { color:var(--muted); font-size:12px; }
+    .copy { font-size:12px; border:1px solid #ffffff20; border-radius:4px; background:#ffffff06; color:var(--text); padding:5px 10px; min-height:32px; min-width:66px; }
+    .copy:hover { border-color:#c4b5fd88; color:var(--accent); }
+    .command pre { margin:0; padding:18px; overflow-x:auto; white-space:pre; line-height:1.8; font-size:13px; tab-size:2; }
+    .command pre code { background:none; padding:0; color:#ded7ec; font-size:inherit; overflow-wrap:normal; }
+    .callout { border-left:2px solid var(--accent); padding:4px 0 4px 17px; color:var(--muted); font-size:14px; margin:24px 0; }
+    .callout strong { color:var(--text); font-weight:550; }
+    .callout p:last-child { margin-bottom:0; }
+    .success { color:var(--green); font-size:14px; display:flex; align-items:baseline; gap:9px; }
+    .success::before { content:"✓"; flex:none; }
+    .completion { margin-top:28px; border-top:1px dashed var(--line); padding-top:20px; display:flex; justify-content:space-between; gap:20px; align-items:center; }
+    .check { display:inline-flex; align-items:center; gap:10px; font-size:14px; cursor:pointer; color:var(--muted); }
+    .check input { accent-color:var(--purple); width:18px; height:18px; margin:0; flex:none; }
+    .check:has(input:checked) { color:var(--green); }
+    .next { font-size:13px; text-decoration:none; }
+    .tui-steps { list-style:none; padding:0; margin:26px 0; counter-reset:tui; }
+    .tui-steps li { counter-increment:tui; display:grid; grid-template-columns:30px minmax(0,1fr); gap:13px; padding:13px 0; }
+    .tui-steps li::before { content:counter(tui); display:grid; place-items:center; font:12px var(--mono); width:26px; height:26px; border:1px solid var(--line); border-radius:50%; margin-top:2px; }
+    .tui-steps strong { font-size:15px; font-weight:600; }
+    .tui-steps p { color:var(--muted); margin:3px 0 0; font-size:14px; }
+    .keys { display:flex; flex-wrap:wrap; gap:12px 22px; margin:20px 0; color:var(--muted); font-size:13px; }
+    kbd { border:1px solid #51475f; border-bottom-width:2px; background:var(--raised); border-radius:4px; padding:2px 5px; color:var(--text); font-size:11px; }
+    details { border:1px solid var(--line); border-radius:8px; margin:18px 0; background:var(--surface); }
+    summary { padding:16px 18px; cursor:pointer; font-size:14px; font-weight:550; }
+    .details-body { padding:0 18px 17px; color:var(--muted); font-size:14px; }
+    .details-body p:last-child { margin-bottom:0; }
+    .settings { padding:21px; margin:25px 0; border:1px solid var(--line); border-radius:8px; background:var(--surface); }
+    .settings h3 { margin:0 0 6px; font-size:16px; }
+    .settings>p { color:var(--muted); font-size:13px; margin-bottom:18px; }
+    .fields { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .field { display:grid; gap:7px; font-size:13px; color:var(--muted); }
+    .field.wide { grid-column:1/-1; }
+    input[type=text],input[type=search],select { min-width:0; width:100%; background:var(--bg); border:1px solid #4c435a; color:var(--text); border-radius:5px; padding:10px 12px; font-size:14px; }
+    .form-bottom { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-top:18px; }
+    .form-bottom small { color:var(--muted); font-size:12px; }
+    .choice-row { display:flex; justify-content:space-between; gap:16px; align-items:center; margin-bottom:23px; flex-wrap:wrap; }
+    .choice-row p { margin:0; font-size:14px; color:var(--muted); }
+    .segmented { display:inline-flex; gap:3px; padding:3px; background:#0d0c10; border:1px solid var(--line); border-radius:7px; }
+    .segmented button { border:0; background:none; color:var(--muted); padding:7px 13px; border-radius:4px; font-size:13px; min-height:36px; }
+    .segmented button[aria-pressed=true] { color:var(--text); background:#332941; }
+    .tree { border:1px solid var(--line); border-radius:8px; padding:20px 22px; font:13px/1.95 var(--mono); overflow-x:auto; color:var(--muted); margin:20px 0; }
+    .tree .root { color:var(--accent); }
+    .tree .note { color:var(--green); }
+    .instructions { padding-left:22px; }
+    .instructions li { padding:5px 0 5px 4px; color:var(--muted); }
+    .instructions strong { color:var(--text); font-weight:550; }
+    .two-col { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .two-col>div { min-width:0; }
+    .two-col h3 { margin-top:10px; }
+    .library-controls { display:flex; align-items:end; gap:12px; margin:24px 0 12px; }
+    .library-controls .field:first-child { flex:1; }
+    .library-controls .field:last-child { width:190px; }
+    .result-count { font-size:12px; color:var(--muted); margin-bottom:20px; }
+    .library-item { padding:19px 0; border-bottom:1px solid var(--line); }
+    .library-item h3 { font-size:16px; margin:0 0 5px; }
+    .library-item p { color:var(--muted); font-size:14px; margin:0 0 10px; }
+    .library-item .command { margin-bottom:0; }
+    .empty { padding:25px 0; color:var(--muted); }
+    .footnote { font-size:13px; color:var(--muted); }
+    footer { border-top:1px solid var(--line); margin-top:10px; padding:26px 0 36px; display:flex; justify-content:space-between; gap:20px; font-size:12px; color:var(--muted); }
+    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:30; background:#e4d9fc; color:#241934; padding:12px 20px; border-radius:7px; box-shadow:0 8px 40px #0006; font-size:14px; max-width:calc(100vw - 32px); text-align:center; }
+    @media(min-width:1500px) { .layout { border-left:1px solid var(--line); border-right:1px solid var(--line); } }
+    @media(max-width:1050px) { .layout { grid-template-columns:220px minmax(0,1fr); } aside { padding-left:20px; padding-right:16px; } main { padding-left:30px; padding-right:30px; } h1 { font-size:50px; } .map { padding:18px; gap:10px; } .two-col { grid-template-columns:1fr; gap:0; } }
+    @media(max-width:760px) { html { scroll-padding-top:135px; } .topbar { height:64px; padding:0 20px; } .topbar .subtitle { display:none; } .toplinks { gap:16px; } .layout { display:block; } aside { height:auto; position:sticky; top:64px; padding:10px 16px; border-right:0; border-bottom:1px solid var(--line); background:var(--bg); z-index:8; display:block; overflow-x:auto; } aside nav { width:max-content; } .nav-caption,.sidebar-tools,.progress-box { display:none; } .route { display:flex; gap:6px; } .route a { font-size:12px; padding:7px 10px; margin:0; } .nav-num { width:20px; height:20px; font-size:10px; } main { padding:36px 22px 0; } h1 { font-size:clamp(38px,8vw,52px); } h2 { font-size:27px; } .hero { padding-bottom:36px; } .hero .lead { font-size:17px; } .map { gap:10px; padding:16px; } .map strong { font-size:12px; } .map span { font-size:11px; } .section { padding:34px 0; } .section-head { gap:12px; } .fields { grid-template-columns:1fr; } .field.wide { grid-column:auto; } .completion { align-items:flex-start; } .library-controls { flex-direction:column; align-items:stretch; } .library-controls .field:last-child { width:auto; } }
+    @media(max-width:400px) { .map { grid-template-columns:1fr; gap:8px; } .map .connector { display:none; } .map strong { display:inline; margin-right:10px; } .toplinks a:first-child { display:none; } }
+    @media(max-width:760px) { aside { scrollbar-width:none; } aside::-webkit-scrollbar { display:none; } }
+    @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+    @media print { .topbar,aside,.hero-actions,.copy,.completion,.settings,.choice-row,.library-controls,.toast,.reset { display:none; } .layout { display:block; } main { max-width:none; padding:0; } body { background:white; color:black; } :root { --text:#111; --muted:#444; --accent:#503188; --line:#ccc; --surface:#f5f5f5; } .command,.command-top { background:#f5f5f5; } .command pre code { color:#111; } .command pre { white-space:pre-wrap; overflow-wrap:anywhere; } .section { break-inside:auto; } h2,h3 { break-after:avoid; } .command { break-inside:avoid; } }
+  </style>
+</head>
+<body>
 <a class="skip" href="#contenido">Saltar al contenido</a>
-<nav aria-label="Secciones"><span class="logo">Agent Toolkit</span>
-<a href="#requisitos">Requisitos</a><a href="#empezar">Instalar</a><a href="#diario">Primer uso</a><a href="#terminal">Terminal</a><a href="#skills">Skills</a><a href="#fallos">Si falla</a><a href="#extra">Más</a></nav>
+<header class="topbar">
+  <a class="brand" href="#inicio" aria-label="NexaKit, inicio de la guía"><svg viewBox="0 0 30 34" fill="none" aria-hidden="true"><path d="M15 1 28 8.5v17L15 33 2 25.5v-17L15 1Z" stroke="#a78bfa" stroke-width="1.5"/><path d="M9 23V11l12 12V11" stroke="#c4b5fd" stroke-width="2.5" stroke-linejoin="round"/></svg>NexaKit</a>
+  <span class="subtitle">Guía de inicio</span>
+  <nav class="toplinks" aria-label="Recursos"><a href="#comandos">Comandos</a><a href="https://github.com/Jcabr3ra1/nexakit">GitHub ↗</a></nav>
 </header>
-<main id="contenido">
-<section class="hero"><h1>Guía de Agent Toolkit</h1>
-<p class="lead">Agent Toolkit conecta Claude Code y Codex: una terminal programa, la otra revisa y tú apruebas cada paso. Esta guía parte de cero, justo después de clonar el repositorio.</p>
-<ul class="quick" aria-label="Lo que escribirás cada día">
-<li><span>Programar</span><code>/programar &lt;tarea&gt;</code><small>en Claude</small></li>
-<li><span>Revisar</span><code>$revisar</code><small>en Codex</small></li>
-<li><span>Ver cómo va</span><code>/estado</code><small>en cualquiera</small></li>
-<li><span>Cerrar el PR</span><code>/cerrar-memoria</code><small>si hay memoria</small></li>
-</ul>
-<p class="note">En Claude Code las skills empiezan con <code>/</code>. En Codex, con <code>$</code>. Los comandos de terminal se ejecutan desde la carpeta donde clonaste el repositorio.</p></section>
-<section id="requisitos"><h2>Antes de empezar <small>lo que debes tener instalado</small></h2>
-<div class="table-wrap req"><table><thead><tr><th>Herramienta</th><th>Para qué</th><th>Comprueba con</th></tr></thead><tbody><tr><th scope="row">Git</th><td>Clonar el repositorio</td><td><code>git --version</code></td></tr><tr><th scope="row">Node.js 24</th><td>Ejecuta todos los comandos (la versión debe empezar por v24)</td><td><code>node --version</code></td></tr><tr><th scope="row">Claude Code</th><td>Una de las dos terminales</td><td><code>claude --version</code></td></tr><tr><th scope="row">Codex CLI</th><td>La otra terminal</td><td><code>codex --version</code></td></tr></tbody></table></div>
-<h3>Opcionales</h3><div class="table-wrap req"><table><thead><tr><th>Herramienta</th><th>Para qué</th><th>Comprueba con</th></tr></thead><tbody><tr><th scope="row">Antigravity CLI (agy)</th><td>Solo para la skill gemini (investigar, analizar, imágenes)</td><td><code>agy --version</code></td></tr><tr><th scope="row">GitHub CLI (gh)</th><td>Solo para actualizar la memoria con project-memory sync</td><td><code>gh --version</code></td></tr></tbody></table></div>
-<p class="note">Necesitas la sesión iniciada en Claude Code y en Codex. Si solo usas uno de los dos, puedes instalar y probar lo demás, pero la revisión cruzada necesita los dos.</p></section>
-<section id="empezar"><h2>Instalar <small>una sola vez</small></h2><ol class="steps">
-<li><h3>Clona el repositorio donde quieras</h3><div class="cmd"><pre><code>git clone https://github.com/Jcabr3ra1/nexakit.git
-cd nexakit</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Clona el repositorio donde quieras">Copiar</button></div><p>Cualquier carpeta sirve. Todos los comandos siguientes se ejecutan desde ella. No la borres ni la muevas después: las skills y el servidor apuntan ahí (si la mueves, repite los pasos 4 y 5).</p></li>
-<li><h3>Instala las dependencias y comprueba</h3><div class="cmd"><pre><code>npm ci --ignore-scripts
-npm test</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Instala las dependencias y comprueba">Copiar</button></div><p><code>npm test</code> tarda alrededor de un minuto y debe terminar sin fallos. Es opcional, pero confirma que tu Node y tu copia están bien.</p></li>
-<li><h3>Revisa qué falta</h3><div class="cmd"><pre><code>node bin/agent-toolkit.js doctor --agent all</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Revisa qué falta">Copiar</button></div><p>Comprueba Node, dependencias, Claude Code, Codex, el servidor, las skills y el permiso de Codex. Al principio es normal que marque pendientes: los resuelven los pasos siguientes.</p></li>
-<li><h3>Enlaza las skills</h3><div class="cmd"><pre><code>node bin/agent-toolkit.js setup --agent all          # vista previa, no escribe
-node bin/agent-toolkit.js setup --agent all --apply  # crea los enlaces</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Enlaza las skills">Copiar</button></div><p>Enlaza las skills de esta carpeta en <code>~/.claude/skills</code> (Claude) y <code>~/.agents/skills</code> (Codex). Nunca reemplaza lo que ya existe: si hay un conflicto, lo indica y no toca nada.</p></li>
-<li><h3>Conecta el servidor en Claude Code y en Codex</h3><div class="cmd"><pre><code>claude mcp add --scope user --transport stdio agent-toolkit-workflow -- node &quot;$PWD/bin/agent-toolkit-mcp.js&quot;
-codex mcp add agent-toolkit-workflow -- node &quot;$PWD/bin/agent-toolkit-mcp.js&quot;</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Conecta el servidor en Claude Code y en Codex">Copiar</button></div><p>Es el servidor que guarda las revisiones entre las dos terminales. <code>setup</code> imprime estos mismos comandos con tu ruta. Si ya existe uno con ese nombre, no lo repitas.</p></li>
-<li><h3>Deja que Codex guarde su registro de revisor</h3><div class="cmd"><pre><code>grep -q &quot;^\[sandbox_workspace_write\]&quot; ~/.codex/config.toml 2&gt;/dev/null &amp;&amp; echo &quot;Ya tienes la sección: añade la ruta a writable_roots a mano&quot; || printf &quot;\n[sandbox_workspace_write]\nwritable_roots = [\&quot;%s/.agent-toolkit\&quot;]\n&quot; &quot;$HOME&quot; &gt;&gt; ~/.codex/config.toml</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Deja que Codex guarde su registro de revisor">Copiar</button></div><p>Codex ejecuta sus comandos en un sandbox que solo deja escribir en el proyecto, y <code>$revisar</code> guarda el id de su sesión en <code>~/.agent-toolkit</code>. <code>doctor</code> te dice si falta este permiso e imprime el comando con tus rutas.</p></li>
-<li><h3>Instala el plugin de niveles (solo Claude Code)</h3><div class="cmd"><pre><code>/plugin marketplace add Jcabr3ra1/nexakit
-/plugin install niveles@agent-toolkit</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Instala el plugin de niveles (solo Claude Code)">Copiar</button></div><p>Se escribe <em>dentro</em> de Claude Code, no en la terminal. Añade cuatro agentes con modelo y esfuerzo fijos para delegar trabajo sin cambiar <code>/model</code>.</p></li>
-<li><h3>Crea los agentes de nivel de Codex</h3><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js agentes            # vista previa, no escribe
-node bin/agent-toolkit-inbox.js agentes --escribir # crea los que falten</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Crea los agentes de nivel de Codex">Copiar</button></div><p>Nunca sobrescribe ni borra. Si ya existe uno distinto lo respeta; con <code>--escribir --forzar</code> lo aparta como <code>.anterior-…</code> antes de crear el nuevo.</p></li>
-<li><h3>Reinicia Claude Code y Codex y vuelve a revisar</h3><div class="cmd"><pre><code>node bin/agent-toolkit.js doctor --agent all</code></pre><button type="button" class="copy" data-copy aria-label="Copiar Reinicia Claude Code y Codex y vuelve a revisar">Copiar</button></div><p>Ambos cargan el servidor y las skills al arrancar. Ahora <code>doctor</code> no debe mostrar pendientes: termina con código 0.</p></li>
-</ol><div class="callout"><p>Para actualizar más adelante: <code>git pull --ff-only</code> y <code>npm ci --ignore-scripts</code> dentro del repositorio, y reinicia Claude Code y Codex.</p></div></section>
-<section id="diario"><h2>Primer uso <small>una terminal programa y la otra revisa</small></h2><ol class="flow">
-<li><span class="tag tu">Tú</span><div><p class="what">Abre dos terminales en la carpeta de tu proyecto.</p><p class="detail">Una con <code>claude</code> y otra con <code>codex</code>. Debe ser la <strong>misma ruta</strong> en las dos, y es el proyecto en el que vas a trabajar, no Agent Toolkit.</p></div></li>
-<li><span class="tag cx">Codex</span><div><p class="what">Escribe <code>$revisar</code>.</p><p class="detail">Registra su sesión y dice «Registrada; me avisarán». Termina su turno y no gasta tokens esperando. Si no encuentra su sesión, pide el id: en Codex, <code>/status</code>.</p></div></li>
-<li><span class="tag cl">Claude</span><div><p class="what">Escribe <code>/programar &lt;la tarea&gt;</code>.</p><p class="detail">Claude puntúa la tarea y elige un nivel (tabla de abajo).</p></div></li>
-<li><span class="tag tu">Tú</span><div><p class="what">Confirmas el nivel, solo si es Exigente o más.</p><p class="detail">Con Ligero o Normal, Claude sigue solo.</p></div></li>
-<li><span class="tag cl">Claude</span><div><p class="what">Programa, prueba y se revisa a sí mismo.</p><p class="detail">Delega el código al agente del nivel cuando hace falta.</p></div></li>
-<li><span class="tag tu">Tú</span><div><p class="what">Apruebas el encargo para Codex.</p><p class="detail">Claude te lo muestra con preguntas, archivos y criterio de aprobación. Nada se envía sin tu OK.</p></div></li>
-<li><span class="tag cx">Codex</span><div><p class="what">Revisa en solo lectura y entrega un informe.</p><p class="detail">Claude le avisa con <code>avisar</code> y Codex lo recibe en su misma sesión.</p></div></li>
-<li><span class="tag cl">Claude</span><div><p class="what">Verifica cada hallazgo y corrige lo que se sostenga.</p><p class="detail">Máximo dos rondas por cambio.</p></div></li>
-<li><span class="tag tu">Tú</span><div><p class="what">Pides el commit y el PR. Tú decides el merge.</p><p class="detail">Si el proyecto tiene memoria de Obsidian, <code>/cerrar-memoria</code> la pone al día.</p></div></li>
-</ol><p>Si Claude es el revisor, en su terminal escribe <code>/revisar</code>: espera en segundo plano sin gastar tokens y se activa cuando llega el encargo.</p>
-<h3>Qué nivel se elige</h3><div class="table-wrap"><table><thead><tr><th>Total</th><th>Nivel</th><th>Claude</th><th>Codex</th></tr></thead><tbody>
-<tr><td>0–2</td><th scope="row">Ligero</th><td><code>haiku · low</code></td><td><code>gpt-6-luna · low</code></td></tr>
-<tr><td>3–4</td><th scope="row">Normal</th><td><code>sonnet · medium</code></td><td><code>gpt-6.1-sol · medium</code></td></tr>
-<tr><td>5–6</td><th scope="row">Exigente</th><td><code>sonnet · high</code></td><td><code>gpt-6.1-sol · high</code></td></tr>
-<tr><td>7–10</td><th scope="row">Alto</th><td><code>opus · high</code></td><td><code>gpt-6-astra · high</code></td></tr>
-</tbody></table></div><p class="note">El total sale de cinco criterios: riesgo, tamaño, ambigüedad, contexto y tipo de trabajo. Riesgo alto (seguridad, datos, dinero, producción) fija un mínimo de Exigente. Se sube de nivel solo si la corrección falló. Los nombres de Codex salen de <code>modelos</code> y pueden cambiar.</p></section>
-<section id="terminal"><h2>Comandos de terminal <small>desde la carpeta del repositorio</small></h2>
-<h3>Instalación <small><code>agent-toolkit</code></small></h3>
-<ul class="cmds">
-<li><div class="cmd"><pre><code>node bin/agent-toolkit.js doctor --agent all</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit.js doctor --agent all" aria-label="Copiar comando">Copiar</button></div><p>Qué falta o qué está mal en la instalación. No cambia nada.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit.js setup --agent all [--apply]</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit.js setup --agent all [--apply]" aria-label="Copiar comando">Copiar</button></div><p>Enlaza las skills. Sin <code>--apply</code> es vista previa; nunca reemplaza nada.</p></li>
-</ul>
-<h3>Revisiones, modelos y consumo <small><code>agent-toolkit-inbox</code></small></h3>
-<ul class="cmds">
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js modelos</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js modelos" aria-label="Copiar comando">Copiar</button></div><p>Qué modelos hay y la tabla de niveles vigente.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js rendimiento</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js rendimiento" aria-label="Copiar comando">Copiar</button></div><p>Qué modelo y nivel rinden mejor (hallazgos que se sostienen).</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js consumo --project-root /ruta</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js consumo --project-root /ruta" aria-label="Copiar comando">Copiar</button></div><p>Tokens, caché y tiempo de las llamadas registradas.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js agentes [--escribir [--forzar]]</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js agentes [--escribir [--forzar]]" aria-label="Copiar comando">Copiar</button></div><p>Crea los agentes de nivel de Codex. Sin <code>--escribir</code> es vista previa.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js registrar --agent codex --project-root /ruta</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js registrar --agent codex --project-root /ruta" aria-label="Copiar comando">Copiar</button></div><p>Guarda la sesión de Codex como revisora. Lo ejecuta <code>$revisar</code>; añade <code>--thread &lt;id&gt;</code> si no la encuentra.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js avisar --project-root /ruta --task &lt;id&gt; --review &lt;id&gt;</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js avisar --project-root /ruta --task &lt;id&gt; --review &lt;id&gt;" aria-label="Copiar comando">Copiar</button></div><p>Avisa a Codex de un encargo ya aprobado. Lo ejecuta la skill, no tú.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-inbox.js cierre --project-root /ruta --task &lt;id&gt; --salida /ruta/traspaso.md</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-inbox.js cierre --project-root /ruta --task &lt;id&gt; --salida /ruta/traspaso.md" aria-label="Copiar comando">Copiar</button></div><p>Cierra una colaboración y deja un borrador de traspaso. Exige que no haya encargos activos.</p></li>
-</ul>
-<h3>Gemini (opcional, requiere agy) <small><code>agent-toolkit-gemini</code></small></h3>
-<ul class="cmds">
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js estado</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js estado" aria-label="Copiar comando">Copiar</button></div><p>Versión de <code>agy</code> y modelos disponibles.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js consultar --prompt "tu pregunta"</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js consultar --prompt &quot;tu pregunta&quot;" aria-label="Copiar comando">Copiar</button></div><p>Una explicación o respuesta directa.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js investigar --prompt "tu pregunta"</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js investigar --prompt &quot;tu pregunta&quot;" aria-label="Copiar comando">Copiar</button></div><p>Búsqueda web con resumen y fuentes.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js analizar --prompt "qué quieres saber" --archivo /ruta/informe.pdf</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js analizar --prompt &quot;qué quieres saber&quot; --archivo /ruta/informe.pdf" aria-label="Copiar comando">Copiar</button></div><p>Lee texto, imágenes, PDF o vídeo (sin audio). Hasta 8 archivos.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js imagen --prompt "descripción"</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js imagen --prompt &quot;descripción&quot;" aria-label="Copiar comando">Copiar</button></div><p>Genera una imagen. Sin vídeo ni audio.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-toolkit-gemini.js historial</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-toolkit-gemini.js historial" aria-label="Copiar comando">Copiar</button></div><p>Consultas anteriores. <code>recuperar --directorio &lt;ruta&gt;</code> trae un resultado sin volver a llamar al modelo.</p></li>
-</ul>
-<h3>Memoria de proyecto (opcional) <small><code>project-memory</code></small></h3>
-<ul class="cmds">
-<li><div class="cmd"><pre><code>node bin/project-memory.js init &lt;carpeta-nueva&gt; --source &lt;repositorio-del-proyecto&gt; --project-id mi-proyecto --project-name "Mi proyecto"</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js init &lt;carpeta-nueva&gt; --source &lt;repositorio-del-proyecto&gt; --project-id mi-proyecto --project-name &quot;Mi proyecto&quot;" aria-label="Copiar comando">Copiar</button></div><p>Vista previa de una memoria nueva en Obsidian para ese proyecto. <code>--source</code> es obligatorio. Con <code>--apply</code> la crea.</p></li>
-<li><div class="cmd"><pre><code>node bin/project-memory.js connect &lt;bóveda&gt; --agent claude</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js connect &lt;bóveda&gt; --agent claude" aria-label="Copiar comando">Copiar</button></div><p>Prepara la conexión de la memoria con Claude (o <code>--agent codex</code>). Con <code>--apply</code> la aplica.</p></li>
-<li><div class="cmd"><pre><code>node bin/project-memory.js doctor &lt;bóveda&gt;</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js doctor &lt;bóveda&gt;" aria-label="Copiar comando">Copiar</button></div><p>Diagnóstico de la bóveda.</p></li>
-<li><div class="cmd"><pre><code>node bin/project-memory.js sync plan &lt;bóveda&gt;</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js sync plan &lt;bóveda&gt;" aria-label="Copiar comando">Copiar</button></div><p>Qué PR fusionados faltan por registrar en la memoria.</p></li>
-<li><div class="cmd"><pre><code>node bin/project-memory.js sync inspect &lt;bóveda&gt; --pr 42</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js sync inspect &lt;bóveda&gt; --pr 42" aria-label="Copiar comando">Copiar</button></div><p>Evidencia de un PR concreto, solo lectura.</p></li>
-<li><div class="cmd"><pre><code>node bin/project-memory.js sync record &lt;bóveda&gt; --pr 42 --outcome documentation-updated --reviewed --summary "Producto actualizado" --note "01-PRODUCTO/Producto.md" --apply</code></pre><button type="button" class="copy" data-copy data-text="node bin/project-memory.js sync record &lt;bóveda&gt; --pr 42 --outcome documentation-updated --reviewed --summary &quot;Producto actualizado&quot; --note &quot;01-PRODUCTO/Producto.md&quot; --apply" aria-label="Copiar comando">Copiar</button></div><p>Registra un PR cuyas notas ya actualizaste: <code>--note</code> es obligatorio (repetible) con <code>documentation-updated</code>. Si no cambió nada, usa <code>--outcome no-documentation-change</code> sin resumen ni notas. Escribe solo con <code>--apply</code> y nunca hace commit ni push.</p></li>
-</ul>
-<p class="note"><code>&lt;bóveda&gt;</code> es la carpeta de memoria de un proyecto, la que contiene <code>project-memory.json</code>. Solo <code>--apply</code> escribe, y nada hace commit ni push.</p></section>
-<section id="skills"><h2>Skills <small>se escriben con / en Claude y con $ en Codex</small></h2><div class="table-wrap"><table><thead><tr><th>Skill</th><th>Para qué</th></tr></thead><tbody>
-<tr><th scope="row"><code>programar &lt;tarea&gt;</code></th><td>Esta terminal programa y pide revisión a la otra.</td></tr>
-<tr><th scope="row"><code>revisar</code></th><td>Esta terminal es la revisora.</td></tr>
-<tr><th scope="row"><code>estado</code></th><td>Tabla de las revisiones abiertas, el encargo pendiente y el último veredicto. Solo lectura.</td></tr>
-<tr><th scope="row"><code>gemini &lt;lo que necesitas&gt;</code></th><td>Usa Gemini para explicar, investigar, analizar archivos o generar una imagen. <code>investigar</code> e <code>imagen</code> son atajos. Requiere <code>agy</code>.</td></tr>
-<tr><th scope="row"><code>cerrar-memoria</code></th><td>Tras fusionar un PR, pone al día la memoria de Obsidian del proyecto. Solo si el proyecto tiene <code>project-memory.json</code>.</td></tr>
-<tr><th scope="row"><code>revision-cruzada</code></th><td>Reúne todas las reglas de <code>programar</code> y <code>revisar</code>. Casi nunca la escribes tú.</td></tr>
-<tr><th scope="row"><code>differential-review, frontend-design, mcp-builder, web-design-guidelines, ordenar-proyecto</code></th><td>Skills recomendadas que también instala <code>setup</code>: revisión de seguridad de un cambio, diseño de interfaces, crear servidores MCP, pautas web y ordenar archivos.</td></tr>
-</tbody></table></div><p class="note">La memoria de Obsidian no se actualiza sola: se hace con <code>/cerrar-memoria</code> después de fusionar un PR.</p></section>
-<section id="fallos"><h2>Si algo falla</h2><div class="table-wrap"><table><thead><tr><th>Síntoma</th><th>Qué hacer</th></tr></thead><tbody>
-<tr><td>Cambié algo y no se nota</td><td>Reinicia Claude Code y Codex.</td></tr>
-<tr><td>No sé qué falta</td><td><code>node bin/agent-toolkit.js doctor --agent all</code> lo dice, con el comando para arreglarlo.</td></tr>
-<tr><td><code>node --version</code> no empieza por v24</td><td>Instala Node.js 24 (por ejemplo con nvm o Homebrew) y repite <code>npm ci --ignore-scripts</code>.</td></tr>
-<tr><td><code>setup</code> indica un conflicto</td><td>Ya tienes una skill con ese nombre. No la reemplaza: revisa la ruta que muestra y decide cuál conservas.</td></tr>
-<tr><td>Abro Codex con <code>--profile &lt;nombre&gt;</code></td><td>Revisa con <code>doctor --agent codex --perfil-codex &lt;nombre&gt;</code>: así evalúa el permiso de ese perfil.</td></tr>
-<tr><td>Moví o volví a clonar la carpeta</td><td>Repite <code>setup --apply</code> y el registro del servidor desde la nueva carpeta.</td></tr>
-<tr><td><code>$revisar</code> dice «No se pudo escribir en el registro de Agent Toolkit»</td><td>Es el sandbox de Codex. Haz el paso «Deja que Codex guarde su registro de revisor».</td></tr>
-<tr><td><code>avisar</code> dice que Codex no se registró</td><td>En Codex escribe <code>$revisar</code>.</td></tr>
-<tr><td><code>registrar</code> no encuentra la sesión</td><td>En Codex, <code>/status</code> da el id. Luego <code>registrar … --thread &lt;id&gt;</code>.</td></tr>
-<tr><td>Codex tarda en reaccionar al aviso</td><td>Si está en mitad de un turno, el aviso espera a que termine.</td></tr>
-<tr><td>Codex no reclama el encargo</td><td>Su modelo no coincide con el recomendado. Cámbialo con <code>/model</code>.</td></tr>
-<tr><td><code>agentes</code> dice «ya existe y es distinto»</td><td>Es lo esperado. Usa <code>--escribir --forzar</code> si quieres reemplazarlo; queda una copia.</td></tr>
-<tr><td><code>sync record</code> dice BLOCKED</td><td>Al repositorio le faltan CI o carpetas de área. Añade la fila a mano en el registro de la bóveda.</td></tr>
-<tr><td>Gemini no responde o falta una imagen</td><td><code>agent-toolkit-gemini estado</code> comprueba <code>agy</code>; una imagen tardía se trae con <code>historial</code> y <code>recuperar</code>.</td></tr>
-</tbody></table></div></section>
-<section id="extra"><h2>Más información</h2><h3>Dónde queda cada cosa</h3><div class="table-wrap"><table><tbody>
-<tr><th scope="row">Colaboraciones y revisiones</th><td><code>~/.agent-toolkit/workflows/peers/</code></td></tr>
-<tr><th scope="row">Sesión de Codex registrada</th><td><code>~/.agent-toolkit/workflows/reviewers/</code></td></tr>
-<tr><th scope="row">Resultados de Gemini</th><td><code>~/.agent-toolkit/gemini/</code></td></tr>
-<tr><th scope="row">Skills</th><td><code>~/.claude/skills/ (Claude) y ~/.agents/skills/ (Codex), como enlaces al repositorio</code></td></tr>
-<tr><th scope="row">Agentes de Codex</th><td><code>~/.codex/agents/</code></td></tr>
-<tr><th scope="row">Memoria de un proyecto</th><td>La carpeta que elijas en <code>project-memory init</code> (la que contiene <code>project-memory.json</code>)</td></tr>
-</tbody></table></div><h3>Límites que conviene recordar</h3><ul class="limits"><li>El esfuerzo de un agente lo fija su archivo, pero una variable como <code>CLAUDE_CODE_EFFORT_LEVEL</code> puede imponerse. El modelo sí se comprobó.</li><li>El aviso directo a Codex se probó contra una sesión inactiva, no con un encargo real de principio a fin.</li><li>Los agentes de solo lectura de Codex lo son por instrucción, no por sandbox.</li><li>Gemini no participa en la revisión cruzada y no genera vídeo ni audio; el audio no se analiza.</li><li>Probado en macOS con Node 24, clonando en carpetas distintas. No se ha comprobado en Linux ni en Windows.</li><li>Todavía no hay una medición controlada que demuestre ahorro de tokens.</li><li>Nada se fusiona, se sube ni se despliega sin tu autorización.</li></ul>
-<details><summary>Herramientas internas del servidor (solo para depurar)</summary><div class="table-wrap"><table><tbody>
-<tr><th scope="row">Revisión cruzada</th><td><code class="wrap">start_collaboration, get_collaboration, publish_peer_context, preview_peer_review, approve_peer_review, request_peer_review, wait_for_peer_handoff, claim_peer_review, submit_peer_review, record_review_outcome, cancel_peer_review, close_collaboration</code></td></tr>
-<tr><th scope="row">Tareas por etapas</th><td><code class="wrap">start_task, get_task, preview_codex_plan, run_codex_plan, preview_claude_proposal, run_claude_proposal, preview_claude_implementation, run_claude_implementation, preview_codex_review, run_codex_review, wait_for_task_activity, cancel_task_execution</code></td></tr>
-</tbody></table></div><p class="note"><code>approve_peer_review</code> es la que te pide permiso: no la pongas en la lista de permitidas ni en modo automático.</p></details>
-<details><summary>Avanzado: agent-task (borradores y verificación manual)</summary><ul class="cmds">
-<li><div class="cmd"><pre><code>node bin/agent-task.js prepare --task t.json --request r.json --catalog c.json --policy p.json</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-task.js prepare --task t.json --request r.json --catalog c.json --policy p.json" aria-label="Copiar comando">Copiar</button></div><p>Prepara un borrador. No usa IA ni consulta cuentas. Hay ejemplos en <code>examples/</code>.</p></li>
-<li><div class="cmd"><pre><code>node bin/agent-task.js verify --contract c.json --expect &lt;sha256&gt; --source &lt;raíz&gt; --handoff &lt;raíz&gt; --phase before</code></pre><button type="button" class="copy" data-copy data-text="node bin/agent-task.js verify --contract c.json --expect &lt;sha256&gt; --source &lt;raíz&gt; --handoff &lt;raíz&gt; --phase before" aria-label="Copiar comando">Copiar</button></div><p>Compara las huellas de los archivos listados.</p></li>
-</ul></details></section></main>
-<footer><p>Agent Toolkit · guía para empezar desde cero. Repositorio: <code>github.com/Jcabr3ra1/nexakit</code></p></footer>
+<div class="layout">
+  <aside aria-label="Navegación de la guía">
+    <nav aria-label="Tu recorrido">
+      <p class="nav-caption">Tu recorrido</p>
+      <ol class="route">
+        <li><a href="#instalar"><span class="nav-num">1</span>Iniciar con npx</a></li>
+        <li><a href="#skills"><span class="nav-num">2</span>Elegir tus skills</a></li>
+        <li><a href="#memoria"><span class="nav-num">3</span>Crear la memoria</a></li>
+        <li><a href="#obsidian"><span class="nav-num">4</span>Abrir en Obsidian</a></li>
+        <li><a href="#conectar"><span class="nav-num">5</span>Conectar tus agentes</a></li>
+        <li><a href="#trabajar"><span class="nav-num">6</span>Empezar a trabajar</a></li>
+      </ol>
+      <div class="sidebar-tools"><a href="#comandos">⌘ &nbsp; Biblioteca de comandos</a><a href="#fallos">? &nbsp; Resolver un problema</a><a href="https://github.com/Jcabr3ra1/nexakit/blob/main/docs/README.md">Documentación completa ↗</a></div>
+    </nav>
+    <div class="progress-box"><div class="progress-label"><span>Tu avance</span><span id="progress-count">0 de 6</span></div><progress id="progress" value="0" max="6" aria-label="Pasos marcados como completados"></progress><button class="reset" id="reset" type="button">Reiniciar marcas</button></div>
+  </aside>
+  <main id="contenido">
+    <section class="hero" id="inicio" aria-labelledby="titulo">
+      <p class="hero-label">De cero a tu primer proyecto</p>
+      <h1 id="titulo">Un lugar para tus skills.<br>Memoria para lo que sigue.</h1>
+      <p class="lead">Prepara NexaKit, abre el contexto de tu proyecto en Obsidian y llévalo a Claude Code o Codex. Un paso a la vez, con el comando que necesitas.</p>
+      <div class="hero-actions"><a class="button primary" href="#instalar">Empezar la guía <span aria-hidden="true">↓</span></a><a class="button" href="#comandos">Consultar comandos</a></div>
+      <div class="map" aria-label="NexaKit prepara skills para tus agentes; Obsidian muestra la memoria del proyecto">
+        <div><strong>Tu proyecto</strong><span>Código y tecnologías</span></div><span class="connector" aria-hidden="true">→</span><div><strong>NexaKit + Obsidian</strong><span>Skills y contexto</span></div><span class="connector" aria-hidden="true">→</span><div><strong>Claude / Codex</strong><span>Trabajar con contexto</span></div>
+      </div>
+      <p class="footnote" style="margin:16px 0 0">Con los pasos 1 y 2 ya puedes usar las skills. La memoria es opcional; continúa desde el 3 para añadirla.</p>
+    </section>
+
+    <section class="section" id="instalar" aria-labelledby="h-instalar">
+      <div class="section-head"><span class="step-number" aria-hidden="true">01</span><div><span class="step-meta">Desde tu proyecto · Terminal</span><h2 id="h-instalar">Abre NexaKit con npx</h2></div></div>
+      <p class="section-intro">Entra en la carpeta de tu proyecto y ejecuta NexaKit directamente. npx obtiene el paquete de npm y abre el asistente sin una instalación global.</p>
+      <ul class="requirements" aria-label="Requisitos"><li>Node.js 24 o superior</li><li>npm con npx</li><li>Git, para la memoria</li><li>Claude Code o Codex CLI</li><li>Obsidian, para el paso 4</li></ul>
+      <h3>Comprueba las herramientas</h3>
+      <div class="command"><div class="command-top"><span class="command-label">Terminal · cualquier carpeta</span><button class="copy" type="button">Copiar</button></div><pre><code>node --version
+npm --version
+git --version</code></pre></div>
+      <p class="muted">Comprueba también <code>claude --version</code> o <code>codex --version</code>, según el cliente que utilices, e inicia sesión en él.</p>
+      <h3>Abre el asistente en tu proyecto</h3>
+      <div class="command"><div class="command-top"><span class="command-label">Terminal · sustituye la ruta por tu proyecto</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="start">cd '/ruta/a/mi-proyecto'
+npx nexakit</code></pre></div>
+      <p class="muted">Si npm pide descargar el paquete, confirma para continuar. Necesitas conexión para la primera descarga y una terminal interactiva. Puedes adaptar las rutas en el paso 2.</p>
+      <div class="callout"><p><strong>Paquete público:</strong> <a href="https://www.npmjs.com/package/nexakit">nexakit en npm</a>. Abre el asistente desde la carpeta de tu aplicación. Revisa las skills y los cambios previstos antes de confirmar la instalación.</p></div>
+      <details><summary>¿Cómo ejecuto memoria y las demás herramientas con npx?</summary><div class="details-body"><p>El paquete tiene varios ejecutables. Para el asistente usa <code>npx nexakit</code>. Para otro ejecutable, indica el paquete explícitamente:</p><div class="command"><div class="command-top"><span class="command-label">Terminal · ayuda de memoria con npx</span><button class="copy" type="button">Copiar</button></div><pre><code>npx --package=nexakit project-memory --help</code></pre></div><p>npx conserva el paquete descargado en su caché. Los enlaces simbólicos y las recetas MCP que apuntan a esa ubicación dependen de que la caché siga disponible. Para las skills del proyecto puedes elegir <strong>copia</strong> en la revisión final. Si limpias la caché, vuelve a revisar la instalación y sus conexiones. <a href="https://docs.npmjs.com/cli/v11/commands/npm-exec/">Referencia de npm exec y npx</a>.</p></div></details>
+      <div class="completion"><label class="check"><input type="checkbox" data-complete="instalar">Ya abrí el asistente con npx</label><a class="next" href="#skills">Elegir skills ↓</a></div>
+    </section>
+
+    <section class="section" id="skills" aria-labelledby="h-skills">
+      <div class="section-head"><span class="step-number" aria-hidden="true">02</span><div><span class="step-meta">En cada proyecto · Terminal</span><h2 id="h-skills">Elige lo que necesita tu proyecto</h2></div></div>
+      <p class="section-intro">Abre el asistente sobre el repositorio en el que vas a trabajar. NexaKit detectará su stack y te explicará por qué encaja cada skill.</p>
+      <form class="settings" id="settings">
+        <h3>Adapta los comandos a tu proyecto</h3><p>Las rutas iniciales son ejemplos. Sustitúyelas por rutas absolutas de tu equipo; se actualizarán los comandos de esta guía.</p>
+        <div class="fields">
+          <label class="field wide">Repositorio de tu proyecto<input type="text" name="project" value="/ruta/a/mi-proyecto" required spellcheck="false" autocomplete="off"></label>
+          <label class="field wide">Carpeta nueva para su memoria<input type="text" name="memory" value="/ruta/a/mi-proyecto-memory" required spellcheck="false" autocomplete="off"></label>
+          <label class="field">Identificador del proyecto<input type="text" name="id" value="mi-proyecto" required pattern="[a-z0-9]+(-[a-z0-9]+)*" title="Usa minúsculas, números y guiones: mi-proyecto" spellcheck="false" autocomplete="off"></label>
+          <label class="field">Sintaxis de tu terminal<select name="shell"><option value="posix">Bash / zsh</option><option value="powershell">PowerShell</option></select></label>
+        </div>
+        <div class="form-bottom"><button type="submit" class="button">Actualizar comandos</button><small id="settings-state" role="status">Usando rutas de ejemplo</small></div>
+      </form>
+      <div class="choice-row"><p>¿Qué agente vas a preparar?</p><div class="segmented" role="group" aria-label="Agentes de los comandos"><button type="button" data-agent="all" aria-pressed="true">Ambos</button><button type="button" data-agent="claude" aria-pressed="false">Claude</button><button type="button" data-agent="codex" aria-pressed="false">Codex</button></div></div>
+      <p class="footnote">Esta elección adapta los ejemplos de la guía. Revisa también el agente destino en la pantalla final del asistente.</p>
+      <div class="command"><div class="command-top"><span class="command-label">Terminal · abrir el asistente</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="tui">npx nexakit --project '/ruta/a/mi-proyecto' --agent all</code></pre></div>
+      <ol class="tui-steps">
+        <li><div><strong>Skills para tu proyecto</strong><p>Lee el motivo, la utilidad prevista y los solapamientos. Marca las que te ayuden con tu tarea.</p></div></li>
+        <li><div><strong>Skills opcionales</strong><p>Añade otras solo si las necesitas. Puedes continuar sin seleccionar ninguna.</p></div></li>
+        <li><div><strong>Revisar e instalar</strong><p>Comprueba agentes, enlaces o copias, reglas de Git y archivos previstos. Pulsa <kbd>e</kbd> para editar la configuración y confirma cuando esté correcta.</p></div></li>
+      </ol>
+      <div class="keys"><span><kbd>↑</kbd> <kbd>↓</kbd> Moverte</span><span><kbd>Espacio</kbd> Marcar</span><span><kbd>Enter</kbd> Continuar</span><span><kbd>a</kbd> Todas / ninguna</span><span><kbd>q</kbd> Salir</span></div>
+      <div class="callout"><p><strong>Compatible y recomendada significan cosas distintas.</strong> Una compatible coincide con tu stack. Una recomendada exige además escenarios funcionales pasados para cada agente destino. El catálogo actual tiene 10 skills locales con hashes comprobados y aún no tiene esos escenarios validados.</p></div>
+      <p class="success">Al terminar, verás el resumen de instalación. Reinicia el agente para que cargue las skills nuevas.</p>
+      <details><summary>Solo quiero consultar sugerencias, sin instalar</summary><div class="details-body"><div class="command"><div class="command-top"><span class="command-label">Terminal · solo lectura</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="recommend">npx nexakit recommend --project '/ruta/a/mi-proyecto'</code></pre></div><p>Puedes concretar el perfil con <code>--profile frontend</code>, <code>backend</code>, <code>mcp</code> o <code>security</code>. NexaKit consulta el catálogo incluido; actualmente no descarga skills de un registro remoto.</p></div></details>
+      <div class="completion"><label class="check"><input type="checkbox" data-complete="skills">Ya revisé e instalé mis skills</label><a class="next" href="#memoria">Crear memoria ↓</a></div>
+    </section>
+
+    <section class="section" id="memoria" aria-labelledby="h-memoria">
+      <div class="section-head"><span class="step-number" aria-hidden="true">03</span><div><span class="step-meta">Opcional · Una memoria por proyecto</span><h2 id="h-memoria">Dale un lugar al contexto</h2></div></div>
+      <p class="section-intro">La memoria guarda decisiones, arquitectura y entregas en notas Markdown. Crea una carpeta separada del código; después la abrirás en Obsidian.</p>
+      <h3>Primero, revisa el plan</h3>
+      <div class="command"><div class="command-top"><span class="command-label">Terminal · vista previa, sin escribir</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="init">npx --package=nexakit project-memory init '/ruta/a/mi-proyecto-memory' --source '/ruta/a/mi-proyecto' --project-id mi-proyecto --project-name 'Mi proyecto'</code></pre></div>
+      <h3>Después, crea la memoria</h3>
+      <div class="command"><div class="command-top"><span class="command-label">Terminal · crea archivos en la carpeta de memoria</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="init-apply">npx --package=nexakit project-memory init '/ruta/a/mi-proyecto-memory' --source '/ruta/a/mi-proyecto' --project-id mi-proyecto --project-name 'Mi proyecto' --apply</code></pre></div>
+      <p class="muted">El proyecto fuente debe ser un repositorio Git existente. La carpeta de memoria debe estar fuera de él; tampoco puede contenerlo. Si ya tienes una memoria, ve a su diagnóstico sin volver a crearla.</p>
+      <h3>Comprueba que la estructura esté bien</h3>
+      <div class="command"><div class="command-top"><span class="command-label">Terminal · diagnóstico de la memoria</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="memory-doctor">npx --package=nexakit project-memory doctor '/ruta/a/mi-proyecto-memory' --strict</code></pre></div>
+      <p class="success">Resuelve los errores o advertencias del diagnóstico antes de conectar el agente.</p>
+      <div class="callout"><p><strong>Qué acabas de crear:</strong> notas de partida, <code>project-memory.json</code> y una skill específica del proyecto. La creación no configura Git, sincronización ni MCP; las notas necesitan tu contexto real.</p></div>
+      <div class="completion"><label class="check"><input type="checkbox" data-complete="memoria">La memoria está creada y comprobada</label><a class="next" href="#obsidian">Abrir Obsidian ↓</a></div>
+    </section>
+
+    <section class="section" id="obsidian" aria-labelledby="h-obsidian">
+      <div class="section-head"><span class="step-number" aria-hidden="true">04</span><div><span class="step-meta">En Obsidian · Sin plugin adicional</span><h2 id="h-obsidian">Abre tu memoria como bóveda</h2></div></div>
+      <p class="section-intro">Obsidian es la forma visual de recorrer y editar estas notas. La carpeta que creó NexaKit ya es tu bóveda.</p>
+      <ol class="instructions">
+        <li>Abre Obsidian y entra en el <strong>gestor de bóvedas</strong>. Desde una bóveda abierta, usa el menú de la bóveda o “Abrir otra bóveda”.</li>
+        <li>Selecciona <strong>“Abrir carpeta como bóveda”</strong> (Open folder as vault).</li>
+        <li>Elige <code data-value="memory">/ruta/a/mi-proyecto-memory</code>, la carpeta que contiene <code>project-memory.json</code> y <code>00-INICIO</code>.</li>
+        <li>Abre <strong>00-INICIO / Inicio del proyecto.md</strong>. Completa el propósito y revisa <strong>Estado actual</strong> y <strong>Mapa de la memoria</strong>.</li>
+      </ol>
+      <pre class="tree"><span class="root" data-value="memory">/ruta/a/mi-proyecto-memory</span>
+├── project-memory.json
+├── <span class="note">00-INICIO/Inicio del proyecto.md</span>
+├── 01-PRODUCTO/
+├── 02-ARQUITECTURA/
+├── 03-IMPLEMENTACION/
+├── 04-DECISIONES/
+├── 05-ENTREGAS/
+└── …</pre>
+      <p class="muted">Abre la carpeta de memoria completa. <code>vault/</code> es el nombre dentro de la plantilla del repositorio; el comando <code>init</code> coloca sus notas directamente en tu carpeta de destino.</p>
+      <p class="footnote">Referencia: <a href="https://help.obsidian.md/manage-vaults">abrir una carpeta existente en Obsidian</a>. La conexión del agente se hace en el siguiente paso.</p>
+      <div class="completion"><label class="check"><input type="checkbox" data-complete="obsidian">Ya veo mis notas en Obsidian</label><a class="next" href="#conectar">Conectar agente ↓</a></div>
+    </section>
+
+    <section class="section" id="conectar" aria-labelledby="h-conectar">
+      <div class="section-head"><span class="step-number" aria-hidden="true">05</span><div><span class="step-meta">Terminal · Conexión de memoria</span><h2 id="h-conectar">Lleva el contexto a tu agente</h2></div></div>
+      <p class="section-intro">Conecta la memoria con el cliente que elegiste en el paso 2. NexaKit enlaza su skill y registra un MCP limitado a la lectura de esa bóveda.</p>
+      <h3>Revisa la conexión prevista</h3>
+      <div data-client="claude"><div class="command"><div class="command-top"><span class="command-label">Terminal · memoria para Claude Code</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="connect-claude">npx --package=nexakit project-memory connect '/ruta/a/mi-proyecto-memory' --agent claude</code></pre></div></div>
+      <div data-client="codex"><div class="command"><div class="command-top"><span class="command-label">Terminal · memoria para Codex</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="connect-codex">npx --package=nexakit project-memory connect '/ruta/a/mi-proyecto-memory' --agent codex</code></pre></div></div>
+      <h3>Aplica la conexión</h3>
+      <p class="muted">Este paso cambia la configuración personal del agente. Si aparece un conflicto con una conexión o skill existente, revisa las rutas que muestra antes de continuar.</p>
+      <div data-client="claude"><div class="command"><div class="command-top"><span class="command-label">Terminal · aplicar en Claude Code</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="connect-claude-apply">npx --package=nexakit project-memory connect '/ruta/a/mi-proyecto-memory' --agent claude --apply</code></pre></div></div>
+      <div data-client="codex"><div class="command"><div class="command-top"><span class="command-label">Terminal · aplicar en Codex</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="connect-codex-apply">npx --package=nexakit project-memory connect '/ruta/a/mi-proyecto-memory' --agent codex --apply</code></pre></div></div>
+      <h3>Reinicia y comprueba una lectura real</h3>
+      <div class="command"><div class="command-top"><span class="command-label">Terminal · estado de las conexiones</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="memory-status">npx --package=nexakit project-memory status '/ruta/a/mi-proyecto-memory'</code></pre></div>
+      <p class="muted">Cierra y abre una sesión nueva de tu agente. Dentro del chat, pídele:</p>
+      <div class="command"><div class="command-top"><span class="command-label">Chat de Claude o Codex · petición de prueba</span><button class="copy" type="button">Copiar</button></div><pre><code>Lee mediante el MCP de memoria la nota 00-INICIO/Inicio del proyecto.md.
+Resume su propósito e indica qué nota consultaste.</code></pre></div>
+      <p class="success">Comprueba que el agente realmente leyó la nota mediante MCP y que la respuesta coincide con su contenido.</p>
+      <div class="callout"><p><strong>Obsidian edita; el MCP consulta.</strong> Abrir Obsidian no conecta al agente. La conexión tampoco mantiene las notas actualizadas automáticamente: el código sigue siendo la fuente principal de verdad.</p></div>
+      <div class="completion"><label class="check"><input type="checkbox" data-complete="conectar">Mi agente ya leyó una nota de la memoria</label><a class="next" href="#trabajar">Empezar a trabajar ↓</a></div>
+    </section>
+
+    <section class="section" id="trabajar" aria-labelledby="h-trabajar">
+      <div class="section-head"><span class="step-number" aria-hidden="true">06</span><div><span class="step-meta">Uso diario · Chat del agente</span><h2 id="h-trabajar">Empieza con una tarea concreta</h2></div></div>
+      <p class="section-intro">Abre el agente en tu repositorio de código y describe el resultado que buscas. Puedes usarlo por separado o añadir revisión cruzada.</p>
+      <div class="two-col">
+        <div data-client="claude"><h3>En Claude Code</h3><div class="command"><div class="command-top"><span class="command-label">Terminal · abrir tu proyecto</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="open-claude">cd '/ruta/a/mi-proyecto'
+claude</code></pre></div></div>
+        <div data-client="codex"><h3>En Codex</h3><div class="command"><div class="command-top"><span class="command-label">Terminal · abrir tu proyecto</span><button class="copy" type="button">Copiar</button></div><pre><code data-command="open-codex">cd '/ruta/a/mi-proyecto'
+codex</code></pre></div></div>
+      </div>
+      <div class="command"><div class="command-top"><span class="command-label">Chat del agente · ejemplo de tarea</span><button class="copy" type="button">Copiar</button></div><pre><code>Consulta la memoria del proyecto y revisa el formulario de inicio de sesión.
+Quiero mejorar su diseño sin cambiar su comportamiento.
+Explica qué archivos necesitas modificar antes de empezar.</code></pre></div>
+      <details><summary>Añadir revisión cruzada entre Claude y Codex</summary><div class="details-body">
+        <p>Necesitas ambos clientes. El MCP de coordinación <code>agent-toolkit-workflow</code> es distinto al MCP de memoria.</p>
+        <div class="command"><div class="command-top"><span class="command-label">Terminal · skills base, primero vista previa</span><button class="copy" type="button">Copiar</button></div><pre><code>npx nexakit setup --agent all</code></pre></div>
+        <div class="command"><div class="command-top"><span class="command-label">Terminal · aplicar los enlaces que falten</span><button class="copy" type="button">Copiar</button></div><pre><code>npx nexakit setup --agent all --apply</code></pre></div>
+        <p><strong>Ejecuta los comandos de registro MCP que imprime setup</strong>, uno para cada cliente que falte. Incluyen la ruta del paquete usado por npx. Esa ruta debe seguir existiendo; si se elimina la caché, revisa el registro y vuelve a configurar la conexión. Reinicia ambos clientes.</p>
+        <div class="command"><div class="command-top"><span class="command-label">Terminal · comprobar instalación y permisos</span><button class="copy" type="button">Copiar</button></div><pre><code>npx nexakit doctor --agent all</code></pre></div>
+        <p>Atiende los pendientes que indique <code>doctor</code>. Para Codex, revisa el acceso de su sandbox a <code>~/.agent-toolkit</code> y usa la receta que imprime para tu configuración.</p>
+        <ol class="instructions"><li>Abre ambos agentes en la <strong>misma carpeta del proyecto</strong>.</li><li>En el chat de Codex, escribe <code>$revisar</code> para registrar esa sesión como revisora.</li><li>En el chat de Claude, escribe <code>/programar mejora el diseño del formulario de inicio de sesión</code>.</li><li>Revisa el encargo que prepare el agente y sigue el flujo de aprobación y revisión. Consulta el estado con <code>/estado</code> en Claude o <code>$estado</code> en Codex.</li></ol>
+        <p>También puedes intercambiar los roles. <a href="https://github.com/Jcabr3ra1/nexakit/blob/main/docs/agentes/coordinacion/peer-review-workflow.md">Ver el flujo de revisión cruzada</a>.</p>
+      </div></details>
+      <details><summary>Modelos y esfuerzo: qué se cambia y qué se sugiere</summary><div class="details-body">
+        <p>La sesión principal recomienda el nivel; no cambia automáticamente el modelo del chat abierto. Los subagentes de nivel usan el modelo y esfuerzo configurados al delegar.</p>
+        <div class="command"><div class="command-top"><span class="command-label">Terminal · ver modelos y niveles vigentes</span><button class="copy" type="button">Copiar</button></div><pre><code>npx --package=nexakit agent-toolkit-inbox modelos</code></pre></div>
+        <p>Para preparar los agentes de Codex, revisa <code>npx --package=nexakit agent-toolkit-inbox agentes</code> y aplica con el comando siguiente:</p>
+        <div class="command"><div class="command-top"><span class="command-label">Terminal · crear agentes de nivel que falten</span><button class="copy" type="button">Copiar</button></div><pre><code>npx --package=nexakit agent-toolkit-inbox agentes --escribir</code></pre></div>
+        <div class="command"><div class="command-top"><span class="command-label">Dentro de Claude Code · plugin opcional de niveles</span><button class="copy" type="button">Copiar</button></div><pre><code>/plugin marketplace add Jcabr3ra1/nexakit
+/plugin install niveles@agent-toolkit</code></pre></div>
+        <p>El identificador del plugin conserva <code>agent-toolkit</code> por compatibilidad.</p>
+      </div></details>
+      <details><summary>Mantener la memoria al cerrar un cambio</summary><div class="details-body">
+        <p>Después de integrar un cambio estable, pide <code>/cerrar-memoria</code> en Claude o <code>$cerrar-memoria</code> en Codex. Indica la ruta de la memoria para que pueda localizar <code>project-memory.json</code>.</p>
+        <p>Revisa qué notas quedaron desactualizadas y las correcciones propuestas. El MCP de lectura no escribe notas y este flujo no implica sincronización automática con Obsidian Sync o Git.</p>
+        <p>Para revisar PR fusionados pendientes en una memoria con remoto fuente configurado, usa <code>npx --package=nexakit project-memory sync plan</code>. Requiere GitHub CLI y acceso al repositorio. <a href="https://github.com/Jcabr3ra1/nexakit/blob/main/docs/memoria/project-memory-sync.md">Ver la guía de sincronización</a>.</p>
+      </div></details>
+      <div class="completion"><label class="check"><input type="checkbox" data-complete="trabajar">Ya sé cómo iniciar mi próxima tarea</label><a class="next" href="#comandos">Ver comandos ↓</a></div>
+      <p class="footnote" style="margin:15px 0 0">Las marcas son una lista personal de esta página. No ejecutan comandos ni verifican la instalación; se reinician al recargar.</p>
+    </section>
+
+    <section class="section" id="comandos" aria-labelledby="h-comandos">
+      <h2 id="h-comandos">El comando que necesitas</h2>
+      <p class="section-intro">Busca por tarea o filtra por categoría. Las rutas siguen la configuración del paso 2. Cada ficha indica dónde ejecutar el comando.</p>
+      <div class="library-controls"><label class="field">Buscar comando<input id="search" type="search" placeholder="Por ejemplo: conectar, diagnóstico, modelos…" autocomplete="off"></label><label class="field">Categoría<select id="category"><option value="all">Todas</option><option value="skills">Skills</option><option value="memory">Memoria</option><option value="chat">Chat del agente</option><option value="workflow">Coordinación</option><option value="gemini">Gemini</option><option value="maintenance">Mantenimiento</option></select></label></div>
+      <p class="result-count" id="result-count" role="status"></p>
+      <div id="command-library"></div><p class="empty" id="empty" hidden>No hay coincidencias. Prueba otra palabra o selecciona “Todas”.</p>
+      <p class="footnote">Para operaciones avanzadas, consulta la <a href="https://github.com/Jcabr3ra1/nexakit/blob/main/docs/guias/guia-de-comandos.md">referencia de comandos</a> o la ayuda de cada CLI.</p>
+      <noscript><p>Los comandos principales están en los pasos anteriores. El buscador y la copia automática requieren JavaScript.</p></noscript>
+    </section>
+
+    <section class="section" id="fallos" aria-labelledby="h-fallos">
+      <h2 id="h-fallos">Si algo no encaja</h2>
+      <details><summary>npx no aparece o npm devuelve E404</summary><div class="details-body"><p>Si no se reconoce <code>npx</code>, revisa que Node.js 24 o superior y npm estén instalados y disponibles en tu PATH; abre otra terminal después de instalarlos.</p><p>Si <code>npx nexakit</code> devuelve E404, comprueba que el paquete ya esté publicado en el registro de npm que usas. La publicación en GitHub es independiente. No cambies el nombre del paquete para intentar continuar.</p><p>Para los ejecutables adicionales, conserva el formato <code>npx --package=nexakit project-memory --help</code> o <code>npx --package=nexakit agent-toolkit-inbox modelos</code>.</p></div></details>
+      <details><summary>El agente no ve las skills o la memoria</summary><div class="details-body"><p>Reinicia su sesión después de instalar o conectar. Comprueba <code>npx nexakit doctor</code> para la instalación base y <code>npx --package=nexakit project-memory status</code> con la ruta de la memoria para su conexión.</p><p>Usa el mismo cliente y perfil con el que configuraste MCP. Si abres Codex con un perfil, añade <code>--perfil-codex nombre-del-perfil</code> a <code>npx nexakit doctor</code>. Haz la prueba de lectura del paso 5.</p></div></details>
+      <details><summary>init o connect informa un conflicto</summary><div class="details-body"><p>Lee qué destino ya existe y comprueba a qué proyecto o instalación pertenece. Estos comandos conservan configuraciones diferentes y no las reemplazan. Una memoria ya creada se diagnostica con <code>npx --package=nexakit project-memory doctor</code>; no necesitas crearla otra vez.</p><p><a href="https://github.com/Jcabr3ra1/nexakit/blob/main/docs/memoria/project-memory-connect.md">Consultar el contrato de conexión</a>.</p></div></details>
+      <details><summary>No se actualizan las notas solas</summary><div class="details-body"><p>Es el comportamiento previsto. NexaKit crea una estructura inicial; Obsidian permite editarla y MCP deja consultarla. Actualiza las notas al cerrar un cambio verificado. Git y Obsidian Sync se configuran por separado.</p></div></details>
+      <details><summary>Quiero añadir más skills al catálogo</summary><div class="details-body"><p>Para mantener o ampliar el catálogo desde el código fuente, añade los archivos revisados bajo <code>catalogs/skills/</code>, registra su origen, licencia, hashes y reglas en <code>catalogs/skills.json</code>, y valida el catálogo. Las pruebas funcionales son necesarias para que una skill pueda aparecer como recomendada.</p><p><a href="https://github.com/Jcabr3ra1/nexakit/blob/main/docs/skills/ampliar-catalogo.md">Seguir la guía para ampliar el catálogo</a>.</p></div></details>
+    </section>
+    <footer><span>NexaKit · Skills, agentes y memoria por proyecto</span><a href="#inicio">Volver al inicio ↑</a></footer>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
 <script>
-document.querySelectorAll('[data-copy]').forEach(function(b){
-  b.addEventListener('click',function(){
-    var box=b.closest('.cmd');var text=b.dataset.text||box.querySelector('code').textContent;
-    var done=function(){var old=b.textContent;b.textContent='Copiado';b.classList.add('ok');setTimeout(function(){b.textContent=old;b.classList.remove('ok')},1500)};
-    if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done,function(){fallback(text,done)})}else{fallback(text,done)}
+(() => {
+  'use strict';
+  const $ = selector => document.querySelector(selector);
+  const $$ = selector => [...document.querySelectorAll(selector)];
+  const state = { project:'/ruta/a/mi-proyecto', memory:'/ruta/a/mi-proyecto-memory', id:'mi-proyecto', shell:'posix', agent:'all' };
+  const quote = value => state.shell === 'powershell' ? "'" + value.replaceAll("'", "''") + "'" : "'" + value.replaceAll("'", "'\"'\"'") + "'";
+  const projectName = () => state.id === 'mi-proyecto' ? 'Mi proyecto' : state.id.replaceAll('-', ' ');
+  const command = key => {
+    const p = quote(state.project), m = quote(state.memory);
+    const init = `npx --package=nexakit project-memory init ${m} --source ${p} --project-id ${state.id} --project-name ${quote(projectName())}`;
+    const map = {
+      start:`cd ${p}\nnpx nexakit`,
+      tui:`npx nexakit --project ${p} --agent ${state.agent}`,
+      recommend:`npx nexakit recommend --project ${p}`,
+      doctor:`npx nexakit doctor --agent ${state.agent}`,
+      setup:`npx nexakit setup --agent ${state.agent}`,
+      'setup-apply':`npx nexakit setup --agent ${state.agent} --apply`,
+      detach:`npx nexakit detach --project ${p}`,
+      'detach-apply':`npx nexakit detach --project ${p} --apply`,
+      init, 'init-apply':init + ' --apply',
+      'memory-doctor':`npx --package=nexakit project-memory doctor ${m} --strict`,
+      'memory-status':`npx --package=nexakit project-memory status ${m}`,
+      'sync-plan':`npx --package=nexakit project-memory sync plan ${m}`,
+      'sync-inspect':`npx --package=nexakit project-memory sync inspect ${m} --pr 42`,
+      'open-claude':`cd ${p}\nclaude`, 'open-codex':`cd ${p}\ncodex`,
+      usage:`npx --package=nexakit agent-toolkit-inbox consumo --project-root ${p}`,
+      models:'npx --package=nexakit agent-toolkit-inbox modelos', agents:'npx --package=nexakit agent-toolkit-inbox agentes',
+      'agents-apply':'npx --package=nexakit agent-toolkit-inbox agentes --escribir',
+      'gemini-status':'npx --package=nexakit agent-toolkit-gemini estado',
+      'gemini-ask':`npx --package=nexakit agent-toolkit-gemini consultar --prompt ${quote('Explica la diferencia entre una skill y un MCP')}`,
+      'gemini-research':`npx --package=nexakit agent-toolkit-gemini investigar --prompt ${quote('Investiga patrones de documentación para proyectos de software')}`,
+      'gemini-history':'npx --package=nexakit agent-toolkit-gemini historial',
+      'claude-programar':'/programar mejora el diseño del formulario sin cambiar su comportamiento',
+      'codex-programar':'$programar mejora el diseño del formulario sin cambiar su comportamiento',
+      'claude-revisar':'/revisar', 'codex-revisar':'$revisar',
+      'claude-estado':'/estado', 'codex-estado':'$estado',
+      'claude-cerrar':'/cerrar-memoria', 'codex-cerrar':'$cerrar-memoria',
+      help:'npx nexakit --help', 'memory-help':'npx --package=nexakit project-memory --help'
+    };
+    for (const agent of ['claude','codex']) {
+      map[`connect-${agent}`] = `npx --package=nexakit project-memory connect ${m} --agent ${agent}`;
+      map[`connect-${agent}-apply`] = map[`connect-${agent}`] + ' --apply';
+    }
+    return map[key];
+  };
+  const entries = [
+    ['tui','skills','Abrir el asistente','Detecta tu stack y permite elegir skills con vista previa.','Terminal · cualquier carpeta'],
+    ['recommend','skills','Consultar skills compatibles','Solo lectura. Añade --profile frontend, backend, mcp o security para expresar tu intención.','Terminal · cualquier carpeta'],
+    ['doctor','maintenance','Diagnosticar NexaKit','Comprueba CLIs, skills base, MCP de coordinación y permisos.','Terminal · cualquier carpeta'],
+    ['setup','workflow','Previsualizar las skills base','Muestra enlaces globales y recetas de registro del MCP de coordinación.','Terminal · cualquier carpeta'],
+    ['setup-apply','workflow','Instalar las skills base','Aplica enlaces globales sin reemplazar destinos diferentes. El registro MCP se ejecuta aparte.','Terminal · escribe enlaces personales'],
+    ['init','memory','Previsualizar una memoria','Prepara la estructura y su manifiesto sin escribir archivos.','Terminal · cualquier carpeta'],
+    ['init-apply','memory','Crear la memoria','Crea notas, manifiesto y skill del proyecto en el destino.','Terminal · escribe en la carpeta de memoria'],
+    ['memory-doctor','memory','Diagnosticar la memoria','Valida la estructura. --strict devuelve error también ante advertencias.','Terminal · solo lectura'],
+    ['connect-claude','memory','Previsualizar conexión con Claude','Muestra los cambios previstos en la skill y el MCP de memoria.','Terminal · solo lectura'],
+    ['connect-claude-apply','memory','Conectar memoria con Claude','Aplica la conexión. Reinicia Claude y comprueba una lectura real.','Terminal · cambia configuración personal'],
+    ['connect-codex','memory','Previsualizar conexión con Codex','Muestra los cambios previstos en la skill y el MCP de memoria.','Terminal · solo lectura'],
+    ['connect-codex-apply','memory','Conectar memoria con Codex','Aplica la conexión. Reinicia Codex y comprueba una lectura real.','Terminal · cambia configuración personal'],
+    ['memory-status','memory','Ver conexiones de la memoria','Inspecciona su estado configurado; la prueba de lectura se hace en el agente.','Terminal · solo lectura'],
+    ['sync-plan','memory','Revisar PR pendientes en memoria','Necesita gh, acceso a GitHub y remoto fuente configurado. No actualiza notas.','Terminal · consulta GitHub'],
+    ['sync-inspect','memory','Inspeccionar un PR fusionado','Cambia 42 por tu número de PR. Consulta la evidencia antes de decidir qué notas actualizar.','Terminal · consulta GitHub'],
+    ['models','workflow','Consultar modelos y niveles','Muestra el catálogo observado y la configuración vigente.','Terminal · cualquier carpeta'],
+    ['agents','workflow','Previsualizar agentes de Codex','Revisa los agentes de nivel antes de crearlos.','Terminal · vista previa'],
+    ['agents-apply','workflow','Crear agentes de nivel de Codex','Crea los agentes que falten y conserva los existentes diferentes.','Terminal · escribe configuración personal'],
+    ['usage','workflow','Consultar consumo registrado','Informa tokens y tiempos de mediciones guardadas; no captura todas las llamadas del chat.','Terminal · solo lectura'],
+    ['claude-programar','chat','Programar con Claude','Necesita las skills base y el MCP de coordinación del paso 6. Sustituye la tarea por la tuya.','Chat de Claude Code · skill /programar'],
+    ['codex-programar','chat','Programar con Codex','Necesita las skills base y el MCP de coordinación del paso 6. Sustituye la tarea por la tuya.','Chat de Codex · skill $programar'],
+    ['claude-revisar','chat','Revisar con Claude','Prepara esta sesión como revisora. Requiere el flujo de coordinación configurado.','Chat de Claude Code · skill /revisar'],
+    ['codex-revisar','chat','Revisar con Codex','Registra esta sesión como revisora del proyecto. Requiere el flujo de coordinación configurado.','Chat de Codex · skill $revisar'],
+    ['claude-estado','chat','Ver revisiones en Claude','Consulta colaboraciones, encargos pendientes y últimos veredictos.','Chat de Claude Code · skill /estado'],
+    ['codex-estado','chat','Ver revisiones en Codex','Consulta colaboraciones, encargos pendientes y últimos veredictos.','Chat de Codex · skill $estado'],
+    ['claude-cerrar','chat','Revisar la memoria al cerrar en Claude','Necesita cerrar-memoria instalada. Indica la ruta de la memoria y revisa los cambios propuestos.','Chat de Claude Code · skill /cerrar-memoria'],
+    ['codex-cerrar','chat','Revisar la memoria al cerrar en Codex','Necesita cerrar-memoria instalada. Indica la ruta de la memoria y revisa los cambios propuestos.','Chat de Codex · skill $cerrar-memoria'],
+    ['gemini-status','gemini','Comprobar Gemini por Antigravity','Requiere agy y su suscripción. Es una integración opcional independiente.','Terminal · consulta Antigravity'],
+    ['gemini-ask','gemini','Consultar a Gemini','Envía una consulta mediante agy y utiliza su cuota.','Terminal · llama a un modelo'],
+    ['gemini-research','gemini','Investigar con Gemini','Busca en la web mediante agy y devuelve fuentes. Utiliza su cuota.','Terminal · llama a un modelo'],
+    ['gemini-history','gemini','Ver historial de Gemini','Lista consultas anteriores sin volver a llamar al modelo.','Terminal · solo lectura'],
+    ['detach','maintenance','Previsualizar el desacoplado','Revisa qué skills y archivos gestionados se retirarían del proyecto.','Terminal · vista previa'],
+    ['detach-apply','maintenance','Retirar la integración del proyecto','Aplica el desacoplado conservando archivos propios o modificados.','Terminal · modifica la integración del proyecto'],
+    ['help','maintenance','Ver ayuda de NexaKit','Consulta las opciones disponibles en tu versión.','Terminal · cualquier carpeta'],
+    ['memory-help','memory','Ver ayuda de memoria','Incluye init, connect, doctor, status y las operaciones sync.','Terminal · cualquier carpeta']
+  ];
+  let toastTimer;
+  function toast(message) {
+    clearTimeout(toastTimer); $('#toast').textContent = message; $('#toast').hidden = false;
+    toastTimer = setTimeout(() => { $('#toast').hidden = true; }, 3500);
+  }
+  function renderCommands() {
+    $$('[data-command]').forEach(code => { code.textContent = command(code.dataset.command); });
+    $$('[data-value]').forEach(node => { node.textContent = state[node.dataset.value]; });
+  }
+  function renderLibrary() {
+    const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+    const query = normalize($('#search').value.trim());
+    const matches = entries.filter(entry => ($('#category').value === 'all' || entry[1] === $('#category').value) && normalize(entry.join(' ') + ' ' + command(entry[0])).includes(query));
+    const fragment = document.createDocumentFragment();
+    for (const [key,, title, description, where] of matches) {
+      const article = document.createElement('article'); article.className = 'library-item';
+      const heading = document.createElement('h3'); heading.textContent = title;
+      const p = document.createElement('p'); p.textContent = description;
+      const box = document.createElement('div'); box.className = 'command';
+      const bar = document.createElement('div'); bar.className = 'command-top';
+      const label = document.createElement('span'); label.className = 'command-label'; label.textContent = where;
+      const button = document.createElement('button'); button.className = 'copy'; button.type = 'button'; button.textContent = 'Copiar'; button.setAttribute('aria-label', `Copiar: ${title}`);
+      const pre = document.createElement('pre'), code = document.createElement('code'); code.textContent = command(key);
+      pre.append(code); bar.append(label,button); box.append(bar,pre); article.append(heading,p,box); fragment.append(article);
+    }
+    $('#command-library').replaceChildren(fragment);
+    $('#result-count').textContent = `${matches.length} de ${entries.length} comandos`;
+    $('#empty').hidden = matches.length > 0;
+  }
+  document.addEventListener('click', async event => {
+    const button = event.target.closest('.copy'); if (!button) return;
+    const code = button.closest('.command').querySelector('pre code');
+    let copied = false;
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(code.textContent); copied = true; } } catch { /* Try a local-file-compatible fallback. */ }
+    if (!copied) {
+      const textarea = document.createElement('textarea'); textarea.value = code.textContent;
+      textarea.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.append(textarea); textarea.select();
+      try { copied = document.execCommand('copy'); } catch { copied = false; }
+      textarea.remove(); button.focus({preventScroll:true});
+    }
+    if (copied) { toast('Comando copiado. Pégalo donde indica la ficha.'); }
+    else {
+      const selection = window.getSelection(), range = document.createRange(); range.selectNodeContents(code); selection.removeAllRanges(); selection.addRange(range);
+      toast('Texto seleccionado. Usa Ctrl+C o ⌘C para copiarlo.');
+    }
   });
-});
-function fallback(text,done){var t=document.createElement('textarea');t.value=text;t.setAttribute('readonly','');t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();try{document.execCommand('copy');done()}catch(e){}document.body.removeChild(t)}
+  $('#settings').addEventListener('submit', event => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const next = Object.fromEntries(['project','memory','id','shell'].map(key => [key, String(data.get(key)).trim()]));
+    if (!next.project || !next.memory || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(next.id) || /[\r\n\x00]/.test(next.project + next.memory)) { toast('Revisa las rutas y el identificador. Usa una sola línea por ruta.'); return; }
+    Object.assign(state,next); renderCommands(); renderLibrary();
+    $('#settings-state').textContent = 'Comandos actualizados para ' + state.id;
+    toast('Rutas actualizadas en toda la guía.');
+  });
+  $$('[data-agent]').forEach(button => button.addEventListener('click', () => {
+    state.agent = button.dataset.agent;
+    $$('[data-agent]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    $$('[data-client]').forEach(node => { node.hidden = state.agent !== 'all' && node.dataset.client !== state.agent; });
+    renderCommands(); renderLibrary();
+  }));
+  const checks = $$('[data-complete]');
+  function updateProgress() {
+    const count = checks.filter(input => input.checked).length;
+    $('#progress').value = count; $('#progress-count').textContent = `${count} de ${checks.length}`;
+    checks.forEach(input => {
+      const link = $(`.route a[href="#${input.dataset.complete}"]`); link.classList.toggle('done',input.checked);
+      link.querySelector('.nav-num').textContent = input.checked ? '✓' : String(checks.indexOf(input)+1);
+    });
+  }
+  checks.forEach(input => input.addEventListener('change',updateProgress));
+  $('#reset').addEventListener('click', () => { checks.forEach(input => { input.checked = false; }); updateProgress(); toast('Marcas reiniciadas.'); });
+  $('#search').addEventListener('input',renderLibrary); $('#category').addEventListener('change',renderLibrary);
+  const anchors = $$('.route a');
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(entries => {
+      entries.filter(entry => entry.isIntersecting).forEach(entry => {
+        anchors.forEach(anchor => { if (anchor.hash === '#' + entry.target.id) anchor.setAttribute('aria-current','step'); else anchor.removeAttribute('aria-current'); });
+      });
+    }, { rootMargin:'-18% 0px -62% 0px', threshold:0 });
+    $$('.hero, .section').forEach(section => observer.observe(section));
+  }
+  $$('.command .copy').forEach(button => { button.setAttribute('aria-label','Copiar: ' + button.closest('.command').querySelector('.command-label').textContent); });
+  renderCommands(); renderLibrary(); updateProgress();
+})();
 </script>
-</body></html>
+</body>
+</html>

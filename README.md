@@ -6,7 +6,7 @@
 
 **Tus skills. Tus agentes. Un mismo flujo.**
 
-[Documentación](docs/README.md) · [Catálogo](catalogs/skills.json) · [Guía de uso](docs/skills/recomendador.md)
+[Guía paso a paso](docs/guias/guia-de-comandos.html) · [Documentación](docs/README.md) · [Catálogo](catalogs/skills.json)
 
 </div>
 
@@ -56,6 +56,7 @@ También puedes instalarlo con `npm install -g nexakit` y ejecutar `nexakit`. El
 
 - **Coordinación entre agentes.** Implementación y revisión cruzada con Claude Code y Codex. [Guía de comandos](docs/guias/guia-de-comandos.md).
 - **Memoria por proyecto.** Contexto separado del código y conectado en solo lectura mediante MCP. [Crear una memoria](docs/memoria/project-memory-init.md).
+- **Guía interactiva.** Inicio, Obsidian, conexión con agentes y comandos copiables. Abre [la guía HTML](docs/guias/guia-de-comandos.html) en tu navegador.
 - **Catálogo ampliable.** Incorpora skills y comprueba sus archivos con `npm run catalog:validate`. [Añadir una skill](docs/skills/ampliar-catalogo.md).
 
 ## Requisitos
