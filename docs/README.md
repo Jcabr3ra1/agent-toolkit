@@ -17,6 +17,8 @@ Para una reorganización, utiliza la skill
 
 ## Guías de uso
 
+- [Desarrollo local, pruebas y empaquetado de NexaKit](guias/desarrollo.md)
+
 - [Guía de comandos de Agent Toolkit](guias/guia-de-comandos.md)
 - [Herramientas de Gemini](guias/herramientas-gemini.md)
 - [Tu primera prueba con Agent Toolkit](guias/primeros-pasos.md)
@@ -90,6 +92,7 @@ Para una reorganización, utiliza la skill
 ## Skills y fuentes
 
 - [Panel interactivo y recomendador de skills](skills/recomendador.md)
+- [Añadir y validar skills del catálogo](skills/ampliar-catalogo.md)
 - [Preparación y baseline del recomendador](skills/evidencias/2026-10-28-recomendador-preparacion.md)
 - [Evaluación inicial de MCP Builder y Differential Review](skills/evidencias/2026-10-28-evaluacion-inicial-mcp-seguridad.md)
 - [Manifiesto de instalación de MCP Builder y seguridad](skills/evidencias/2026-10-28-incorporacion-mcp-seguridad.json)

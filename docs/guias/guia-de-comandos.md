@@ -51,7 +51,7 @@ npm test
 
 ### 3. Abre el asistente por pasos o revisa qué falta
 
-En una terminal interactiva puedes abrir el asistente guiado en 4 pasos (guarda su estado aislado bajo `.agent-toolkit/`, ignora automáticamente lo acoplado en `.gitignore` o `.git/info/exclude`, instala primero las skills fundamentales verificadas con SHA-256 para tu stack, luego las opcionales y permite desacoplarlo cuando quieras con `[d]` o `detach`):
+En una terminal interactiva puedes abrir el asistente en tres pasos: skills para tu proyecto, opcionales y revisión de la instalación. Las compatibles se eligen manualmente; solo se premarcan recomendaciones con escenarios validados para los agentes destino. En la última pantalla, `e` permite cambiar agentes, modo, Git ignore y núcleo global. El estado del proyecto queda bajo `.agent-toolkit/`; `[d]` y `detach` permiten desacoplarlo con vista previa.
 
 ```sh
 npx nexakit                                   # o node bin/nexakit.js (alias: agent-toolkit)

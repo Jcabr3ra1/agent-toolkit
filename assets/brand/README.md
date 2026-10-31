@@ -8,8 +8,8 @@ un núcleo hexagonal que representa la memoria del proyecto, rodeado de módulos
 que representan agentes y herramientas conectados.
 
 El archivo original es un PNG de 1024 × 765 píxeles con fondo negro, tonos
-morados y lilas, degradados y volumen. El README usa esta imagen y mantiene el
-nombre “Agent Toolkit” como texto para conservar su legibilidad y accesibilidad.
+morados y lilas, degradados y volumen. El símbolo se conserva como marca del proyecto. La portada del README usa una
+cabecera propia de NexaKit con tipografía de terminal y una vista real del asistente.
 
 ### Colores de referencia
 
@@ -22,8 +22,11 @@ nombre “Agent Toolkit” como texto para conservar su legibilidad y accesibili
 
 ## Otras versiones y capturas
 
-- [`agent-toolkit-tui-hero.png`](agent-toolkit-tui-hero.png): captura principal en
-  terminal del asistente interactivo por pasos mostrada en la portada del `README.md`.
+- `nexakit-readme-hero.svg`: fuente vectorial de la cabecera, con una vista del asistente integrada.
+- `nexakit-readme-hero.png`: versión renderizada de la cabecera para el README de GitHub.
+
+- [`agent-toolkit-tui-hero.png`](agent-toolkit-tui-hero.png): vista renderizada del
+  asistente por pasos, con foco lila y progreso visible. Se integra en la cabecera del README.
 - [`agent-toolkit-mark.svg`](agent-toolkit-mark.svg): variante vectorial
   simplificada creada durante la exploración de la propuesta 02.
 - [`agent-toolkit-mark-v1.png`](agent-toolkit-mark-v1.png): propuesta anterior en
@@ -33,3 +36,5 @@ nombre “Agent Toolkit” como texto para conservar su legibilidad y accesibili
 
 El símbolo se adoptó para la documentación del repositorio. No se ha realizado
 una búsqueda de marcas registradas y no se garantiza exclusividad comercial.
+
+La composición de la cabecera toma como referencia el [README de AutoSkills](https://github.com/midudev/autoskills); el nombre, los colores, el arte y la captura corresponden a NexaKit.

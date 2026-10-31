@@ -46,7 +46,7 @@ test('Node-only and Node+MCP fixtures do not invent frontend, HTTP frameworks or
   const nodeRec = recommendSkills({ catalog, inspection: nodeInspection });
   assert.deepEqual(nodeRec.recommended, []);
   assert.deepEqual(nodeRec.candidates, []);
-  assert.equal(nodeRec.optional.length, 10);
+  assert.equal(nodeRec.optional.length, catalog.skills.filter(skill => skill.review.status !== 'rejected').length);
   assert.equal(JSON.stringify({ nodeInspection, nodeRec }).includes('SECRET_TOKEN'), false);
   assert.deepEqual(await snapshotTree(nodeOnly), before);
 
@@ -382,4 +382,30 @@ test('git ignore management (.gitignore & .git/info/exclude) and safe decoupling
   assert.equal(await fs.access(path.join(fakeHome, '.codex/agents/nivel_ligero.toml')).then(() => true, () => false), false);
   assert.equal(await fs.readFile(path.join(fakeHome, '.claude/skills/user-global-skill/SKILL.md'), 'utf8'), '# keep');
   assert.equal(await fs.readFile(path.join(fakeHome, '.codex/agents/custom_agent.toml'), 'utf8'), 'name = "custom"\n');
+});
+
+test('validated recommendations require applicable passed scenarios for every target client', async t => {
+  const { inspectSkillProject, recommendSkills } = await import('../src/skill-recommendations.js');
+  const data = structuredClone(await loadSkillCatalog());
+  const entry = data.skills.find(skill => skill.name === 'mcp-builder');
+  const root = await tempProject(t, { 'package.json': { dependencies: { '@modelcontextprotocol/sdk': '1.30.0' } } });
+  const inspection = await inspectSkillProject(root, { toolkitRoot: TOOLKIT_ROOT });
+  const scenario = client => ({ id: `mcp-${client}`, revision: entry.revision, profile: 'mcp', taskClass: 'mcp-development', requiredSignals: ['mcp-sdk'], client, status: 'passed', evidencePath: `docs/skills/evidencias/mcp-${client}.md` });
+  entry.scenarios = [scenario('claude')];
+  let report = recommendSkills({ catalog: validateSkillCatalog(data), inspection, clients: ['claude', 'codex'] });
+  assert.equal(report.recommended.length, 0);
+  assert.equal(report.candidates[0].recommendationStatus, 'compatible');
+  assert.ok(report.candidates[0].pendingReasons.some(reason => reason.includes('codex')));
+  assert.match(report.candidates[0].reasons[0], /package\.json \(@modelcontextprotocol\/sdk\)/u);
+  assert.equal(recommendSkills({ catalog: validateSkillCatalog(data), inspection, clients: ['claude'] }).recommended[0].recommendationStatus, 'validated');
+  entry.scenarios.push(scenario('codex'));
+  report = recommendSkills({ catalog: validateSkillCatalog(data), inspection, clients: ['claude', 'codex'] });
+  assert.deepEqual(report.recommended.map(skill => skill.name), ['mcp-builder']);
+  assert.deepEqual(report.recommended[0].evidence.map(item => item.client), ['claude', 'codex']);
+  entry.scenarios[1].status = 'failed';
+  assert.equal(recommendSkills({ catalog: validateSkillCatalog(data), inspection, clients: ['claude', 'codex'] }).recommended.length, 0);
+  entry.scenarios[1].status = 'passed';
+  entry.review.status = 'pending';
+  assert.equal(recommendSkills({ catalog: validateSkillCatalog(data), inspection, clients: ['claude', 'codex'] }).recommended.length, 0);
+  assert.throws(() => recommendSkills({ catalog: validateSkillCatalog(data), inspection, clients: ['unknown'] }));
 });

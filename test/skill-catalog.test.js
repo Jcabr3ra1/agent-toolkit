@@ -21,7 +21,7 @@ async function walkFiles(dir, prefix = '') {
   return files;
 }
 
-test('loadSkillCatalog loads all 10 verified bundled skills matching real disk hashes without polluting global setupToolkit', async t => {
+test('loadSkillCatalog loads all bundled skills matching real disk hashes without polluting global setupToolkit', async t => {
   const { loadSkillCatalog } = await import('../src/skill-catalog.js');
   const { setupToolkit } = await import('../src/toolkit-setup.js');
   const catalog = await loadSkillCatalog();
@@ -30,7 +30,7 @@ test('loadSkillCatalog loads all 10 verified bundled skills matching real disk h
   assert.equal(Object.isFrozen(catalog.addons), true);
 
   const names = catalog.skills.filter(s => s.bundled).map(s => s.name).sort();
-  assert.deepEqual(names, [
+  const originalSkills = [
     'api-design-principles',
     'differential-review',
     'frontend-design',
@@ -41,7 +41,9 @@ test('loadSkillCatalog loads all 10 verified bundled skills matching real disk h
     'vercel-react-best-practices',
     'web-design-guidelines',
     'webapp-testing'
-  ]);
+  ];
+  for (const name of originalSkills) assert.ok(names.includes(name), `missing bundled skill: ${name}`);
+  assert.equal(new Set(names).size, names.length);
 
   for (const entry of catalog.skills.filter(s => s.bundled)) {
     const diskFiles = await walkFiles(path.join(ROOT, entry.installedPath));

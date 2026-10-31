@@ -15,6 +15,8 @@
   },
   "scripts": {
     "test": "node --test",
+    "catalog:validate": "node scripts/validate-skill-catalog.js",
+    "catalog:files": "node scripts/validate-skill-catalog.js --files",
     "prepack": "node scripts/prepare-package.js"
   },
   "engines": {
@@ -63,7 +65,9 @@
     ".claude/skills/",
     ".agents/skills/",
     "assets/brand/",
+    "docs/skills/evidencias/",
     "assets/runtime/",
-    "scripts/prepare-package.js"
+    "scripts/prepare-package.js",
+    "scripts/validate-skill-catalog.js"
   ]
 }

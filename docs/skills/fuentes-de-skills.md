@@ -138,3 +138,5 @@ Para cada nueva fuente, anotar nombre, URL original verificada, uso en Toolkit y
 fecha de consulta. Añadir versión o revisión cuando se adapte contenido concreto,
 junto con su licencia y atribución. Si un origen está pendiente de confirmar,
 marcarlo como pendiente en vez de deducir una URL.
+
+Para incorporar los archivos y reglas de una skill al catálogo, generar su inventario SHA-256 y registrar escenarios de utilidad, sigue [Añadir y validar skills del catálogo](ampliar-catalogo.md).

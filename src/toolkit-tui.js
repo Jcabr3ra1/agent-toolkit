@@ -21,12 +21,12 @@ const AGENT_LABELS = Object.freeze({
   codex: 'Solo Codex'
 });
 const MODE_LABELS = Object.freeze({
-  symlink: 'Enlace simbólico hacia Agent Toolkit (ligero, recomendado)',
-  copy: `Copia verificada + ${PROJECT_TOOLKIT_DIR}/skills-lock.json`
+  symlink: 'Enlaza las skills al toolkit sin duplicarlas. Recomendado para trabajar en este equipo.',
+  copy: `Guarda una copia de las skills en el proyecto y sus hashes en ${PROJECT_TOOLKIT_DIR}/skills-lock.json. Útil si prefieres no depender de enlaces al toolkit.`
 });
 const GIT_IGNORE_LABELS = Object.freeze({
-  gitignore: `.gitignore (bloque gestionado con ${PROJECT_TOOLKIT_DIR}/)`,
-  'git-exclude': '.git/info/exclude (invisible en Git sin tocar .gitignore)'
+  gitignore: 'Oculta los archivos instalados en Git. Usa .gitignore si quieres compartir estas reglas con tu equipo.',
+  'git-exclude': 'Oculta los archivos instalados en Git solo en tu equipo, sin modificar el .gitignore compartido.'
 });
 
 function style(colorEnabled) {
@@ -44,11 +44,6 @@ function style(colorEnabled) {
     magenta: wrap(35, 39),
     cyan: wrap(36, 39)
   };
-}
-
-function truncate(text, maxLen) {
-  if (maxLen <= 4 || text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 1) + '…';
 }
 
 export async function buildToolkitTuiSnapshot({
@@ -77,6 +72,7 @@ export async function buildToolkitTuiSnapshot({
   const recommendation = recommendSkills({
     catalog,
     inspection,
+    clients: agent === 'all' ? ['claude', 'codex'] : [agent],
     ...(profile && { profile })
   });
 
@@ -117,8 +113,10 @@ function buildSkillItem(entry, linksForSkill, { isFundamental }) {
       : 'SHA-256 ✓';
 
   const reasonText = isFundamental
-    ? entry.reasons.map(r => r.replace(/\s*\(package\.json.*\)$/u, '')).join(', ')
+    ? entry.reasons.join(', ')
     : `perfil ${entry.profiles.join('/')}`;
+  const validated = entry.recommendationStatus === 'validated';
+  const checked = Boolean(isFundamental && validated && missingCount > 0);
 
   return {
     id: `skill:${entry.name}`,
@@ -127,7 +125,16 @@ function buildSkillItem(entry, linksForSkill, { isFundamental }) {
     summary: entry.summary,
     license: entry.license,
     origin: `${reasonText} · ${stateLabel} (${entry.license})`,
-    checked: Boolean(isFundamental && missingCount > 0),
+    reasons: entry.reasons ?? [],
+    pendingReasons: entry.pendingReasons ?? [],
+    evidence: entry.evidence ?? [],
+    overlapsWith: entry.overlapsWith ?? [],
+    recommendationStatus: entry.recommendationStatus,
+    installationStatus: conflictCount > 0 ? 'conflict' : missingCount === 0 ? 'installed' : 'missing',
+    reviewStatus: entry.reviewStatus,
+    reviewNotes: entry.reviewNotes,
+    checked,
+    selectionSource: checked ? 'auto' : 'default',
     alreadyReady: missingCount === 0 && conflictCount === 0
   };
 }
@@ -156,9 +163,11 @@ export function createToolkitTuiModel(snapshot) {
   const initialGitIgnore = coupling.gitIgnoreStrategy === 'git-exclude' ? 'git-exclude' : 'gitignore';
 
   return {
-    step: 1, // 1 | 2 | 3 | 4 | 'done' | 'detach-preview' | 'detached'
+    step: 1, // project skills | optional skills | review | done | detach-preview | detached
     showCommands: false,
-    cursors: { 1: 0, 2: 0, 3: 0 },
+    cursors: { 1: 0, 2: 0 },
+    configCursor: 0,
+    configDraft: null,
     config: {
       agent: snapshot.agent,
       installMode: snapshot.installMode ?? coupling.mode ?? 'symlink',
@@ -177,275 +186,273 @@ export function createToolkitTuiModel(snapshot) {
   };
 }
 
+// Terminal cells, rather than UTF-16 length, keep borders aligned for project names.
+function cellWidth(text) {
+  return [...text].reduce((width, char) => {
+    const cp = char.codePointAt(0);
+    if (/\p{Mark}/u.test(char) || cp === 0x200d || cp === 0xfe0f) return width;
+    const wide = /\p{Extended_Pictographic}/u.test(char)
+      || (cp >= 0x1100 && (cp <= 0x115f || cp === 0x2329 || cp === 0x232a
+        || (cp >= 0x2e80 && cp <= 0xa4cf) || (cp >= 0xac00 && cp <= 0xd7a3)
+        || (cp >= 0xf900 && cp <= 0xfaff) || (cp >= 0xfe10 && cp <= 0xfe19)
+        || (cp >= 0xfe30 && cp <= 0xfe6f) || (cp >= 0xff00 && cp <= 0xff60)
+        || (cp >= 0xffe0 && cp <= 0xffe6) || cp >= 0x20000));
+    return width + (wide ? 2 : 1);
+  }, 0);
+}
+
+function wrapText(text, width) {
+  const lines = [];
+  for (const paragraph of String(text).split('\n')) {
+    let line = '';
+    for (const token of paragraph.match(/\s*\S+/gu) ?? []) {
+      const word = token.trimStart();
+      let gap = token.slice(0, token.length - word.length);
+      if (line && cellWidth(line + gap + word) > width) {
+        lines.push(line.trimEnd());
+        line = '';
+        gap = '';
+      }
+      for (const char of gap + word) {
+        if (cellWidth(line + char) > width) {
+          lines.push(line);
+          line = '';
+        }
+        line += char;
+      }
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
 export function renderToolkitTuiFrame(model, { columns = 96, color = true } = {}) {
   const c = style(color);
-  const width = Math.max(60, Math.min(columns - 4, 98));
+  const plain = text => String(text);
+  const margin = columns < 50 ? '' : '  ';
+  const width = Math.max(12, Math.min(columns - margin.length * 2, 96));
   const innerWidth = width - 4;
   const lines = [];
-
-  // Header Box (AutoSkills style)
-  lines.push(c.cyan(`  ╭${'─'.repeat(width - 2)}╮`));
-  lines.push(`  ${c.cyan('│')} ${c.bold(truncate('nexakit · Asistente por pasos de skills verificadas', innerWidth).padEnd(innerWidth))} ${c.cyan('│')}`);
-  lines.push(`  ${c.cyan('│')} ${c.dim(truncate(`Proyecto: ${model.snapshot.inspection.projectName}`, innerWidth).padEnd(innerWidth))} ${c.cyan('│')}`);
-  lines.push(c.cyan(`  ╰${'─'.repeat(width - 2)}╯`));
-  lines.push('');
-
-  // Commands overlay (available anytime via [c])
-  if (model.showCommands) {
-    lines.push(`  ${c.bold('Chuleta rápida de comandos (en Claude usa /nombre · en Codex usa $nombre):')}`);
-    for (const cmd of model.snapshot.guide.workflowCommands) {
-      const label = cmd.id === 'revisar' ? `${cmd.codex} / ${cmd.claude}` : cmd.claude;
-      lines.push(`    ${c.cyan(label.padEnd(28))} ${c.dim('←')} ${truncate(cmd.description, Math.max(22, width - 34))}`);
+  const body = [];
+  const add = (text = '', paint = plain) => {
+    for (const line of wrapText(text, innerWidth)) body.push({ text: line, paint });
+  };
+  const outside = (text = '', paint = plain) => {
+    for (const line of wrapText(text, width)) lines.push(margin + paint(line));
+  };
+  const accent = text => c.bold(c.magenta(text));
+  const selected = color ? text => c.magenta(`\x1b[7m${text}\x1b[27m`) : plain;
+  const finish = (hints = []) => {
+    lines.push(`${margin}${c.dim(`╭${'─'.repeat(width - 2)}╮`)}`);
+    for (const row of body) {
+      const padding = ' '.repeat(Math.max(0, innerWidth - cellWidth(row.text)));
+      lines.push(`${margin}${c.dim('│')} ${row.paint(row.text + padding)} ${c.dim('│')}`);
     }
-    lines.push('');
-    lines.push(`  ${c.bold('Comandos de terminal:')}`);
-    for (const cli of model.snapshot.guide.cliCommands) {
-      lines.push(`    ${c.green(cli.command.padEnd(40))} ${c.dim('←')} ${truncate(cli.description, Math.max(20, width - 46))}`);
+    lines.push(`${margin}${c.dim(`╰${'─'.repeat(width - 2)}╯`)}`);
+    if (model.statusMessage) {
+      outside();
+      outside(`! ${model.statusMessage}`, c.yellow);
     }
-    lines.push('');
-    lines.push(`  ${c.dim('[Esc / c / Tab] Volver al paso actual · [q] Salir')}`);
+    outside();
+    for (const hint of hints) outside(hint, text => text.replace(/\[[^\]]+\]/gu, c.bold));
     return lines.join('\n') + '\n';
-  }
-
-  // Top of vertical rail: Environment + Detected Stack
+  };
   const doc = model.snapshot.doctor;
-  const envBadges = [
-    doc.node.supported ? c.green(`✓ Node ${doc.node.version}`) : c.red(`✗ Node ${doc.node.version}`),
-    ...Object.entries(doc.clients).map(([name, info]) => (info.available ? c.green(`✓ ${name}`) : c.yellow(`○ ${name}`))),
-    Object.values(doc.mcp).every(m => m.state === 'configured') ? c.green('✓ MCP') : c.yellow('○ MCP pendiente')
-  ];
-  lines.push(`  ${c.cyan('┌')}  ${c.bold('Entorno:')} ${envBadges.join(' · ')}`);
+  const config = model.configDraft ?? model.config;
+  const shortAgent = AGENT_LABELS[config.agent];
+  const shortMode = config.installMode === 'copy' ? 'Copia verificada' : 'Enlace simbólico';
+  const shortIgnore = config.gitIgnore === 'git-exclude' ? '.git/info/exclude' : '.gitignore';
+  const detachHint = model.snapshot.inspection.coupling?.coupled ? ' · [d] desacoplar' : '';
+  const workflowLabel = cmd => cmd.id === 'revisar' ? `${cmd.codex} / ${cmd.claude}` : cmd.claude;
 
-  const sigLabels = model.snapshot.inspection.signals.map(s => `${c.green('✓')} ${s.label}`);
-  if (sigLabels.length === 0) {
-    lines.push(`  ${c.cyan('│')}  ${c.bold('Tecnologías detectadas:')} ${c.dim('sin señales Node en la raíz')}`);
-  } else {
-    lines.push(`  ${c.cyan('│')}  ${c.bold('Tecnologías detectadas:')} ${sigLabels.join('  ')}`);
+  outside('◆ nexakit', accent);
+  outside(`Proyecto: ${model.snapshot.inspection.projectName}`);
+  outside();
+
+  if (model.showCommands) {
+    add('Comandos a mano', c.bold);
+    add('En Claude usa /nombre; en Codex, $nombre.', c.dim);
+    add();
+    for (const cmd of model.snapshot.guide.workflowCommands) {
+      add(workflowLabel(cmd), accent);
+      add(cmd.description);
+      add();
+    }
+    add('En tu terminal', c.bold);
+    for (const cli of model.snapshot.guide.cliCommands) {
+      add(cli.command, c.cyan);
+      add(cli.description);
+      add();
+    }
+    return finish(['[Esc / c / Tab] volver al paso actual · [q] salir']);
   }
-  for (const unm of model.snapshot.recommendation.unmatchedSignals) {
-    lines.push(`  ${c.cyan('│')}    ${c.dim(`● ${unm.label} (sin skill empaquetada aún)`)}`);
+
+  const step = typeof model.step === 'number' ? model.step : model.step === 'done' ? 4 : 0;
+  if (step > 0) {
+    const labels = columns < 60 ? ['Skills', 'Extras', 'Revisar'] : ['Tu proyecto', 'Opcionales', 'Revisar e instalar'];
+    outside(labels.map((label, i) => {
+      const n = i + 1;
+      return `${n < step ? '✓' : n === step ? '●' : '○'} ${label}`;
+    }).join('  /  '), text => text.split('/').map(part => part.includes('●')
+      ? accent(part)
+      : part.includes('✓') ? c.green(part) : c.dim(part)).join(c.dim('/')));
+    outside();
   }
-  for (const lim of model.snapshot.inspection.limits.slice(0, 2)) {
-    lines.push(`  ${c.cyan('│')}    ${c.yellow('!')} ${c.dim(truncate(lim, width - 10))}`);
-  }
+
+  outside(`${doc.node.supported ? '✓' : '!'} Node ${doc.node.version}  ${Object.entries(doc.clients).map(([name, info]) => `${info.available ? '✓' : '○'} ${name}`).join('  ')}  ${Object.values(doc.mcp).every(m => m.state === 'configured') ? '✓ MCP' : '○ MCP pendiente'}`);
+  const signals = model.snapshot.inspection.signals;
+  outside(`Stack: ${signals.length ? signals.map(s => s.label).join(', ') : 'sin señales Node en la raíz'}`, c.dim);
+  for (const signal of model.snapshot.recommendation.unmatchedSignals) outside(`${signal.label}: sin skill empaquetada aún.`, c.dim);
+  for (const limit of model.snapshot.inspection.limits.slice(0, 2)) outside(`! ${limit}`, c.yellow);
   if (model.snapshot.inspection.coupling?.coupled && model.step !== 'detached') {
-    lines.push(`  ${c.cyan('│')}  ${c.bold('Proyecto:')} ${c.green(`✓ acoplado en ${PROJECT_TOOLKIT_DIR}/`)} ${c.dim('· pulsa [d] para desacoplar limpiamente')}`);
+    outside(`✓ acoplado en ${PROJECT_TOOLKIT_DIR}/ · [d] desacoplar`, c.green);
   }
-  lines.push(`  ${c.cyan('│')}`);
+  outside();
 
-  const shortMode = model.config.installMode === 'copy' ? `Copia + ${PROJECT_TOOLKIT_DIR}/skills-lock.json` : 'Enlace simbólico';
-  const shortAgent = model.config.agent === 'all' ? 'Claude + Codex' : model.config.agent;
-  const shortIgnore = model.config.gitIgnore === 'git-exclude' ? '.git/info/exclude' : '.gitignore';
-
-  // Detached Done Screen
   if (model.step === 'detached' && model.resultData) {
     const r = model.resultData;
-    lines.push(`  ${c.green('◇')}  ${c.bold(c.green('Proyecto desacoplado limpiamente'))}`);
-    lines.push(`  ${c.cyan('│')}    Skills retiradas del proyecto: ${r.removedCount}`);
-    lines.push(`  ${c.cyan('│')}    Carpeta ${PROJECT_TOOLKIT_DIR}/ retirada: ${r.stateDirRemoved ? 'sí' : 'sin cambios'}`);
-    lines.push(`  ${c.cyan('│')}    Reglas Git ignore limpiadas:   ${r.gitIgnoreCleanedCount}`);
-    if (r.conflicts > 0) {
-      lines.push(`  ${c.cyan('│')}    Archivos propios respetados:   ${c.yellow(String(r.conflicts))}`);
-    }
-    lines.push(`  ${c.cyan('│')}`);
-    lines.push(`  ${c.cyan('└')}  ${c.dim('[Enter / q] Cerrar asistente · [c] Ver chuleta completa')}`);
-    return lines.join('\n') + '\n';
+    add('✓ Proyecto desacoplado limpiamente', c.green);
+    add();
+    add(`Skills retiradas del proyecto: ${r.removedCount}`);
+    add(`Carpeta ${PROJECT_TOOLKIT_DIR}/ retirada: ${r.stateDirRemoved ? 'sí' : 'sin cambios'}`);
+    add(`Reglas Git ignore limpiadas: ${r.gitIgnoreCleanedCount}`);
+    if (r.conflicts > 0) add(`Archivos propios respetados: ${r.conflicts}`, c.yellow);
+    return finish(['[Enter / q] cerrar asistente · [c] comandos']);
   }
 
-  // Detach Safe Preview Screen
   if (model.step === 'detach-preview' && model.detachPlan) {
     const dp = model.detachPlan;
-    const actionable = dp.items.filter(i => i.action !== 'conflict');
-    lines.push(`  ${c.yellow('◆')}  ${c.bold(c.yellow('Vista previa de desacoplado (aún no se ha borrado nada)'))}`);
-    for (const item of actionable.slice(0, 10)) {
-      lines.push(`  ${c.cyan('│')}    ${c.red('−')} [${item.client}] ${item.relativePath} ${c.dim(`(${item.reason})`)}`);
-    }
-    if (actionable.length > 10) {
-      lines.push(`  ${c.cyan('│')}    ${c.dim(`… y ${actionable.length - 10} skill(s) más.`)}`);
-    }
-    if (dp.removeStateDir) {
-      lines.push(`  ${c.cyan('│')}    ${c.red('−')} [estado] ${PROJECT_TOOLKIT_DIR}/ (manifiesto y lockfile locales)`);
-    }
-    for (const upd of dp.gitIgnoreUpdates ?? []) {
-      lines.push(`  ${c.cyan('│')}    ${c.red('−')} [git] Retirar bloque gestionado de ${upd.relativePath}`);
-    }
-    for (const conf of dp.items.filter(i => i.action === 'conflict')) {
-      lines.push(`  ${c.cyan('│')}    ${c.yellow('⚠')} ${conf.relativePath} — ${conf.reason}`);
-    }
-    lines.push(`  ${c.cyan('│')}`);
-    lines.push(`  ${c.cyan('└')}  ${c.bold('[Enter / s] Confirmar desacoplado')} · ${c.dim('[Esc / Bksp / n] cancelar sin borrar')}`);
-    return lines.join('\n') + '\n';
+    const actionable = dp.items.filter(item => item.action !== 'conflict');
+    add('Vista previa de desacoplado', c.bold);
+    add('Aún no se ha borrado nada.', c.yellow);
+    add();
+    for (const item of actionable.slice(0, 10)) add(`− [${item.client}] ${item.relativePath} (${item.reason})`);
+    if (actionable.length > 10) add(`… y ${actionable.length - 10} skill(s) más.`, c.dim);
+    if (dp.removeStateDir) add(`− [estado] ${PROJECT_TOOLKIT_DIR}/ (manifiesto y lockfile locales)`);
+    for (const update of dp.gitIgnoreUpdates ?? []) add(`− [git] Retirar bloque gestionado de ${update.relativePath}`);
+    for (const conflict of dp.items.filter(item => item.action === 'conflict')) add(`! ${conflict.relativePath} — ${conflict.reason}`, c.yellow);
+    return finish(['[Enter / s] confirmar desacoplado', '[Esc / Bksp / n] cancelar sin borrar · [c] comandos · [q] salir']);
   }
 
-  // Done Screen
   if (model.step === 'done' && model.resultData) {
     const r = model.resultData;
-    lines.push(`  ${c.green('◇')}  ${c.bold(c.green('Instalación verificada completada'))}`);
-    lines.push(`  ${c.cyan('│')}    Modo aplicado en proyecto:     ${shortMode}`);
-    lines.push(`  ${c.cyan('│')}    Skills instaladas en proyecto: ${r.projectLinksCreated} destino(s)`);
-    lines.push(`  ${c.cyan('│')}    Estado aislado e ignorado en:  ${PROJECT_TOOLKIT_DIR}/ (${shortIgnore})`);
-    if (model.config.installMode === 'copy') {
-      lines.push(`  ${c.cyan('│')}    skills-lock.json actualizado:  ${r.lockfileWritten ? `sí (${PROJECT_TOOLKIT_DIR}/)` : 'sin cambios'}`);
-    }
-    if (r.globalApplied || r.levelsCreated > 0) {
-      lines.push(`  ${c.cyan('│')}    Núcleo global actualizado:     ${r.globalApplied ? 'skills enlazadas' : ''} ${r.levelsCreated ? `(${r.levelsCreated} niveles Codex)` : ''}`.trimEnd());
-    }
-    if (r.conflicts > 0) {
-      lines.push(`  ${c.cyan('│')}    Conflictos respetados intactos: ${c.yellow(String(r.conflicts))}`);
-    }
-    lines.push(`  ${c.cyan('│')}`);
-    lines.push(`  ${c.cyan('◆')}  ${c.bold('Comandos listos para empezar en tu sesión:')}`);
+    add('✓ Instalación verificada completada', c.green);
+    add();
+    add(`Modo aplicado en proyecto: ${shortMode}`);
+    add(`Skills instaladas en proyecto: ${r.projectLinksCreated} destino(s)`);
+    add(`Estado aislado e ignorado en: ${PROJECT_TOOLKIT_DIR}/ (${shortIgnore})`);
+    if (model.config.installMode === 'copy') add(`skills-lock.json actualizado: ${r.lockfileWritten ? 'sí' : 'sin cambios'}`);
+    if (r.globalApplied || r.levelsCreated > 0) add(`Núcleo global actualizado: ${r.globalApplied ? 'skills enlazadas' : ''} ${r.levelsCreated ? `(${r.levelsCreated} niveles Codex)` : ''}`);
+    if (r.conflicts > 0) add(`Conflictos respetados intactos: ${r.conflicts}`, c.yellow);
+    add();
+    add('Empieza en tu sesión', c.bold);
     for (const cmd of model.snapshot.guide.workflowCommands.slice(0, 5)) {
-      const label = cmd.id === 'revisar' ? `${cmd.codex} / ${cmd.claude}` : cmd.claude;
-      lines.push(`  ${c.cyan('│')}    ${c.cyan(label.padEnd(26))} ${c.dim('←')} ${truncate(cmd.description, Math.max(22, width - 36))}`);
+      add(workflowLabel(cmd), accent);
+      add(cmd.description);
     }
-    lines.push(`  ${c.cyan('│')}`);
-    lines.push(`  ${c.cyan('└')}  ${c.dim('[Enter / q] Cerrar · [c] Chuleta completa · (para desacoplar después: npx nexakit detach)')}`);
-    return lines.join('\n') + '\n';
+    return finish(['[Enter / q] cerrar · [c] comandos', 'Para desacoplar después: npx nexakit detach']);
   }
 
-  // Collapsed breadcrumbs of completed steps
-  const numStep = typeof model.step === 'number' ? model.step : 0;
-  if (numStep > 1) {
-    lines.push(`  ${c.green('◇')}  ${c.dim(`Paso 1 · Destino: ${shortAgent} · Modo: ${shortMode} · Git: ${shortIgnore}`)}`);
-  }
-  if (numStep > 2) {
-    const fundCount = model.fundamentalItems.filter(i => i.checked).length;
-    lines.push(`  ${c.green('◇')}  ${c.dim(`Paso 2 · Skills fundamentales marcadas: ${fundCount} de ${model.fundamentalItems.length}`)}`);
-  }
-  if (numStep > 3) {
-    const optCount = model.optionalItems.filter(i => i.checked).length;
-    lines.push(`  ${c.green('◇')}  ${c.dim(`Paso 3 · Skills opcionales marcadas: ${optCount}`)}`);
-  }
-  if (numStep > 1) lines.push(`  ${c.cyan('│')}`);
-
-  const detachHint = model.snapshot.inspection.coupling?.coupled ? ' · [d] desacoplar' : '';
-
-  // Active Step 1: Target, Mode & Git Ignore
-  if (model.step === 1) {
-    const cur = model.cursors[1];
-    lines.push(`  ${c.cyan('◆')}  ${c.bold('Paso 1 de 4 · Destino, modo y Git ignore')}`);
-    const rows = [
-      {
-        label: 'Agentes destino:',
-        value: AGENT_LABELS[model.config.agent],
-        hint: '(Espacio cambia: ambos / claude / codex)'
-      },
-      {
-        label: 'Modo en proyecto:',
-        value: MODE_LABELS[model.config.installMode],
-        hint: ''
-      },
-      {
-        label: 'Ignorar en Git:',
-        value: GIT_IGNORE_LABELS[model.config.gitIgnore],
-        hint: ''
-      },
-      {
-        label: 'Núcleo global:',
-        value: `${model.config.syncGlobalCore ? c.green('[x]') : c.dim('[ ]')} Sincronizar pack base y agentes de nivel ${model.config.globalAlreadyReady ? c.dim('(✓ ya al día)') : c.yellow(`(${model.config.pendingGlobalCount} pendientes)`)}`,
-        hint: ''
-      }
-    ];
-    rows.forEach((r, idx) => {
-      const ptr = idx === cur ? c.cyan('❯') : ' ';
-      const title = idx === cur ? c.bold(r.label.padEnd(18)) : r.label.padEnd(18);
-      const val = r.hint ? `${c.cyan(r.value)} ${c.dim(r.hint)}` : r.value;
-      lines.push(`  ${c.cyan('│')}  ${ptr} ${idx + 1}. ${title} ${val}`);
-    });
-    lines.push(`  ${c.cyan('│')}`);
-    lines.push(`  ${c.cyan('└')}  ${c.dim(`[↑/↓] mover · [Espacio] cambiar · [Enter] ir a Paso 2${detachHint} · [c] comandos · [q] salir`)}`);
-  }
-
-  // Active Step 2: Fundamental Recommended & Verified Skills
-  if (model.step === 2) {
-    const cur = model.cursors[2];
-    const checkedCount = model.fundamentalItems.filter(i => i.checked).length;
-    lines.push(`  ${c.cyan('◆')}  ${c.bold(`Paso 2 de 4 · Skills recomendadas y verificadas para tu stack (${checkedCount} marcadas)`)}`);
-    if (model.fundamentalItems.length === 0) {
-      lines.push(`  ${c.cyan('│')}    ${c.dim('No se detectaron frameworks adicionales que requieran skills específicas en este paso.')}`);
-      lines.push(`  ${c.cyan('│')}    ${c.dim('Pulsa [Enter] para revisar las skills opcionales disponibles en el Paso 3.')}`);
-    } else {
-      lines.push(`  ${c.cyan('│')}    ${c.dim('Fijadas por revisión y comprobadas con SHA-256 frente al catálogo local:')}`);
-      model.fundamentalItems.forEach((item, idx) => {
-        const ptr = idx === cur ? c.cyan('❯') : ' ';
-        const box = item.checked ? c.green('[x]') : c.dim('[ ]');
-        const name = idx === cur ? c.bold(item.title) : item.title;
-        const orig = c.dim(`← ${truncate(item.origin, Math.max(20, width - item.title.length - 18))}`);
-        lines.push(`  ${c.cyan('│')}  ${ptr} ${box} ${idx + 1}. ${name}  ${orig}`);
-      });
-    }
-    lines.push(`  ${c.cyan('│')}`);
-    lines.push(`  ${c.cyan('└')}  ${c.dim(`[↑/↓] mover · [Espacio] marcar · [a] todas · [Enter] siguiente · [Bksp/←] atrás${detachHint} · [c] comandos`)}`);
-  }
-
-  // Active Step 3: Optional Skills & External Add-ons (Superpowers)
   if (model.step === 3) {
-    const cur = model.cursors[3];
-    const checkedCount = model.optionalItems.filter(i => i.checked).length;
-    lines.push(`  ${c.cyan('◆')}  ${c.bold(`Paso 3 de 4 · Skills opcionales y añadidos (${checkedCount} marcadas)`)}`);
-    if (model.optionalItems.length === 0) {
-      lines.push(`  ${c.cyan('│')}    ${c.dim('Todas las skills del catálogo ya encajaron con tu stack en el Paso 2.')}`);
-    } else {
-      lines.push(`  ${c.cyan('│')}    ${c.dim('Opcionales verificadas fuera del stack detectado (desmarcadas por defecto):')}`);
-      model.optionalItems.forEach((item, idx) => {
-        const ptr = idx === cur ? c.cyan('❯') : ' ';
-        const box = item.checked ? c.green('[x]') : c.dim('[ ]');
-        const name = idx === cur ? c.bold(item.title) : item.title;
-        const orig = c.dim(`← ${truncate(item.origin, Math.max(20, width - item.title.length - 18))}`);
-        lines.push(`  ${c.cyan('│')}  ${ptr} ${box} ${idx + 1}. ${name}  ${orig}`);
-      });
+    const cur = model.configCursor;
+    const agentHint = config.agent === 'all'
+      ? 'Instala las skills para Claude y Codex. Mantén ambos si usas los dos; cambia este ajuste si solo usas uno.'
+      : `Instala las skills solo para ${config.agent === 'claude' ? 'Claude Code' : 'Codex'}. Elige ambos si también usas el otro agente.`;
+    const globalHint = config.globalAlreadyReady
+      ? 'Las skills base y los agentes de nivel de tu usuario ya están al día. Puedes dejar este ajuste desmarcado.'
+      : `Prepara las skills base y los agentes de nivel para todos tus proyectos (${config.pendingGlobalCount} pendientes). ${config.syncGlobalCore ? 'Déjalo marcado si quieres sincronizarlos.' : 'Márcalo si quieres sincronizarlos.'}`;
+    const rows = [
+      { label: 'Agentes destino', value: AGENT_LABELS[config.agent], hint: agentHint },
+      { label: 'Modo en proyecto', value: shortMode, hint: MODE_LABELS[config.installMode] },
+      { label: 'Ignorar en Git', value: shortIgnore, hint: GIT_IGNORE_LABELS[config.gitIgnore] },
+      { label: 'Núcleo global', value: `${config.syncGlobalCore ? '[x]' : '[ ]'} Sincronizar skills base y agentes de nivel`, hint: globalHint }
+    ];
+    add('Paso 3 de 3 · Revisar e instalar', c.bold);
+    add('Aún no se ha escrito nada en disco.', c.yellow);
+    add();
+    const chosen = [...model.fundamentalItems, ...model.optionalItems].filter(item => item.checked);
+    add(`Skills seleccionadas (${chosen.length})`, c.bold);
+    add(chosen.length ? chosen.map(item => item.title).join(', ') : 'No hay skills de proyecto seleccionadas.');
+    add();
+    add(model.configDraft ? 'Editar configuración de instalación' : 'Configuración de instalación', c.bold);
+    add();
+    rows.forEach((row, i) => {
+      const focused = model.configDraft && i === cur;
+      add(`${model.configDraft ? (focused ? '❯ ' : '  ') : ''}${row.label}: ${row.value}`, focused ? selected : plain);
+    });
+    if (model.configDraft) {
+      add('Casillas: [x] activado · [ ] desactivado.', c.dim);
+      add();
+      add(rows[cur].hint, c.cyan);
+      return finish(['[↑/↓] seleccionar ajuste · [Espacio] cambiar / marcar', '[Enter] actualizar vista previa · [Esc / Bksp] descartar ajustes', '[c] comandos · [q] salir']);
     }
-    if (model.snapshot.recommendation.addons.length > 0) {
-      lines.push(`  ${c.cyan('│')}`);
-      lines.push(`  ${c.cyan('│')}    ${c.bold('Añadido externo opcional (sin descarga automática):')}`);
-      for (const addon of model.snapshot.recommendation.addons) {
-        lines.push(`  ${c.cyan('│')}      ${c.magenta('•')} ${addon.name} (${addon.versionReviewed} · ${addon.license}) ${c.dim('— 4 prácticas base ya adaptadas')}`);
-        lines.push(`  ${c.cyan('│')}        ${c.dim(truncate(`Claude: ${addon.installHints.claude}`, width - 12))}`);
-      }
-    }
-    lines.push(`  ${c.cyan('│')}`);
-    lines.push(`  ${c.cyan('└')}  ${c.dim(`[↑/↓] mover · [Espacio] marcar · [a] todas · [Enter] vista previa · [Bksp/←] atrás${detachHint} · [c] comandos`)}`);
-  }
-
-  // Active Step 4: Safe Preview + SHA-256 Integrity Check
-  if (model.step === 4 && model.previewData) {
+    add();
+    add('Cambios previstos', c.bold);
     const p = model.previewData;
-    lines.push(`  ${c.yellow('◆')}  ${c.bold(c.yellow('Paso 4 de 4 · Vista previa segura (aún no se ha escrito nada en disco)'))}`);
-    if (p.verifiedSkillsCount > 0) {
-      lines.push(`  ${c.cyan('│')}    ${c.green(`✓ Integridad SHA-256 comprobada en ${p.verifiedSkillsCount} skill(s) del catálogo`)}`);
+    if (!p) {
+      add('No hay una vista previa válida. Vuelve a las skills y revisa la selección.', c.yellow);
+      return finish(['[Bksp/←] volver a opcionales · [c] comandos · [q] salir']);
     }
-    if (p.actions.length === 0) {
-      lines.push(`  ${c.cyan('│')}    ${c.dim('No hay cambios pendientes de escribir (todo lo seleccionado ya está al día).')}`);
-    } else {
-      for (const act of p.actions.slice(0, 12)) {
-        const icon = act.kind === 'conflict' ? c.yellow('⚠') : c.green('+');
-        lines.push(`  ${c.cyan('│')}    ${icon} ${truncate(act.label, width - 10)}`);
-      }
-      if (p.actions.length > 12) {
-        lines.push(`  ${c.cyan('│')}    ${c.dim(`… y ${p.actions.length - 12} acción(es) más en la selección.`)}`);
-      }
-    }
+    if (p.verifiedSkillsCount > 0) add(`✓ Integridad SHA-256 comprobada en ${p.verifiedSkillsCount} skill(s) del catálogo`, c.green);
+    if (p.actions.length === 0) add('No hay cambios pendientes de escribir (todo lo seleccionado ya está al día).');
+    for (const action of p.actions.slice(0, 12)) add(`${action.kind === 'conflict' ? '!' : '+'} ${action.label}`, action.kind === 'conflict' ? c.yellow : plain);
+    if (p.actions.length > 12) add(`… y ${p.actions.length - 12} acción(es) más en la selección.`, c.dim);
     if (p.conflictsCount > 0) {
-      lines.push(`  ${c.cyan('│')}    ${c.yellow(`Nota: ${p.conflictsCount} conflicto(s) existente(s) se respetarán sin borrar ni sobrescribir.`)}`);
+      add();
+      add(`! ${p.conflictsCount} conflicto(s) se respetarán sin borrar ni sobrescribir.`, c.yellow);
     }
     if (p.manualCommands.length > 0) {
-      lines.push(`  ${c.cyan('│')}`);
-      lines.push(`  ${c.cyan('│')}    ${c.bold('Comandos externos sugeridos (opcional):')}`);
-      for (const cmd of p.manualCommands.slice(0, 2)) {
-        lines.push(`  ${c.cyan('│')}      ${c.dim('$')} ${truncate(cmd, width - 12)}`);
+      add();
+      add('Comandos externos sugeridos (opcional)', c.bold);
+      for (const cmd of p.manualCommands.slice(0, 2)) add(`$ ${cmd}`, c.cyan);
+    }
+    return finish(['[Enter / s] confirmar e instalar · [e] editar configuración', `[Bksp/←] volver a opcionales · [Esc / n] cancelar${detachHint}`, '[c] comandos · [q] salir']);
+  }
+
+  if (model.step === 1 || model.step === 2) {
+    const fundamental = model.step === 1;
+    const items = fundamental ? model.fundamentalItems : model.optionalItems;
+    const cur = model.cursors[model.step];
+    const checkedCount = items.filter(item => item.checked).length;
+    add(`Paso ${model.step} de 3 · ${fundamental ? 'Skills para tu proyecto' : 'Skills opcionales'}`, c.bold);
+    add(`${checkedCount} de ${items.length} marcadas · archivos comprobados por SHA-256`, c.green);
+    add(fundamental ? 'Solo las recomendaciones validadas vienen marcadas. Las compatibles las eliges tú.' : 'Fuera del stack detectado. Tú eliges qué añadir.', c.dim);
+    add();
+    if (items.length === 0) {
+      add(fundamental ? 'No se detectaron frameworks adicionales que requieran skills específicas en este paso.' : 'Todas las skills del catálogo ya encajaron con tu stack en el Paso 1.');
+    }
+    items.forEach((item, i) => add(`${i === cur ? '❯' : ' '} ${item.checked ? '[x]' : '[ ]'} ${item.title}${item.alreadyReady ? ' · ya instalada' : ''} · ${item.recommendationStatus === 'validated' ? 'Recomendada' : fundamental ? 'Compatible' : 'Opcional'}`, i === cur ? selected : item.checked ? c.green : plain));
+    if (items[cur]) {
+      add();
+      const item = items[cur];
+      add(`Por qué: ${item.reasons.length ? item.reasons.join(', ') : 'sin coincidencia con el stack; disponible para elección manual.'}`, c.cyan);
+      add(`Utilidad prevista: ${item.summary}`);
+      if (item.recommendationStatus === 'validated') {
+        add('Recomendada: escenario funcional pasado para los agentes destino.', c.green);
+        for (const evidence of item.evidence) add(`Evidencia (${evidence.client}): ${evidence.evidencePath}`, c.dim);
+      } else if (fundamental) {
+        add('Compatible: utilidad sin validar para este contexto.', c.yellow);
+        for (const reason of item.pendingReasons) add(`Pendiente: ${reason}`, c.dim);
+      }
+      if (item.overlapsWith.length > 0) add(`Comparte ámbito con: ${item.overlapsWith.join(', ')}. Revisa si necesitas ambas.`, c.dim);
+      if (item.installationStatus === 'conflict') add('Instalación: hay archivos propios o modificados; se conservarán.', c.yellow);
+      if (item.reviewStatus === 'reviewed-with-observations') add(`Observaciones: ${item.reviewNotes}`, c.yellow);
+      add(`Integridad: SHA-256 comprobado · Licencia: ${item.license}`, c.dim);
+      add('La integridad de los archivos no acredita su utilidad.', c.dim);
+    }
+    if (!fundamental && model.snapshot.recommendation.addons.length > 0) {
+      add();
+      add('Añadido externo opcional · sin descarga automática', c.bold);
+      for (const addon of model.snapshot.recommendation.addons) {
+        add(`${addon.name} (${addon.versionReviewed} · ${addon.license})`, c.magenta);
+        add('4 prácticas base ya adaptadas.', c.dim);
+        add(`Claude: ${addon.installHints.claude}`, c.dim);
       }
     }
-    lines.push(`  ${c.cyan('│')}`);
-    lines.push(`  ${c.cyan('└')}  ${c.bold('[Enter / s] Confirmar e instalar')} · ${c.dim('[Bksp/←] volver al Paso 3 · [Esc / n] cancelar sin escribir')}`);
+    return finish([`[↑/↓] mover · [Espacio] marcar/desmarcar · [a] todas · [Enter] ${fundamental ? 'opcionales' : 'revisar instalación'}`, `${fundamental ? '' : '[Bksp/←] atrás · '}[c] comandos${detachHint} · [q] salir`]);
   }
 
-  if (model.statusMessage) {
-    lines.push('');
-    lines.push(`  ${c.yellow(model.statusMessage)}`);
-  }
-
-  return lines.join('\n') + '\n';
+  return finish();
 }
 
 export async function computeInstallPreview(model, setupOptions = {}) {
@@ -626,13 +633,16 @@ export function formatRecommendationReport(report) {
     }
   }
 
-  lines.push('', `Skills fundamentales verificadas para tu stack (${report.candidates.length}):`);
+  lines.push('', `Skills compatibles por tecnología o perfil, sin escenario validado (${report.candidates.length}):`);
   if (report.candidates.length === 0) {
     lines.push('  - Ninguna skill específica adicional coincide con las señales actuales.');
   } else {
     for (const cand of report.candidates) {
       const state = cand.installed ? ` · en proyecto: ${cand.installed.integrity}` : '';
       lines.push(`  - ${cand.name} (${cand.license}, SHA-256 ✓) ← ${cand.reasons.join(', ')}${state}`);
+      lines.push(`    Utilidad prevista: ${cand.summary}`);
+      for (const reason of cand.pendingReasons) lines.push(`    Pendiente: ${reason}`);
+      if (cand.overlapsWith.length) lines.push(`    Comparte ámbito con: ${cand.overlapsWith.join(', ')}`);
     }
   }
 
@@ -654,6 +664,7 @@ export function formatRecommendationReport(report) {
     lines.push('', 'Límites de la inspección:');
     for (const lim of report.limits) lines.push(`  ! ${lim}`);
   }
+  lines.push('', 'SHA-256 comprueba integridad de archivos; no acredita utilidad ni calidad.');
 
   return lines.join('\n') + '\n';
 }
@@ -681,6 +692,35 @@ export async function runToolkitTui({
       color: useColor
     });
     output.write(`\x1b[2J\x1b[H${frame}`);
+  };
+
+  const updateReview = async (config = model.config) => {
+    let snapshot = model.snapshot;
+    let fundamentalItems = model.fundamentalItems;
+    let optionalItems = model.optionalItems;
+    if (config.agent !== snapshot.agent || config.installMode !== snapshot.installMode) {
+      snapshot = await buildToolkitTuiSnapshot({
+        projectRoot: snapshot.inspection.projectRoot,
+        agent: config.agent,
+        installMode: config.installMode,
+        profile: snapshot.profile,
+        codexProfile: snapshot.codexProfile,
+        setupOptions
+      });
+      const refreshed = createToolkitTuiModel(snapshot);
+      const choices = new Map([...fundamentalItems, ...optionalItems].map(item => [item.skillName, item]));
+      const preserveChoice = item => {
+        const previous = choices.get(item.skillName);
+        return previous?.selectionSource === 'user'
+          ? { ...item, checked: previous.checked, selectionSource: 'user' }
+          : item;
+      };
+      fundamentalItems = refreshed.fundamentalItems.map(preserveChoice);
+      optionalItems = refreshed.optionalItems.map(preserveChoice);
+      config = { ...config, globalAlreadyReady: refreshed.config.globalAlreadyReady, pendingGlobalCount: refreshed.config.pendingGlobalCount };
+    }
+    const previewData = await computeInstallPreview({ ...model, snapshot, config, fundamentalItems, optionalItems }, setupOptions);
+    Object.assign(model, { snapshot, config, fundamentalItems, optionalItems, previewData, configDraft: null, step: 3 });
   };
 
   let cleanedUp = false;
@@ -765,37 +805,8 @@ export async function runToolkitTui({
         return;
       }
 
-      // Step 4: Preview confirmation / back / cancel
-      if (model.step === 4) {
-        if (key === '\x7f' || key === '\x08' || key === '\x1b[D') {
-          model.step = 3;
-          model.previewData = null;
-          render();
-          return;
-        }
-        if (key === '\x1b' || key === 'n' || key === 'N') {
-          model.step = 1;
-          model.previewData = null;
-          model.statusMessage = 'Instalación cancelada; no se modificó ningún archivo.';
-          render();
-          return;
-        }
-        if (key === '\r' || key === '\n' || key === 's' || key === 'S') {
-          try {
-            const resultData = await executeApprovedPreview(model, setupOptions);
-            model.resultData = resultData;
-            model.step = 'done';
-          } catch (err) {
-            model.step = 1;
-            model.statusMessage = err?.message || 'No se pudo completar la instalación.';
-          }
-          render();
-        }
-        return;
-      }
-
       // [d] Detach project shortcut from Steps 1, 2 or 3
-      if ((key === 'd' || key === 'D') && (model.step === 1 || model.step === 2 || model.step === 3)) {
+      if ((key === 'd' || key === 'D') && !model.configDraft && (model.step === 1 || model.step === 2 || model.step === 3)) {
         try {
           const dp = await planToolkitDetach({
             projectRoot: model.snapshot.inspection.projectRoot,
@@ -822,75 +833,65 @@ export async function runToolkitTui({
         return;
       }
 
-      // Back navigation on Steps 2 and 3
-      if ((model.step === 2 || model.step === 3) && (key === '\x7f' || key === '\x08' || key === '\x1b[D')) {
-        model.step = model.step - 1;
+      // Edit a draft at the final review. Saving only regenerates the preview.
+      if (model.step === 3 && model.configDraft) {
+        if (key === '\x1b' || key === '\x7f' || key === '\x08') {
+          model.configDraft = null;
+        } else if (key === '\x1b[A' || key === 'k') {
+          model.configCursor = (model.configCursor + 3) % 4;
+        } else if (key === '\x1b[B' || key === 'j') {
+          model.configCursor = (model.configCursor + 1) % 4;
+        } else if (key === ' ' || key === '\x1b[C' || key === '\x1b[D') {
+          const draft = model.configDraft;
+          if (model.configCursor === 0) draft.agent = AGENTS_CYCLE[(AGENTS_CYCLE.indexOf(draft.agent) + 1) % AGENTS_CYCLE.length];
+          else if (model.configCursor === 1) draft.installMode = draft.installMode === 'symlink' ? 'copy' : 'symlink';
+          else if (model.configCursor === 2) draft.gitIgnore = draft.gitIgnore === 'gitignore' ? 'git-exclude' : 'gitignore';
+          else draft.syncGlobalCore = !draft.syncGlobalCore;
+        } else if (key === '\r' || key === '\n') {
+          try {
+            await updateReview(model.configDraft);
+          } catch (err) {
+            model.statusMessage = err?.message || 'No se pudo actualizar la vista previa. No se ha instalado nada.';
+          }
+        }
         render();
         return;
       }
 
-      // Step 1 controls (4 rows: agent, installMode, gitIgnore, syncGlobalCore)
-      if (model.step === 1) {
-        if (key === '\x1b[A' || key === 'k') {
-          model.cursors[1] = (model.cursors[1] + 3) % 4;
-          render();
-          return;
-        }
-        if (key === '\x1b[B' || key === 'j') {
-          model.cursors[1] = (model.cursors[1] + 1) % 4;
-          render();
-          return;
-        }
-        if (key === ' ' || key === '\x1b[C' || key === '\x1b[D') {
-          const idx = model.cursors[1];
-          if (idx === 0) {
-            const nextIdx = (AGENTS_CYCLE.indexOf(model.config.agent) + 1) % AGENTS_CYCLE.length;
-            model.config.agent = AGENTS_CYCLE[nextIdx];
-          } else if (idx === 1) {
-            model.config.installMode = model.config.installMode === 'symlink' ? 'copy' : 'symlink';
-          } else if (idx === 2) {
-            model.config.gitIgnore = model.config.gitIgnore === 'gitignore' ? 'git-exclude' : 'gitignore';
-          } else {
-            model.config.syncGlobalCore = !model.config.syncGlobalCore;
-          }
-          render();
-          return;
-        }
-        if (key === '\r' || key === '\n') {
-          if (
-            model.config.agent !== model.snapshot.agent ||
-            model.config.installMode !== model.snapshot.installMode
-          ) {
-            try {
-              const updatedPlan = await planProjectSkillInstall({
-                projectRoot: model.snapshot.inspection.projectRoot,
-                skillNames: model.snapshot.catalog.skills.map(s => s.name),
-                agent: model.config.agent,
-                mode: model.config.installMode,
-                gitIgnore: model.config.gitIgnore,
-                catalog: model.snapshot.catalog,
-                toolkitRoot: setupOptions.toolkitRoot ?? TOOLKIT_ROOT
-              });
-              model.snapshot.agent = model.config.agent;
-              model.snapshot.installMode = model.config.installMode;
-              model.snapshot.projectInstallPlan = updatedPlan;
-              const fundSrc = [...model.snapshot.recommendation.recommended, ...model.snapshot.recommendation.candidates];
-              model.fundamentalItems = fundSrc.map(entry =>
-                buildSkillItem(entry, updatedPlan.links.filter(l => l.name === entry.name), { isFundamental: true })
-              );
-              model.optionalItems = model.snapshot.recommendation.optional.map(entry =>
-                buildSkillItem(entry, updatedPlan.links.filter(l => l.name === entry.name), { isFundamental: false })
-              );
-            } catch {}
-          }
+      if (model.step === 3) {
+        if (key === 'e' || key === 'E') {
+          model.configDraft = { ...model.config };
+          model.configCursor = 0;
+        } else if (key === '\x7f' || key === '\x08' || key === '\x1b[D') {
           model.step = 2;
-          render();
+          model.previewData = null;
+        } else if (key === '\x1b' || key === 'n' || key === 'N') {
+          model.step = 1;
+          model.previewData = null;
+          model.statusMessage = 'Instalación cancelada; no se modificó ningún archivo.';
+        } else if ((key === '\r' || key === '\n' || key === 's' || key === 'S') && model.previewData) {
+          try {
+            model.resultData = await executeApprovedPreview(model, setupOptions);
+            model.step = 'done';
+          } catch (err) {
+            model.step = 1;
+            model.previewData = null;
+            model.statusMessage = err?.message || 'No se pudo completar la instalación.';
+          }
         }
+        render();
         return;
       }
 
-      // Step 2 & Step 3 list controls
-      const activeList = model.step === 2 ? model.fundamentalItems : model.optionalItems;
+      // Back from optional skills keeps both lists and their choices intact.
+      if (model.step === 2 && (key === '\x7f' || key === '\x08' || key === '\x1b[D')) {
+        model.step = 1;
+        render();
+        return;
+      }
+
+      // Project and optional skill list controls
+      const activeList = model.step === 1 ? model.fundamentalItems : model.optionalItems;
       const stepNum = model.step;
 
       if ((key === '\x1b[A' || key === 'k') && activeList.length > 0) {
@@ -905,26 +906,31 @@ export async function runToolkitTui({
       }
       if (key === ' ' && activeList.length > 0) {
         const item = activeList[model.cursors[stepNum]];
-        if (item) item.checked = !item.checked;
+        if (item) {
+          item.checked = !item.checked;
+          item.selectionSource = 'user';
+        }
         render();
         return;
       }
       if ((key === 'a' || key === 'A') && activeList.length > 0) {
         const allChecked = activeList.every(i => i.checked);
-        for (const item of activeList) item.checked = !allChecked;
+        for (const item of activeList) {
+          item.checked = !allChecked;
+          item.selectionSource = 'user';
+        }
         render();
         return;
       }
       if (key === '\r' || key === '\n') {
-        if (model.step === 2) {
-          model.step = 3;
+        if (model.step === 1) {
+          model.step = 2;
           render();
           return;
         }
-        // Step 3 -> Step 4 (Preview)
+        // Optional skills -> final review
         try {
-          model.previewData = await computeInstallPreview(model, setupOptions);
-          model.step = 4;
+          await updateReview();
         } catch (err) {
           model.statusMessage = err?.message || 'No se pudo comprobar la vista previa.';
         }

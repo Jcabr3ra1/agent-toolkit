@@ -89,7 +89,7 @@
         },
         "client": { "type": "string", "enum": ["codex", "claude"] },
         "status": { "type": "string", "enum": ["passed", "pending", "failed"] },
-        "evidencePath": { "type": "string", "minLength": 1, "maxLength": 240 }
+        "evidencePath": { "type": "string", "minLength": 1, "maxLength": 240, "pattern": "^docs/skills/evidencias/" }
       }
     },
     "skillEntry": {

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Ajv2020 from 'ajv/dist/2020.js';
 import schema from '../schemas/skill-catalog.schema.json' with { type: 'json' };
 
@@ -80,7 +81,10 @@ export function validateSkillCatalog(value) {
       throw new SkillCatalogError(`Falta SKILL.md en el manifiesto de ${skill.name}.`);
     }
 
+    const scenarioIds = new Set();
     for (const scenario of skill.scenarios) {
+      if (scenarioIds.has(scenario.id)) throw new SkillCatalogError(`Escenario duplicado en ${skill.name}: ${scenario.id}.`);
+      scenarioIds.add(scenario.id);
       if (scenario.revision !== skill.revision) {
         throw new SkillCatalogError(`El escenario ${scenario.id} de ${skill.name} apunta a otra revisión.`);
       }
@@ -115,11 +119,31 @@ export function validateSkillCatalog(value) {
   return deepFreeze(copy);
 }
 
+// Refuse symbolic parents as well as symbolic files when checking catalog resources.
+export async function resolveCatalogResource(toolkitRoot, relativePath) {
+  if (!isSafeRelativeSubpath(relativePath)) throw new SkillCatalogError('Ruta de recurso de catálogo inválida.');
+  let target = await fs.realpath(toolkitRoot);
+  const segments = relativePath.split('/');
+  for (let i = 0; i < segments.length; i++) {
+    target = path.join(target, segments[i]);
+    const stat = await fs.lstat(target);
+    if (stat.isSymbolicLink() || (i < segments.length - 1 && !stat.isDirectory())) {
+      throw new SkillCatalogError(`Recurso del catálogo con enlace o padre no regular: ${relativePath}.`);
+    }
+  }
+  return target;
+}
+
 export async function loadSkillCatalog({ catalogUrl = DEFAULT_CATALOG_URL } = {}) {
   let raw;
   try {
+    const stat = await fs.lstat(catalogUrl);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 2 * 1024 * 1024) {
+      throw new SkillCatalogError('El catálogo debe ser un archivo regular de hasta 2 MiB, sin enlaces simbólicos.');
+    }
     raw = await fs.readFile(catalogUrl, 'utf8');
-  } catch {
+  } catch (error) {
+    if (error instanceof SkillCatalogError) throw error;
     throw new SkillCatalogError('No se pudo leer el catálogo confiable de skills.');
   }
   let parsed;
@@ -128,5 +152,19 @@ export async function loadSkillCatalog({ catalogUrl = DEFAULT_CATALOG_URL } = {}
   } catch {
     throw new SkillCatalogError('El catálogo de skills no contiene JSON válido.');
   }
-  return validateSkillCatalog(parsed);
+  const catalog = validateSkillCatalog(parsed);
+  const filename = catalogUrl instanceof URL ? fileURLToPath(catalogUrl) : path.resolve(catalogUrl);
+  const toolkitRoot = path.dirname(path.dirname(filename));
+  for (const skill of catalog.skills) {
+    for (const scenario of skill.scenarios.filter(item => item.status === 'passed')) {
+      try {
+        const evidencePath = await resolveCatalogResource(toolkitRoot, scenario.evidencePath);
+        const stat = await fs.lstat(evidencePath);
+        if (!stat.isFile() || stat.size === 0 || stat.size > 512 * 1024) throw new Error('Invalid evidence file');
+      } catch {
+        throw new SkillCatalogError(`Evidencia ausente, vacía o no regular para ${skill.name}/${scenario.id}: ${scenario.evidencePath}.`);
+      }
+    }
+  }
+  return catalog;
 }

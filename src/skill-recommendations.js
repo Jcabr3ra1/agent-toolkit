@@ -523,13 +523,20 @@ function findApplicableScenario(skill, observedSignalIds, profile, client) {
   return null;
 }
 
-export function recommendSkills({ catalog, inspection, profile, client } = {}) {
+export function recommendSkills({ catalog, inspection, profile, client, clients } = {}) {
   if (!catalog || !inspection) throw new Error('Se requieren catalog e inspection.');
   if (profile !== undefined && !VALID_PROFILES.has(profile)) {
     throw new Error('El perfil debe ser frontend, backend, mcp o security.');
   }
   if (client !== undefined && !VALID_CLIENTS.has(client)) {
     throw new Error('El filtro --client solo admite codex o claude.');
+  }
+  if (clients !== undefined && (!Array.isArray(clients) || clients.length === 0 || clients.some(value => !VALID_CLIENTS.has(value)) || new Set(clients).size !== clients.length)) {
+    throw new Error('Los agentes destino deben ser una lista de codex y/o claude sin duplicados.');
+  }
+  const targetClients = clients ?? (client ? [client] : []);
+  if (client && clients && (clients.length !== 1 || clients[0] !== client)) {
+    throw new Error('Los filtros client y clients deben indicar el mismo agente.');
   }
 
   const observedIds = new Set(inspection.signals.map(s => s.id));
@@ -562,6 +569,8 @@ export function recommendSkills({ catalog, inspection, profile, client } = {}) {
         revision: skill.revision,
         installedPath: skill.installedPath,
         profiles: [...skill.matching.profiles],
+        recommendationStatus: 'optional',
+        reasons: [],
         overlapsWith: [...skill.overlapsWith],
         reviewStatus: skill.review.status,
         reviewNotes: skill.review.notes,
@@ -576,7 +585,8 @@ export function recommendSkills({ catalog, inspection, profile, client } = {}) {
       ...matchedSignals.map(sig => `${SIGNAL_LABELS[sig] ?? sig} (${signalMap.get(sig).sources[0]})`),
       ...(matchedProfile ? [`perfil ${profile}`] : [])
     ];
-    const scenario = findApplicableScenario(skill, observedIds, profile, client);
+    const scenarios = targetClients.map(target => ({ client: target, scenario: findApplicableScenario(skill, observedIds, profile, target) }));
+    const allScenariosPassed = scenarios.length > 0 && scenarios.every(item => item.scenario);
 
     const baseItem = {
       name: skill.name,
@@ -593,19 +603,24 @@ export function recommendSkills({ catalog, inspection, profile, client } = {}) {
       installableFromToolkit: true
     };
 
-    if (scenario && skill.review.status !== 'pending') {
+    if (allScenariosPassed && skill.review.status !== 'pending') {
       recommended.push({
         ...baseItem,
-        taskClass: scenario.taskClass,
-        evidencePath: scenario.evidencePath
+        recommendationStatus: 'validated',
+        taskClass: scenarios[0].scenario.taskClass,
+        evidencePath: scenarios[0].scenario.evidencePath,
+        evidence: scenarios.map(({ client: target, scenario }) => ({ client: target, scenarioId: scenario.id, taskClass: scenario.taskClass, evidencePath: scenario.evidencePath }))
       });
     } else {
       const pendingReasons = [];
       if (skill.review.status === 'pending') pendingReasons.push('revisión de contenido pendiente');
-      if (!client) pendingReasons.push('sin --client para validar escenario específico de agente');
-      if (!scenario) pendingReasons.push('escenario funcional general pendiente');
+      if (targetClients.length === 0) pendingReasons.push('indica --client para comprobar un escenario del agente destino');
+      for (const item of scenarios) {
+        if (!item.scenario) pendingReasons.push(`sin escenario funcional pasado aplicable a ${item.client}`);
+      }
       candidates.push({
         ...baseItem,
+        recommendationStatus: 'compatible',
         pendingReasons
       });
     }
@@ -641,6 +656,7 @@ export function recommendSkills({ catalog, inspection, profile, client } = {}) {
     projectRoot: inspection.projectRoot,
     profile: profile ?? null,
     client: client ?? null,
+    clients: [...targetClients],
     signals: inspection.signals,
     recommended,
     candidates,

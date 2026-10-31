@@ -18,14 +18,18 @@ function createFakeTty({ columns = 100 } = {}) {
   input.pause = () => { input.resumed = false; };
 
   let buffer = '';
+  let frame = '';
   const waiters = [];
   const output = new EventEmitter();
   output.isTTY = true;
   output.columns = columns;
   output.write = chunk => {
     buffer += String(chunk);
+    frame = String(chunk).includes('\x1b[2J\x1b[H')
+      ? String(chunk).split('\x1b[2J\x1b[H').at(-1)
+      : frame + String(chunk);
     for (let i = waiters.length - 1; i >= 0; i--) {
-      if (waiters[i].regex.test(buffer)) {
+      if (waiters[i].regex.test(frame)) {
         const w = waiters.splice(i, 1)[0];
         w.resolve();
       }
@@ -36,8 +40,9 @@ function createFakeTty({ columns = 100 } = {}) {
     input,
     output,
     getOutput: () => buffer,
+    getFrame: () => frame,
     sendKey: seq => input.emit('data', Buffer.from(seq, 'utf8')),
-    waitFor: regex => (regex.test(buffer)
+    waitFor: regex => (regex.test(frame)
       ? Promise.resolve()
       : new Promise((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error(`Timeout waiting for ${regex}`)), 4000);
@@ -70,61 +75,147 @@ async function createSandboxEnv(t, projectPkg = { name: 'ui-demo', dependencies:
   return { root, homeDirectory, codexHome, projectRoot, toolkitRoot: toolkitMini };
 }
 
-test('wizard model separates Step 1 (mode), Step 2 (fundamental verified skills) and Step 3 (optional skills + Superpowers)', async t => {
+test('wizard starts with project skills, then optionals, then review with installation settings', async t => {
   const env = await createSandboxEnv(t);
-  const { getToolkitCommandsGuide } = await import('../src/toolkit-commands-guide.js');
+  const { buildToolkitTuiSnapshot, createToolkitTuiModel, renderToolkitTuiFrame, computeInstallPreview } = await import('../src/toolkit-tui.js');
+  const setupOptions = { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } };
+  const model = createToolkitTuiModel(await buildToolkitTuiSnapshot({ projectRoot: env.projectRoot, setupOptions }));
+  const readable = frame => frame.replace(/[│\n]/gu, ' ').replace(/\s+/gu, ' ');
+  const first = renderToolkitTuiFrame(model, { columns: 100, color: false });
+  assert.equal(model.step, 1);
+  assert.match(first, /Paso 1 de 3/u);
+  assert.match(first, /vercel-react-best-practices/u);
+  assert.match(first, /Next\.js/u);
+  assert.doesNotMatch(first, /Configuración de instalación|differential-review/u);
+  assert.equal(model.fundamentalItems.every(item => !item.checked), true);
+  assert.match(readable(first), /Por qué:.*package\.json/u);
+  assert.match(readable(first), /Compatible/u);
+  assert.match(readable(first), /Utilidad prevista:/u);
+  assert.doesNotMatch(first, /Recomendada/u);
+
+  model.step = 2;
+  const optional = renderToolkitTuiFrame(model, { columns: 100, color: false });
+  assert.match(optional, /Paso 2 de 3/u);
+  assert.match(optional, /differential-review/u);
+  assert.match(optional, /obra\/superpowers/u);
+  assert.equal(model.optionalItems.every(item => !item.checked), true);
+  assert.ok(readable(optional).includes(model.optionalItems[0].summary));
+  model.cursors[2] = 1;
+  assert.ok(readable(renderToolkitTuiFrame(model, { columns: 100, color: false })).includes(model.optionalItems[1].summary));
+
+  model.fundamentalItems[0].checked = true; // an explicit user choice
+  model.step = 3;
+  model.previewData = await computeInstallPreview(model, setupOptions);
+  const review = renderToolkitTuiFrame(model, { columns: 100, color: false });
+  assert.match(review, /Paso 3 de 3/u);
+  assert.match(review, /Configuración de instalación/u);
+  assert.match(review, /Enlace simbólico/u);
+  assert.match(review, /frontend-design/u);
+  assert.match(review, /\[e\]/u);
+
+  model.showCommands = true;
+  const commands = renderToolkitTuiFrame(model, { columns: 68, color: false });
+  assert.match(commands, /\/programar/u);
+  assert.match(commands, /\$revisar/u);
+});
+
+test('installed skills are identified in the first step and are not selected again by default', async t => {
+  const env = await createSandboxEnv(t, { name: 'mcp-demo', dependencies: { '@modelcontextprotocol/sdk': '1.30.0' } });
   const { buildToolkitTuiSnapshot, createToolkitTuiModel, renderToolkitTuiFrame } = await import('../src/toolkit-tui.js');
+  const { planProjectSkillInstall, applyProjectSkillInstall } = await import('../src/skill-recommendations.js');
+  const setupOptions = { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } };
+  const snapshot = await buildToolkitTuiSnapshot({ projectRoot: env.projectRoot, setupOptions });
+  await applyProjectSkillInstall(await planProjectSkillInstall({ projectRoot: env.projectRoot, skillNames: ['mcp-builder'], agent: 'all', mode: 'symlink', catalog: snapshot.catalog, toolkitRoot: env.toolkitRoot }));
+  const model = createToolkitTuiModel(await buildToolkitTuiSnapshot({ projectRoot: env.projectRoot, setupOptions }));
+  const frame = renderToolkitTuiFrame(model, { columns: 100, color: false });
+  assert.match(frame, /\[ \] mcp-builder · ya instalada/u);
+  assert.equal(model.fundamentalItems.find(item => item.skillName === 'mcp-builder').checked, false);
+});
 
-  const guide = getToolkitCommandsGuide({ clients: { claude: { available: true }, codex: { available: true } } });
-  assert.equal(guide.workflowCommands.some(c => c.claude === '/spec-driven-development'), true);
-  assert.equal(guide.workflowCommands.some(c => c.codex === '$revisar'), true);
+test('only proven target scenarios are preselected; manual choices survive a target change', async t => {
+  const env = await createSandboxEnv(t, { name: 'mcp-demo', dependencies: { '@modelcontextprotocol/sdk': '1.30.0' } });
+  const { buildToolkitTuiSnapshot, createToolkitTuiModel, runToolkitTui } = await import('../src/toolkit-tui.js');
+  const setupOptions = { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } };
+  const catalogPath = path.join(env.toolkitRoot, 'catalogs/skills.json');
+  const catalog = JSON.parse(await fs.readFile(catalogPath, 'utf8'));
+  const skill = catalog.skills.find(entry => entry.name === 'mcp-builder');
+  skill.scenarios = [{ id: 'synthetic-mcp-claude', revision: skill.revision, profile: 'mcp', taskClass: 'mcp-development', requiredSignals: ['mcp-sdk'], client: 'claude', status: 'passed', evidencePath: 'docs/skills/evidencias/synthetic.md' }];
+  await fs.mkdir(path.join(env.toolkitRoot, 'docs/skills/evidencias'), { recursive: true });
+  await fs.writeFile(path.join(env.toolkitRoot, skill.scenarios[0].evidencePath), 'Synthetic fixture to test recommendation gating; not a real skill evaluation.');
+  await fs.writeFile(catalogPath, JSON.stringify(catalog));
+  const both = createToolkitTuiModel(await buildToolkitTuiSnapshot({ projectRoot: env.projectRoot, setupOptions }));
+  assert.equal(both.fundamentalItems[0].checked, false);
+  const claude = createToolkitTuiModel(await buildToolkitTuiSnapshot({ projectRoot: env.projectRoot, agent: 'claude', setupOptions }));
+  assert.equal(claude.fundamentalItems[0].checked, true);
+  assert.equal(claude.fundamentalItems[0].recommendationStatus, 'validated');
+  for (const manual of [false, true]) {
+    const tty = createFakeTty();
+    const running = runToolkitTui({ input: tty.input, output: tty.output, projectRoot: env.projectRoot, agent: 'claude', setupOptions });
+    t.after(() => tty.sendKey('\x03'));
+    await tty.waitFor(/Paso 1 de 3/u);
+    if (manual) { tty.sendKey(' '); tty.sendKey(' '); }
+    tty.sendKey('\r');
+    await tty.waitFor(/Paso 2 de 3/u);
+    tty.sendKey('\r');
+    await tty.waitFor(/Paso 3 de 3/u);
+    tty.sendKey('e');
+    await tty.waitFor(/Editar configuración/u);
+    tty.sendKey(' '); // Claude -> Codex, which has no passed scenario
+    await tty.waitFor(/Solo Codex/u);
+    tty.sendKey('\r');
+    await tty.waitFor(/\[Enter \/ s\] confirmar e instalar/u);
+    assert.match(tty.getFrame(), manual ? /Skills seleccionadas \(1\)/u : /Skills seleccionadas \(0\)/u);
+    tty.sendKey('q');
+    assert.equal(await running, 0);
+  }
+});
 
+test('frames fit narrow terminals without losing commands or changing the model', async t => {
+  const env = await createSandboxEnv(t);
+  const { buildToolkitTuiSnapshot, createToolkitTuiModel, renderToolkitTuiFrame } = await import('../src/toolkit-tui.js');
   const snapshot = await buildToolkitTuiSnapshot({
     projectRoot: env.projectRoot,
-    agent: 'all',
     setupOptions: { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } }
   });
   const model = createToolkitTuiModel(snapshot);
-  assert.equal(model.step, 1);
-
-  // Step 1 frame shows target & install mode
-  const step1Frame = renderToolkitTuiFrame(model, { columns: 100, color: false });
-  assert.match(step1Frame, /Paso 1 de 4/u);
-  assert.match(step1Frame, /Next\.js/u);
-  assert.match(step1Frame, /Enlace simbólico/u);
-
-  // Step 2 frame shows ONLY fundamental matched skills (vercel-react-best-practices, vercel-composition-patterns, frontend-design, web-design-guidelines), pre-checked!
-  model.step = 2;
-  const step2Frame = renderToolkitTuiFrame(model, { columns: 100, color: false });
-  assert.match(step2Frame, /Paso 2 de 4/u);
-  assert.match(step2Frame, /vercel-react-best-practices/u);
-  assert.match(step2Frame, /vercel-composition-patterns/u);
-  assert.match(step2Frame, /frontend-design/u);
-  assert.equal(model.fundamentalItems.every(i => i.checked), true);
-  assert.equal(step2Frame.includes('differential-review'), false);
-
-  // Step 3 frame shows optional skills (unchecked by default) + Superpowers
-  model.step = 3;
-  const step3Frame = renderToolkitTuiFrame(model, { columns: 100, color: false });
-  assert.match(step3Frame, /Paso 3 de 4/u);
-  assert.match(step3Frame, /differential-review/u);
-  assert.match(step3Frame, /obra\/superpowers/u);
-  assert.equal(model.optionalItems.every(i => !i.checked), true);
-
-  // Commands overlay works from any step and narrow terminals
-  model.showCommands = true;
-  const commandsFrame = renderToolkitTuiFrame(model, { columns: 68, color: false });
-  assert.match(commandsFrame, /\/programar/u);
-  assert.match(commandsFrame, /\$revisar/u);
+  model.statusMessage = 'Un mensaje largo que debe seguir siendo legible en una terminal estrecha sin desbordar el marco.';
+  model.previewData = { verifiedSkillsCount: 1, actions: [{ kind: 'conflict', label: 'Archivo propio respetado en una ruta muy larga del proyecto' }], conflictsCount: 1, manualCommands: ['npx example --project /una/ruta/muy/larga/que/no/debe/desaparecer'] };
+  model.detachPlan = { items: [{ action: 'conflict', relativePath: 'archivo-propio', reason: 'Se conserva sin cambios' }], gitIgnoreUpdates: [] };
+  model.resultData = { projectLinksCreated: 1, conflicts: 1, removedCount: 1, gitIgnoreCleanedCount: 1 };
+  for (const columns of [40, 68, 100]) {
+    for (const step of [1, 2, 3, 'done', 'detach-preview', 'detached']) {
+      model.step = step;
+      const before = structuredClone(model);
+      const plain = renderToolkitTuiFrame(model, { columns, color: false });
+      const colored = renderToolkitTuiFrame(model, { columns, color: true });
+      assert.deepEqual(model, before, 'rendering must be read-only');
+      assert.equal(colored.replace(/\x1b\[[0-9;]*m/gu, ''), plain);
+      for (const line of plain.trimEnd().split('\n')) {
+        assert.ok(Array.from(line).length <= columns, `${step} at ${columns} columns: ${line}`);
+      }
+    }
+    model.step = 3;
+    model.configDraft = { ...model.config, installMode: 'copy' };
+    for (const cursor of [0, 1, 2, 3]) {
+      model.configCursor = cursor;
+      const editor = renderToolkitTuiFrame(model, { columns, color: false });
+      for (const line of editor.trimEnd().split('\n')) assert.ok(Array.from(line).length <= columns);
+    }
+    model.configDraft = null;
+    model.showCommands = true;
+    const commands = renderToolkitTuiFrame(model, { columns, color: false });
+    for (const line of commands.trimEnd().split('\n')) assert.ok(Array.from(line).length <= columns);
+    // Wrapping may split a long command, but must never truncate it.
+    assert.ok(commands.replace(/[│\s]/gu, '').includes('npxnexakit'));
+    model.showCommands = false;
+  }
 });
 
-test('step-by-step wizard supports back navigation, zero-write cancel in Step 4, and verified copy + skills-lock.json installation', async t => {
+test('step-by-step wizard supports back navigation, zero-write cancel in final review, and verified copy + skills-lock.json installation', async t => {
   const env = await createSandboxEnv(t, { name: 'api-demo', dependencies: { express: '5.0.0' } });
   const { runToolkitTui } = await import('../src/toolkit-tui.js');
 
-  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-  // 1. Walk Step 1 -> Step 2 -> Step 3 -> Step 4 (Preview) -> Backspace to Step 3 -> Forward to Step 4 -> Esc cancel: ZERO writes!
+  // Walk project skills -> optional skills -> review, back and forward, then cancel without writes.
   const ttyCancel = createFakeTty();
   const cancelPromise = runToolkitTui({
     input: ttyCancel.input,
@@ -134,20 +225,18 @@ test('step-by-step wizard supports back navigation, zero-write cancel in Step 4,
     setupOptions: { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } }
   });
 
-  await ttyCancel.waitFor(/Paso 1 de 4/u);
+  await ttyCancel.waitFor(/Paso 1 de 3/u);
   ttyCancel.sendKey('\r'); // Step 1 -> Step 2
-  await ttyCancel.waitFor(/Paso 2 de 4/u);
+  await ttyCancel.waitFor(/Paso 2 de 3/u);
   ttyCancel.sendKey('\r'); // Step 2 -> Step 3
-  await ttyCancel.waitFor(/Paso 3 de 4/u);
-  ttyCancel.sendKey('\r'); // Step 3 -> Step 4 (Preview)
-  await ttyCancel.waitFor(/Paso 4 de 4/u);
+  await ttyCancel.waitFor(/Paso 3 de 3/u);
   assert.deepEqual(await fs.readdir(env.homeDirectory), []);
   assert.equal(await fs.access(path.join(env.projectRoot, '.agents')).then(() => true, () => false), false);
 
-  ttyCancel.sendKey('\x7f'); // Backspace -> back to Step 3!
-  await wait(15);
-  ttyCancel.sendKey('\r'); // Step 3 -> Step 4 again
-  await wait(30);
+  ttyCancel.sendKey('\x7f');
+  await ttyCancel.waitFor(/Paso 2 de 3/u);
+  ttyCancel.sendKey('\r');
+  await ttyCancel.waitFor(/Paso 3 de 3/u);
   ttyCancel.sendKey('\x1b'); // Esc cancel preview -> back to Step 1 with zero writes
   await ttyCancel.waitFor(/Instalación cancelada/u);
   ttyCancel.sendKey('\x03'); // Ctrl+C exit
@@ -160,7 +249,7 @@ test('step-by-step wizard supports back navigation, zero-write cancel in Step 4,
   await fs.mkdir(path.dirname(conflictFile), { recursive: true });
   await fs.writeFile(conflictFile, 'keep-my-file');
 
-  // Run wizard choosing "copy + skills-lock.json" mode in Step 1 + adding 1 optional skill (differential-review) in Step 3!
+  // Select the optional differential-review skill, then choose copy mode in final review.
   const ttyCopy = createFakeTty();
   const copyPromise = runToolkitTui({
     input: ttyCopy.input,
@@ -170,18 +259,21 @@ test('step-by-step wizard supports back navigation, zero-write cancel in Step 4,
     setupOptions: { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } }
   });
 
-  await ttyCopy.waitFor(/Paso 1 de 4/u);
-  // Step 1: move down to item 2 (Modo en proyecto) and press Space to switch symlink -> copy!
-  ttyCopy.sendKey('j');
-  ttyCopy.sendKey(' ');
+  await ttyCopy.waitFor(/Paso 1 de 3/u);
+  ttyCopy.sendKey('a'); // explicitly select both compatible HTTP skills
+  ttyCopy.sendKey('\r'); // project skills -> optional skills
+  await ttyCopy.waitFor(/Paso 2 de 3/u);
+  ttyCopy.sendKey(' '); // select differential-review
+  ttyCopy.sendKey('\r'); // review
+  await ttyCopy.waitFor(/Paso 3 de 3/u);
+  ttyCopy.sendKey('e'); // edit installation settings at the end
+  await ttyCopy.waitFor(/Editar configuración/u);
+  ttyCopy.sendKey('j'); // mode
+  ttyCopy.sendKey(' '); // symlink -> copy
   await ttyCopy.waitFor(/Copia verificada/u);
-  ttyCopy.sendKey('\r'); // -> Step 2 (fundamentals: api-design-principles & nodejs-backend-patterns pre-checked)
-  await ttyCopy.waitFor(/Paso 2 de 4/u);
-  ttyCopy.sendKey('\r'); // -> Step 3 (optionals: cursor on 1st optional = differential-review)
-  await ttyCopy.waitFor(/Paso 3 de 4/u);
-  ttyCopy.sendKey(' '); // check differential-review!
-  ttyCopy.sendKey('\r'); // -> Step 4 (Preview)
-  await ttyCopy.waitFor(/skills-lock\.json/u);
+  ttyCopy.sendKey('\r'); // save settings; does not install
+  await ttyCopy.waitFor(/\[Enter \/ s\] confirmar e instalar/u);
+  assert.equal(await fs.access(path.join(env.projectRoot, '.agent-toolkit')).then(() => true, () => false), false);
   ttyCopy.sendKey('\r'); // Confirm install!
   await ttyCopy.waitFor(/Instalación verificada completada/u);
   ttyCopy.sendKey('q'); // Exit from done screen
@@ -230,6 +322,136 @@ test('step-by-step wizard supports back navigation, zero-write cancel in Step 4,
   assert.equal(await fs.access(path.join(env.projectRoot, '.agent-toolkit')).then(() => true, () => false), false);
   assert.equal(await fs.access(path.join(env.projectRoot, '.gitignore')).then(() => true, () => false), false);
   assert.equal(await fs.access(path.join(env.projectRoot, '.claude')).then(() => true, () => false), false);
+});
+
+test('final configuration preserves skill choices, discards drafts, and installs only after reviewing refreshed settings', async t => {
+  const env = await createSandboxEnv(t, { name: 'api-demo', dependencies: { express: '5.0.0' } });
+  const { runToolkitTui } = await import('../src/toolkit-tui.js');
+  const tty = createFakeTty();
+  const running = runToolkitTui({ input: tty.input, output: tty.output, projectRoot: env.projectRoot,
+    setupOptions: { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } } });
+  t.after(() => tty.sendKey('\x03'));
+  await tty.waitFor(/Paso 1 de 3/u);
+  tty.sendKey(' '); // explicitly select nodejs-backend-patterns; leave api-design-principles unchecked
+  tty.sendKey('\r');
+  await tty.waitFor(/Paso 2 de 3/u);
+  tty.sendKey(' '); // select differential-review
+  tty.sendKey('\r');
+  await tty.waitFor(/Paso 3 de 3/u);
+  assert.match(tty.getFrame(), /nodejs-backend-patterns/u);
+  assert.doesNotMatch(tty.getFrame(), /api-design-principles/u);
+
+  tty.sendKey('e');
+  await tty.waitFor(/Editar configuración/u);
+  tty.sendKey(' '); // both -> Claude
+  await tty.waitFor(/Solo Claude Code/u);
+  tty.sendKey('\x1b'); // discard draft
+  await tty.waitFor(/\[Enter \/ s\] confirmar e instalar/u);
+  assert.match(tty.getFrame(), /Claude \+ Codex/u);
+  tty.sendKey('e');
+  await tty.waitFor(/Editar configuración/u);
+  tty.sendKey(' '); // both -> Claude
+  tty.sendKey('j');
+  tty.sendKey(' '); // copy
+  await tty.waitFor(/Copia verificada/u);
+  tty.sendKey('\r'); // update preview; never install here
+  await tty.waitFor(/\[Enter \/ s\] confirmar e instalar/u);
+  assert.match(tty.getFrame(), /Solo Claude Code/u);
+  assert.match(tty.getFrame(), /skills-lock\.json/u);
+  assert.doesNotMatch(tty.getFrame(), /api-design-principles/u);
+  assert.deepEqual(await fs.readdir(env.homeDirectory), []);
+  assert.equal(await fs.access(path.join(env.projectRoot, '.agent-toolkit')).then(() => true, () => false), false);
+
+  tty.sendKey('\x7f');
+  await tty.waitFor(/Paso 2 de 3/u);
+  assert.match(tty.getFrame(), /\[x\] differential-review/u);
+  tty.sendKey('\x7f');
+  await tty.waitFor(/Paso 1 de 3/u);
+  assert.match(tty.getFrame(), /\[ \] api-design-principles/u);
+  assert.match(tty.getFrame(), /\[x\] nodejs-backend-patterns/u);
+  tty.sendKey('\r');
+  await tty.waitFor(/Paso 2 de 3/u);
+  tty.sendKey('\r');
+  await tty.waitFor(/Paso 3 de 3/u);
+  tty.sendKey('\r');
+  await tty.waitFor(/Instalación verificada completada/u);
+  tty.sendKey('q');
+  assert.equal(await running, 0);
+  const lock = JSON.parse(await fs.readFile(path.join(env.projectRoot, '.agent-toolkit/skills-lock.json'), 'utf8'));
+  assert.ok(lock.skills['nodejs-backend-patterns']);
+  assert.ok(lock.skills['differential-review']);
+  assert.equal(lock.skills['api-design-principles'], undefined);
+  assert.equal(await fs.access(path.join(env.projectRoot, '.agents/skills')).then(() => true, () => false), false);
+  assert.equal((await fs.lstat(path.join(env.projectRoot, '.claude/skills/differential-review'))).isSymbolicLink(), false);
+});
+
+test('a failed settings refresh stays in the editor and cannot install the old preview', async t => {
+  const env = await createSandboxEnv(t);
+  const { runToolkitTui } = await import('../src/toolkit-tui.js');
+  const tty = createFakeTty();
+  const running = runToolkitTui({ input: tty.input, output: tty.output, projectRoot: env.projectRoot,
+    setupOptions: { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } } });
+  t.after(() => tty.sendKey('\x03'));
+  await tty.waitFor(/Paso 1 de 3/u);
+  tty.sendKey('\r');
+  await tty.waitFor(/Paso 2 de 3/u);
+  tty.sendKey('\r');
+  await tty.waitFor(/Paso 3 de 3/u);
+  tty.sendKey('e');
+  await tty.waitFor(/Editar configuración/u);
+  tty.sendKey(' '); // changed target requires a new snapshot
+  await tty.waitFor(/Solo Claude Code/u);
+  const catalogPath = path.join(env.toolkitRoot, 'catalogs/skills.json');
+  const originalCatalog = await fs.readFile(catalogPath);
+  await fs.writeFile(catalogPath, '{ invalid');
+  tty.sendKey('\r');
+  await tty.waitFor(/no contiene JSON válido/u);
+  assert.match(tty.getFrame(), /Editar configuración/u);
+  assert.doesNotMatch(tty.getFrame(), /confirmar e instalar/u);
+  tty.sendKey('s'); // must not apply the old preview from inside the editor
+  await fs.writeFile(catalogPath, originalCatalog);
+  tty.sendKey('\r');
+  await tty.waitFor(/\[Enter \/ s\] confirmar e instalar/u);
+  assert.match(tty.getFrame(), /Solo Claude Code/u);
+  assert.deepEqual(await fs.readdir(env.homeDirectory), []);
+  assert.equal(await fs.access(path.join(env.projectRoot, '.agent-toolkit')).then(() => true, () => false), false);
+  tty.sendKey('q');
+  assert.equal(await running, 0);
+});
+
+test('empty project and empty skill selection can reach review without creating artifacts', async t => {
+  const env = await createSandboxEnv(t, { name: 'empty-project' });
+  const { runToolkitTui } = await import('../src/toolkit-tui.js');
+  const tty = createFakeTty();
+  const running = runToolkitTui({ input: tty.input, output: tty.output, projectRoot: env.projectRoot, agent: 'claude',
+    setupOptions: { homeDirectory: env.homeDirectory, codexHome: env.codexHome, toolkitRoot: env.toolkitRoot, environment: { PATH: '' } } });
+  t.after(() => tty.sendKey('\x03'));
+  await tty.waitFor(/Paso 1 de 3/u);
+  assert.match(tty.getFrame(), /0 de 0 marcadas/u);
+  tty.sendKey(' ');
+  tty.sendKey('a');
+  tty.sendKey('\r');
+  await tty.waitFor(/Paso 2 de 3/u);
+  tty.sendKey('a');
+  await tty.waitFor(/10 de 10 marcadas/u);
+  tty.sendKey('a');
+  await tty.waitFor(/0 de 10 marcadas/u);
+  tty.sendKey('\r');
+  await tty.waitFor(/Paso 3 de 3/u);
+  assert.match(tty.getFrame(), /No hay skills de proyecto seleccionadas/u);
+  tty.sendKey('e');
+  await tty.waitFor(/Editar configuración/u);
+  tty.sendKey('j'); tty.sendKey('j'); tty.sendKey('j');
+  tty.sendKey(' '); // disable the pending global setup as well
+  await tty.waitFor(/\[ \] Sincronizar/u);
+  tty.sendKey('\r');
+  await tty.waitFor(/No hay cambios pendientes de escribir/u);
+  tty.sendKey('\r');
+  await tty.waitFor(/Instalación verificada completada/u);
+  tty.sendKey('q');
+  assert.equal(await running, 0);
+  assert.deepEqual(await fs.readdir(env.homeDirectory), []);
+  assert.deepEqual(await fs.readdir(env.projectRoot), ['package.json']);
 });
 
 test('runToolkitCli handles non-TTY fallback, recommend, detach (--apply / --json) and preserves exit codes', async t => {
