@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-toolkit.local/schemas/skill-catalog.schema.json",
+  "title": "Agent Toolkit Skill Catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "updatedAt", "skills", "externalReferences", "addons"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "updatedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "skills": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/skillEntry" }
+    },
+    "externalReferences": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/externalReference" }
+    },
+    "addons": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/addonEntry" }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "profile": {
+      "type": "string",
+      "enum": ["frontend", "backend", "mcp", "security"]
+    },
+    "signal": {
+      "type": "string",
+      "enum": [
+        "nodejs",
+        "typescript",
+        "mcp-sdk",
+        "react",
+        "nextjs",
+        "tailwindcss",
+        "astro",
+        "vue",
+        "svelte",
+        "supabase",
+        "postgres",
+        "express",
+        "fastify",
+        "hono",
+        "playwright",
+        "vitest"
+      ]
+    },
+    "capabilityFlag": {
+      "type": "string",
+      "enum": ["none", "read-only", "optional", "present", "unknown"]
+    },
+    "fileEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "scenarioEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "profile", "taskClass", "requiredSignals", "client", "status", "evidencePath"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "profile": { "$ref": "#/$defs/profile" },
+        "taskClass": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "requiredSignals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/signal" },
+          "uniqueItems": true
+        },
+        "client": { "type": "string", "enum": ["codex", "claude"] },
+        "status": { "type": "string", "enum": ["passed", "pending", "failed"] },
+        "evidencePath": { "type": "string", "minLength": 1, "maxLength": 240 }
+      }
+    },
+    "skillEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "bundled",
+        "summary",
+        "repository",
+        "sourcePath",
+        "installedPath",
+        "revision",
+        "license",
+        "files",
+        "matching",
+        "overlapsWith",
+        "review",
+        "scenarios"
+      ],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "bundled": { "const": true },
+        "summary": { "type": "string", "minLength": 5, "maxLength": 240 },
+        "repository": { "type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$" },
+        "sourcePath": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "installedPath": { "type": "string", "pattern": "^(skills|catalogs/skills)/[a-z0-9-]+$" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "license": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/fileEntry" }
+        },
+        "matching": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["anySignals", "profiles", "taskClasses"],
+          "properties": {
+            "anySignals": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/signal" },
+              "uniqueItems": true
+            },
+            "profiles": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/profile" },
+              "uniqueItems": true
+            },
+            "taskClasses": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "uniqueItems": true
+            }
+          }
+        },
+        "overlapsWith": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "uniqueItems": true
+        },
+        "review": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reviewedAt", "notes", "capabilities"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["reviewed-with-observations", "reviewed", "pending", "rejected"]
+            },
+            "reviewedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+            "notes": { "type": "string", "minLength": 5, "maxLength": 400 },
+            "capabilities": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["filesystem", "processes", "network", "paidApi"],
+              "properties": {
+                "filesystem": { "$ref": "#/$defs/capabilityFlag" },
+                "processes": { "$ref": "#/$defs/capabilityFlag" },
+                "network": { "$ref": "#/$defs/capabilityFlag" },
+                "paidApi": { "$ref": "#/$defs/capabilityFlag" }
+              }
+            }
+          }
+        },
+        "scenarios": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scenarioEntry" }
+        }
+      }
+    },
+    "externalReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "summary", "sourceUrl", "anySignals", "profiles", "statusNote"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "summary": { "type": "string", "minLength": 5, "maxLength": 200 },
+        "sourceUrl": { "type": "string", "pattern": "^https://github\\.com/" },
+        "anySignals": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/signal" },
+          "uniqueItems": true
+        },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/profile" },
+          "uniqueItems": true
+        },
+        "statusNote": { "type": "string", "minLength": 5, "maxLength": 240 }
+      }
+    },
+    "addonEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "versionReviewed", "license", "optional", "autoInstall", "repository", "summary", "adaptedSkills", "installHints"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "versionReviewed": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "license": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "optional": { "type": "boolean" },
+        "autoInstall": { "const": false },
+        "repository": { "type": "string", "pattern": "^https://github\\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$" },
+        "summary": { "type": "string", "minLength": 5, "maxLength": 280 },
+        "adaptedSkills": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "uniqueItems": true
+        },
+        "installHints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["claude", "codex", "antigravity"],
+          "properties": {
+            "claude": { "type": "string", "minLength": 5, "maxLength": 200 },
+            "codex": { "type": "string", "minLength": 5, "maxLength": 200 },
+            "antigravity": { "type": "string", "minLength": 5, "maxLength": 200 }
+          }
+        }
+      }
+    }
+  }
+}

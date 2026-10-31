@@ -1,7 +1,7 @@
 # Adaptación selectiva de Superpowers a Agent Toolkit
 
-Fecha: 2026-10-28.
-Estado: diseño propuesto para revisión; el usuario eligió la opción 2.
+Fecha: 2026-10-28 (primera entrega implementada el 2026-10-31).
+Estado: primera entrega incorporada en skills y documentación; ver [guía de integración](../skills/superpowers-integration.md).
 
 ## Intención
 
@@ -85,11 +85,14 @@ La incorporación al repositorio y la instalación en clientes son pasos distint
 - Repositorio: skills/spec-driven-development/, skills/quality-gate/,
   skills/programar/, docs/guias/uso.md y templates/agent-team/README.md.
 - Instalación local de Superpowers 7.0.1: README, LICENSE y las skills consultadas
-  using-superpowers y brainstorming. Las prácticas restantes requieren lectura
-  detallada al preparar su adaptación.
+  en detalle al implementar la primera entrega (`using-superpowers`, `brainstorming`,
+  `writing-plans`, `systematic-debugging`, `test-driven-development` y
+  `verification-before-completion`, además de sus referencias de apoyo).
 - Memoria privada consultada: 01-PRODUCTO/Producto.md, verificada allí al
   2026-10-11; coincide con el propósito del repositorio. La consulta del directorio
   de decisiones devolvió RG_BUSY; no se afirma una revisión completa de decisiones.
 
-El siguiente paso, tras aprobar este diseño, es preparar el plan de adaptación.
-Commit, instalación y actualización de memoria requieren su autorización propia.
+Primera entrega completada en `skills/spec-driven-development/`, `skills/depurar/`,
+`skills/desarrollo-con-pruebas/`, `skills/quality-gate/` y
+`docs/skills/superpowers-integration.md`. Commit, publicación y actualización de
+memoria siguen requiriendo su autorización propia.

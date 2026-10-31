@@ -20,8 +20,10 @@ nombre “Agent Toolkit” como texto para conservar su legibilidad y accesibili
 | Variación del morado | Morado oscuro `#6D28D9` |
 | Acentos | Lila `#A78BFA` y `#C4B5FD` |
 
-## Otras versiones
+## Otras versiones y capturas
 
+- [`agent-toolkit-tui-hero.png`](agent-toolkit-tui-hero.png): captura principal en
+  terminal del asistente interactivo por pasos mostrada en la portada del `README.md`.
 - [`agent-toolkit-mark.svg`](agent-toolkit-mark.svg): variante vectorial
   simplificada creada durante la exploración de la propuesta 02.
 - [`agent-toolkit-mark-v1.png`](agent-toolkit-mark-v1.png): propuesta anterior en

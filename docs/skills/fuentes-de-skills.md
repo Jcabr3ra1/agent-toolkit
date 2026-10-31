@@ -7,7 +7,7 @@ adaptamos para Agent Toolkit. Se amplía conforme incorporemos nuevas fuentes.
 
 | Skill o biblioteca | Origen | Relación con Agent Toolkit | Fecha de consulta |
 | --- | --- | --- | --- |
-| Superpowers | [Repositorio original: obra/superpowers](https://github.com/obra/superpowers) | El plugin original seguirá instalado. Se ha elegido adaptar prácticas seleccionadas a las skills de Toolkit; la adaptación está pendiente. | 2026-10-28 |
+| Superpowers | [Repositorio original: obra/superpowers](https://github.com/obra/superpowers) | El plugin original puede seguir instalado. Se adaptaron prácticas seleccionadas (`7.0.1`, MIT) en `spec-driven-development`, `depurar`, `desarrollo-con-pruebas` y `quality-gate`; ver [guía de integración](superpowers-integration.md). | 2026-10-31 |
 | ordenar-proyecto | [Fuente local de Agent Toolkit](../../skills/ordenar-proyecto/SKILL.md) | Skill propia para organizar archivos y mantener referencias. Incorporada a la biblioteca; sin URL publicada independiente. | 2026-10-28 |
 | Impeccable | [Repositorio original: pbakaus/impeccable](https://github.com/pbakaus/impeccable) | Disponible en el entorno local; no distribuida por Toolkit. | 2026-10-28 |
 | frontend-design | [Claude Code Templates: creative-design/frontend-design](https://github.com/davila7/claude-code-templates/tree/main/cli-tool/components/skills/creative-design/frontend-design) | Incorporada sin modificar a skills/frontend-design y enlazada para Claude y Codex en este proyecto. | 2026-10-28 |
@@ -101,13 +101,14 @@ La evaluación está en [Skills recomendadas](skills-recomendadas.md#referente-p
 Estas fuentes están registradas para evaluación. Los motivos y prioridades están
 en [Skills recomendadas](skills-recomendadas.md).
 
-| Skill | Fuente original | Fecha de consulta |
-| --- | --- | --- |
-| api-design-principles | [wshobson/agents](https://github.com/wshobson/agents/blob/main/plugins/backend-development/skills/api-design-principles/SKILL.md) | 2026-10-28 |
-| nodejs-backend-patterns | [wshobson/agents](https://github.com/wshobson/agents/blob/main/plugins/javascript-typescript/skills/nodejs-backend-patterns/SKILL.md) | 2026-10-28 |
-| supabase-postgres-best-practices | [Supabase](https://github.com/supabase/agent-skills/blob/main/skills/supabase-postgres-best-practices/SKILL.md) | 2026-10-28 |
-| vercel-react-best-practices | [Vercel](https://github.com/vercel-labs/agent-skills/blob/main/skills/react-best-practices/SKILL.md) | 2026-10-28 |
-| webapp-testing | [Anthropic](https://github.com/anthropics/skills/blob/main/skills/webapp-testing/SKILL.md) | 2026-10-28 |
+| Skill | Fuente original fijada | Estado en Agent Toolkit | Fecha |
+| --- | --- | --- | --- |
+| vercel-react-best-practices | [Vercel (`1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62`)](https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/react-best-practices) | Incorporada en `catalogs/skills/vercel-react-best-practices` (MIT) con hashes SHA-256 en `catalogs/skills.json`. | 2026-10-31 |
+| vercel-composition-patterns | [Vercel (`1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62`)](https://github.com/vercel-labs/agent-skills/tree/1a2c79d4e6c4a2283dc2c614b6538cbe1ed5ca62/skills/composition-patterns) | Incorporada en `catalogs/skills/vercel-composition-patterns` (MIT) con hashes SHA-256 en `catalogs/skills.json`. | 2026-10-31 |
+| supabase-postgres-best-practices | [Supabase (`c9be0e931b7930f7d02126d04774d904c381e7d7`)](https://github.com/supabase/agent-skills/tree/c9be0e931b7930f7d02126d04774d904c381e7d7/skills/supabase-postgres-best-practices) | Incorporada en `catalogs/skills/supabase-postgres-best-practices` con `LICENSE.txt` MIT original y hashes SHA-256. | 2026-10-31 |
+| nodejs-backend-patterns | [wshobson/agents (`7e2fb559cf4b824b27f1fec49fe88f7511066d26`)](https://github.com/wshobson/agents/tree/7e2fb559cf4b824b27f1fec49fe88f7511066d26/plugins/javascript-typescript/skills/nodejs-backend-patterns) | Incorporada en `catalogs/skills/nodejs-backend-patterns` con `LICENSE.txt` MIT original y hashes SHA-256. | 2026-10-31 |
+| api-design-principles | [wshobson/agents (`7e2fb559cf4b824b27f1fec49fe88f7511066d26`)](https://github.com/wshobson/agents/tree/7e2fb559cf4b824b27f1fec49fe88f7511066d26/plugins/backend-development/skills/api-design-principles) | Incorporada en `catalogs/skills/api-design-principles` con `LICENSE.txt` MIT original y hashes SHA-256. | 2026-10-31 |
+| webapp-testing | [Anthropic (`ca45fc496a3436251f191354091d557da31c15b5`)](https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/webapp-testing) | Incorporada en `catalogs/skills/webapp-testing` con `LICENSE.txt` Apache-2.0 original y hashes SHA-256. | 2026-10-31 |
 
 ## Superpowers
 
@@ -116,13 +117,20 @@ en [Skills recomendadas](skills-recomendadas.md).
 - [Documentación e instalación](https://github.com/obra/superpowers#installation).
 - [Licencia MIT](https://github.com/obra/superpowers/blob/main/LICENSE).
 
-La instalación local consultada corresponde a Superpowers **7.0.1**. Ese dato
+La instalación local consultada corresponde a Superpowers **7.0.1** (`Copyright (c) 2025 Jesse Vincent`, licencia MIT). Ese dato
 identifica la copia revisada; los enlaces a `main` muestran el contenido vigente
 del repositorio y pueden cambiar.
 
-La [propuesta de adaptación](../planes/2026-10-28-integracion-superpowers-design.md)
-describe qué prácticas se plantea incorporar. El plugin original y las
-adaptaciones de Toolkit tendrán mantenimiento separado.
+La [guía de integración y adaptación](superpowers-integration.md) relaciona cada
+práctica revisada (`using-superpowers`, `brainstorming`, `writing-plans`,
+`systematic-debugging`, `test-driven-development` y `verification-before-completion`)
+con las skills [`spec-driven-development`](../../skills/spec-driven-development/SKILL.md),
+[`depurar`](../../skills/depurar/SKILL.md),
+[`desarrollo-con-pruebas`](../../skills/desarrollo-con-pruebas/SKILL.md) y
+[`quality-gate`](../../skills/quality-gate/SKILL.md), cada una con su copia de
+`LICENSE.txt` original. El [diseño de adaptación](../planes/2026-10-28-integracion-superpowers-design.md)
+conserva las decisiones de alcance. El plugin original y las adaptaciones de
+Toolkit mantienen mantenimiento separado.
 
 ## Cómo ampliar el registro
 

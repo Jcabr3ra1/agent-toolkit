@@ -1,41 +1,55 @@
 # [Nombre del cambio]
 
-## Estado
+## Estado y modo
 
-Propuesto | Aprobado | En implementación | Verificado | Archivado
+- Estado: Propuesto | Aprobado | En implementación | Verificado | Archivado
+- Modo de ejecución previsto: `tutor` | `autonomous` (sujeto a reglas del proyecto)
 
-## Problema
+## Intención y problema
 
-## Objetivo
-
-## Fuera de alcance
+## Objetivo, fuera de alcance y anti-objetivos
 
 ## Comportamiento actual comprobado
 
-## Requisitos
+## Alternativas consideradas y elección
 
-### Funcionales
+| Opción | Resumen | Ventajas | Compensaciones |
+| --- | --- | --- | --- |
+| A | | | |
+| B | | | |
 
-### No funcionales
+- **Opción elegida y motivo:**
 
-## Criterios de aceptación
+## Decisiones del usuario frente a propuestas técnicas
+
+- **Acordado por el usuario:**
+- **Propuesto por el agente (revisable):**
+
+## Requisitos y criterios de aceptación
 
 - Dado ..., cuando ..., entonces ...
 
-## Casos límite y errores
+## Diseño, contratos, datos y seguridad
 
-## Diseño propuesto
+## Foco de revisión (entradas límite y modos de fallo)
 
-## Datos, privacidad y seguridad
+- [ ] Caso / entrada límite — comportamiento esperado — tarea que lo verifica
 
-## Alternativas consideradas
+## Mapa de archivos
 
-## Riesgos y reversión
+- Crear / Modificar: `ruta/exacta` — responsabilidad
+- Pruebas / Verificación: `ruta/exacta` — qué comprueba
 
 ## Plan de tareas
 
-- [ ] Tarea — resultado — verificación
+### Tarea 1: [Entregable verificable]
 
-## Evidencia de cierre
+- **Archivos:** Crear/Modificar `...` · Probar `...`
+- **Interfaces:** Consume `...` · Produce `...`
+- [ ] Paso 1 (prueba o preparación verificable): ...
+- [ ] Paso 2 (implementación mínima): ...
+- [ ] Paso 3 (verificación): ejecutar `...` → resultado esperado `...`
+
+## Evidencia de cierre y límites observados
 
 ## Preguntas abiertas

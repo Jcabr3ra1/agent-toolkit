@@ -5,3 +5,4 @@ coverage/
 
 assets/runtime/package-lock.json
 *.tgz
+.agent-toolkit/

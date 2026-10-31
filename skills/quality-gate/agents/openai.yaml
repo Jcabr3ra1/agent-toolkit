@@ -1,7 +1,7 @@
 interface:
   display_name: "Quality Gate"
-  short_description: "Revisa entregas contra requisitos, riesgos y evidencia"
-  default_prompt: "Usa $quality-gate para revisar esta entrega y emitir un resultado respaldado por evidencia."
+  short_description: "Verifica entregas contra requisitos, riesgos y evidencia fresca"
+  default_prompt: "Usa $quality-gate para verificar con evidencia fresca si esta entrega cumple los requisitos o qué cambios necesita."
 
 policy:
   allow_implicit_invocation: true

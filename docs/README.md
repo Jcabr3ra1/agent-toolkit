@@ -89,10 +89,12 @@ Para una reorganización, utiliza la skill
 
 ## Skills y fuentes
 
+- [Panel interactivo y recomendador de skills](skills/recomendador.md)
 - [Preparación y baseline del recomendador](skills/evidencias/2026-10-28-recomendador-preparacion.md)
 - [Evaluación inicial de MCP Builder y Differential Review](skills/evidencias/2026-10-28-evaluacion-inicial-mcp-seguridad.md)
 - [Manifiesto de instalación de MCP Builder y seguridad](skills/evidencias/2026-10-28-incorporacion-mcp-seguridad.json)
 - [Skills recomendadas para Agent Toolkit](skills/skills-recomendadas.md)
+- [Integración y adaptación de Superpowers](skills/superpowers-integration.md)
 - [Fuentes de las skills](skills/fuentes-de-skills.md)
 
 ## Planes y diseños transversales

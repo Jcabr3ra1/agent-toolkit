@@ -49,7 +49,18 @@ npm test
 
 `npm test` tarda alrededor de un minuto y debe terminar sin fallos. Es opcional, pero confirma que tu Node y tu copia están bien.
 
-### 3. Revisa qué falta
+### 3. Abre el asistente por pasos o revisa qué falta
+
+En una terminal interactiva puedes abrir el asistente guiado en 4 pasos (guarda su estado aislado bajo `.agent-toolkit/`, ignora automáticamente lo acoplado en `.gitignore` o `.git/info/exclude`, instala primero las skills fundamentales verificadas con SHA-256 para tu stack, luego las opcionales y permite desacoplarlo cuando quieras con `[d]` o `detach`):
+
+```sh
+npx nexakit                                   # o node bin/nexakit.js (alias: agent-toolkit)
+npx nexakit recommend --project .
+npx nexakit detach --project .                # vista previa de desacoplado
+npx nexakit detach --project . --apply        # retira lo acoplado sin tocar archivos propios
+```
+
+Si prefieres ejecutar cada comprobación por separado o desde un script:
 
 ```sh
 node bin/agent-toolkit.js doctor --agent all
@@ -191,6 +202,7 @@ El total sale de cinco criterios: riesgo, tamaño, ambigüedad, contexto y tipo 
 | `gemini <lo que necesitas>` | Usa Gemini para explicar, investigar, analizar archivos o generar una imagen. `investigar` e `imagen` son atajos. Requiere `agy`. |
 | `cerrar-memoria` | Tras fusionar un PR, pone al día la memoria de Obsidian del proyecto. Solo si el proyecto tiene `project-memory.json`. |
 | `revision-cruzada` | Reúne todas las reglas de `programar` y `revisar`. Casi nunca la escribes tú. |
+| `spec-driven-development, depurar, desarrollo-con-pruebas, quality-gate` | Flujo de trabajo adaptado de Superpowers (especificar y planificar, investigar causa raíz antes de arreglar, TDD paso a paso y verificar con evidencia fresca). Convive con Superpowers si lo tienes instalado; ver [integración](../skills/superpowers-integration.md). |
 | `differential-review, frontend-design, mcp-builder, web-design-guidelines, ordenar-proyecto` | Skills recomendadas que también instala `setup`: revisión de seguridad de un cambio, diseño de interfaces, crear servidores MCP, pautas web y ordenar archivos. |
 
 La memoria de Obsidian no se actualiza sola: se hace con `/cerrar-memoria` después de fusionar un PR. `cerrar-avisens` es un alias del mismo cierre.

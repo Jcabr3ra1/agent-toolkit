@@ -45,7 +45,7 @@ con un catálogo JSON validado y evidencia de archivos/tecnologías detectadas.
 | MCP Builder de Anthropic | Incorporada y enlazada; revisión y comprobaciones acotadas registradas | Completar escenarios funcionales de agente antes de recomendar como probada. |
 | Seguridad: differential-review de Trail of Bits | Incorporada con licencia original; aplicada a un fragmento de cambio real | Ampliar la evaluación cuando exista un encargo de revisión delimitado. |
 | Catálogo de skills con evidencia | Dirección aceptada; diseño preparado y revisado para planificación | Revisar el diseño y declarar el modo del encargo de código. |
-| Prácticas de Superpowers | Adaptación selectiva elegida; pendiente | Retomar el diseño de adaptación, incorporando el catálogo y las skills instaladas durante esta sesión. |
+| Prácticas de Superpowers | Primera entrega de adaptación incorporada y validada en formato (`spec-driven-development`, `depurar`, `desarrollo-con-pruebas`, `quality-gate` y [guía](../skills/superpowers-integration.md)) | Observar su comportamiento en sesiones reales de ambos clientes e integrar en el catálogo cuando corresponda. |
 | Calidad del desarrollo | Propuesta | Acordar comprobaciones automáticas proporcionales antes de añadir herramientas. |
 
 MCP Builder y revisión de seguridad tienen prioridad explícita. Una skill de

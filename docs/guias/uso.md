@@ -367,10 +367,14 @@ La arquitectura inicial del sistema de memoria está en [`docs/memoria/project-m
 - `web-design-guidelines`: revisión de interfaces con las guías de Vercel; consulta reglas vigentes en línea antes de cada revisión.
 - `frontend-design`: guía de diseño frontend de Claude Code Templates, con fuente y licencia registradas en [Fuentes de las skills](../skills/fuentes-de-skills.md).
 - `ordenar-proyecto`: organiza archivos y carpetas y ayuda a ubicar archivos nuevos conservando sus referencias.
-- `spec-driven-development`: transforma una necesidad en especificación, plan, tareas y verificación.
+- `spec-driven-development`: alinea intención, alternativas, especificación verificable y plan de tareas ejecutables antes de implementar.
+- `depurar`: investiga y reproduce la causa raíz de fallos o regresiones con evidencia antes de proponer correcciones.
+- `desarrollo-con-pruebas`: guía o ejecuta el ciclo rojo, verde y refactorización respetando el modo `tutor` o `autonomous` y el trabajo existente.
 - `decision-records`: documenta decisiones confirmadas con contexto y consecuencias.
 - `project-handoff`: prepara traspasos breves y verificables entre sesiones o agentes.
-- `quality-gate`: revisa entregas contra requisitos, riesgos y evidencia.
+- `quality-gate`: verifica entregas contra requisitos, riesgos y evidencia fresca antes de afirmar cierre o aprobación.
+
+Las equivalencias de proceso y reglas de convivencia con el plugin opcional Superpowers están en [Integración y adaptación de Superpowers](../skills/superpowers-integration.md).
 
 ## Preparar un encargo para otro agente
 
