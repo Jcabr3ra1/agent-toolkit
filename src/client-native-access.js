@@ -1,3 +1,4 @@
+import { supportsDiagnosticHost } from "./client-local-platform.js";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { spawn as nativeSpawn } from "node:child_process";
@@ -18,6 +19,7 @@ export function createNativeAccessPermit(cfg, input) {
 export function revokeNativeAccessPermit(h) { const p = permits.get(h); if (p) p.live = false; }
 
 export function createNativeAccessCollector(schema, candidateSchema, configuration, authorization, dependencies = {}) {
+  const platformAdmitted = supportsDiagnosticHost(process.platform, process.arch, dependencies);
   const cfg = copyInertJson(configuration), cs = copyInertJson(candidateSchema);
   if (cs.$id !== "https://agent-toolkit.local/schemas/agent-client-native-diagnostics.schema.json") throw Error("Invalid candidate schema");
   const ajv = new Ajv2020({ strict: true }); ajv.addSchema(cs);
@@ -49,7 +51,7 @@ export function createNativeAccessCollector(schema, candidateSchema, configurati
       const d = strictPreflightJson(input), p = !types.isProxy(authorization) && permits.get(authorization);
       if (!p || !p.live || p.used || p.binding !== hash({ cfg, input: d })) throw Error("permission");
       p.used = true; claimed = true;
-      if (process.platform !== "darwin" || process.arch !== "arm64") throw Error("platform");
+      if (!platformAdmitted) throw Error("platform");
       const current = new Date(clock()).toISOString().replace(/\.\d{3}Z$/, "Z");
       r.preflight = evaluate({ ...d, now: current });
       if (!r.preflight.queryEligible) { r.reasons = ["access-controls-insufficient"]; return { report: r, auth }; }

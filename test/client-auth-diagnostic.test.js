@@ -1,3 +1,4 @@
+import { compiler, sdkArguments, supported } from "../testing/client-posix.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -20,7 +21,6 @@ import { createSelectiveReadPermit } from "../src/client-selective-files.js";
 
 const schema = JSON.parse(await fs.readFile(new URL("../schemas/agent-client-auth-diagnostic.schema.json", import.meta.url), "utf8"));
 const fixture = fileURLToPath(new URL("../testing/auth-diagnostic/fixture.c", import.meta.url));
-const compiler = "/Library/Developer/CommandLineTools/usr/bin/clang", sdk = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk";
 const defaultLimits = { maxBytes: 32768, blockBytes: 32768, maxDepth: 32, maxNodes: 20000, maxKeyBytes: 256, maxKeys: 4096 };
 const mono = () => Number(process.hrtime.bigint() / 1000000n);
 const wire = { loggedIn: true, authMethod: "claude.ai", subscriptionType: "pro" };
@@ -119,18 +119,34 @@ test("AD inert schema/limits reject getters/proxies/toJSON without side effects"
   assert.equal(traps, 0);
 });
 
-const localTest = (name, fn) => test(name, { skip: process.platform !== "darwin", timeout: 20000 }, fn);
+const localTest = (name, fn) => test(name, { skip: supported ? false : "Requires POSIX ownership/modes, compiler and process-group isolation for the synthetic auth fixture.", timeout: 20000 }, fn);
 // Native synthetic integration is not a startup-latency benchmark. Keep budget
 // validation independent, and exercise exact deadline boundaries virtually.
 const INTEGRATION_TIMING = Object.freeze({ processTimeoutMs: 3000, totalTimeoutMs: 5000, graceMs: 100, confirmationMs: 120 });
 const VALIDATION_TIMING = Object.freeze({ processTimeoutMs: 800, totalTimeoutMs: 2500, graceMs: 100, confirmationMs: 120 });
 function reviews(cfg) { const bindingSha256 = authDiagnosticReviewBinding(cfg); cfg.identityReview.bindingSha256 = bindingSha256; cfg.startupReview.bindingSha256 = bindingSha256; return cfg; }
+function declarationConfiguration() {
+  // Fictitious inert stat pins for pre-host validation, never installation evidence.
+  const root = path.resolve("synthetic-auth-declaration"), uid = 1000;
+  const pin = name => ({ path: path.join(root, name), dev: 1, ino: name === "artifact" ? 3 : 4, uid, mode: name === "artifact" ? 0o500 : 0o777, size: 1, mtimeMs: 1, ctimeMs: 1 });
+  return reviews({ source: "synthetic-fixture", recipe: "auth-status-v1", version: "fictitious-declaration",
+    artifact: { ...pin("artifact"), sha256: "a".repeat(64) }, entryLink: pin("entry"),
+    workspaceParent: { path: path.join(root, "workspaces"), dev: 1, ino: 2, uid, mode: 0o700 }, excludedRoots: [path.join(root, "excluded")],
+    identityReview: { state: "reviewed", bindingSha256: "0".repeat(64), evidenceSha256: "1".repeat(64) },
+    startupReview: { state: "reviewed", bindingSha256: "0".repeat(64), evidenceSha256: "2".repeat(64), effectsEnumerated: true, unresolvedEffects: false },
+    limits: { ...VALIDATION_TIMING, maxOutputBytes: 32768, maxErrorBytes: 32768, permitLifetimeMs: 60000 } });
+}
+function forbiddenEffects() {
+  const counts = { io: 0, spawn: 0 };
+  const io = Object.fromEntries(Object.keys(fs).map(key => [key, () => { counts.io++; throw Error("unexpected IO"); }]));
+  return { counts, deps: { io, spawn() { counts.spawn++; throw Error("unexpected spawn"); } } };
+}
 async function setup(t, mode = 0, timing = INTEGRATION_TIMING) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-auth-fixture-"))); await fs.chmod(root, 0o700);
   const owned = await fs.lstat(root);
   t.after(async () => { const s = await fs.lstat(root).catch(() => null); if (s?.isDirectory() && !s.isSymbolicLink() && s.dev === owned.dev && s.ino === owned.ino) await fs.rm(root, { recursive: true }); });
   const artifact = path.join(root, "fictitious-artifact"), entry = path.join(root, "fictitious-entry"), parent = path.join(root, "workspaces"); await fs.mkdir(parent, { mode: 0o700 });
-  await new Promise((resolve, reject) => execFile(compiler, ["-std=c11", "-Wall", "-Wextra", "-Werror", "-isysroot", sdk, `-DAD_MODE=${mode}`, fixture, "-o", artifact],
+  await new Promise((resolve, reject) => execFile(compiler, ["-std=c11", "-Wall", "-Wextra", "-Werror", ...sdkArguments, `-DAD_MODE=${mode}`, fixture, "-o", artifact],
     { env: { PATH: "/usr/bin:/bin", HOME: process.env.HOME, TMPDIR: root }, timeout: 10000 }, e => e ? reject(Error("Fictitious compilation failed")) : resolve()).stdin.end());
   await fs.chmod(artifact, 0o500); await fs.symlink(artifact, entry);
   const a = await fs.lstat(artifact), e = await fs.lstat(entry), p = await fs.lstat(parent);
@@ -172,40 +188,47 @@ for (const mode of [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 17, 18, 19, 21, 22])
   else if (r.terminationConfirmed) assert.deepEqual(await fs.readdir(parent), []);
   if (mode === 10) assert.ok(r.reasons.includes("auth-descendants-unconfirmed"));
 });
-for (const kind of ["missing", "fake", "serialized", "proxy", "revoked", "used", "mismatch", "expired", "foreign"]) localTest("AD permission " + kind + " blocks before IO", async t => {
-  const { cfg, parent } = await setup(t); let p = kind === "missing" ? undefined : permit(cfg), traps = 0;
+for (const kind of ["missing", "fake", "serialized", "proxy", "revoked", "used", "mismatch", "expired", "foreign"]) test("AD permission " + kind + " blocks before IO", { timeout: 20000 }, async () => {
+  const cfg = declarationConfiguration(), { counts, deps } = forbiddenEffects();
+  assert.equal(typeof collector(cfg, permit(cfg), deps).run, "function");
+  let p = kind === "missing" ? undefined : permit(cfg), traps = 0;
   if (kind === "fake") p = {};
   if (kind === "serialized") p = JSON.parse(JSON.stringify(p));
   if (kind === "proxy") p = new Proxy({}, { getPrototypeOf() { traps++; throw Error("private"); } });
   if (kind === "revoked") revokeAuthDiagnosticPermit(p);
-  if (kind === "used") { const a = new AbortController(); a.abort(); await collector(cfg, p, { signal: a.signal }).run(); }
+  if (kind === "used") assert.deepEqual(safe(await collector(cfg, p, deps).run(undefined)).reasons, ["auth-input-forbidden"]);
   if (kind === "mismatch") cfg.limits.totalTimeoutMs++;
   if (kind === "foreign") p = createManagedPreferencesInvocationPermit(cfg);
-  let calls = 0; const deps = { io: { lstat() { calls++; throw Error("private"); } }, spawn() { calls++; throw Error("private"); } };
   if (kind === "expired") deps.monotonic = () => mono() + 100000;
-  assert.equal(safe(await collector(cfg, p, deps).run()).state, "blocked-before-start"); assert.equal(calls, 0); assert.equal(traps, 0); assert.deepEqual(await fs.readdir(parent), []);
+  const r = safe(await collector(cfg, p, deps).run());
+  assert.equal(r.state, "blocked-before-start"); assert.deepEqual(r.reasons, ["auth-permission-rejected"]); assert.equal(r.spawnAttempts, 0);
+  assert.deepEqual(counts, { io: 0, spawn: 0 }); assert.equal(traps, 0);
 });
 for (const kind of ["identity-pending", "identity-rejected", "startup-pending", "startup-rejected", "identity-binding", "startup-binding", "effects-unknown", "effects-not-enumerated"])
-  localTest("AD specific startup gate " + kind + " blocks before all IO", async t => {
-    const { cfg } = await setup(t);
+  test("AD specific startup gate " + kind + " blocks before all IO", { timeout: 20000 }, async () => {
+    const cfg = declarationConfiguration(), { counts, deps } = forbiddenEffects();
+    assert.equal(typeof collector(cfg, permit(cfg), deps).run, "function");
     if (kind.startsWith("identity-")) cfg.identityReview[kind === "identity-binding" ? "bindingSha256" : "state"] = kind === "identity-binding" ? "f".repeat(64) : kind.slice(9);
     if (kind.startsWith("startup-")) cfg.startupReview[kind === "startup-binding" ? "bindingSha256" : "state"] = kind === "startup-binding" ? "f".repeat(64) : kind.slice(8);
     if (kind === "effects-unknown") cfg.startupReview.unresolvedEffects = true;
     if (kind === "effects-not-enumerated") cfg.startupReview.effectsEnumerated = false;
-    let calls = 0; const r = safe(await collector(cfg, permit(cfg), { io: { lstat() { calls++; throw Error("private"); } }, spawn() { calls++; throw Error("private"); } }).run());
-    assert.equal(r.state, "blocked-before-start"); assert.deepEqual(r.reasons, ["auth-startup-not-reviewed"]); assert.equal(calls, 0);
+    const r = safe(await collector(cfg, permit(cfg), deps).run());
+    assert.equal(r.state, "blocked-before-start"); assert.deepEqual(r.reasons, ["auth-startup-not-reviewed"]); assert.equal(r.spawnAttempts, 0);
+    assert.deepEqual(counts, { io: 0, spawn: 0 });
   });
 localTest("AD concurrent collectors consume one scoped handle only once", async t => {
   const { cfg } = await setup(t), p = permit(cfg); const rs = await Promise.all([collector(cfg, p).run(), collector(cfg, p).run()]); rs.forEach(safe);
   assert.equal(rs.reduce((n, r) => n + r.spawnAttempts, 0), 1); assert.equal(rs.filter(r => r.state === "observation-complete").length, 1);
 });
-localTest("AD N1/S3.1/S3.2/S2/C1/SC handles do not cross the diagnostic boundary", async t => {
-  const { cfg } = await setup(t);
+test("AD N1/S3.1/S3.2/S2/C1/SC handles do not cross the diagnostic boundary", { timeout: 20000 }, async () => {
+  const cfg = declarationConfiguration(), { counts, deps } = forbiddenEffects();
+  assert.equal(typeof collector(cfg, permit(cfg), deps).run, "function");
   const handles = [createManagedPreferencesInvocationPermit(cfg), createDiagnosticPermit(cfg), createNativeAccessPermit({}, {}),
     createSupervisedPermit("synthetic", () => {}, () => {}), createFixturePermit(() => {}, () => {}), createSelectiveReadPermit(cfg)];
   for (const p of handles) {
-    let calls = 0; const r = safe(await collector(cfg, p, { io: { lstat() { calls++; throw Error("private"); } }, spawn() { calls++; throw Error("private"); } }).run());
-    assert.equal(r.state, "blocked-before-start"); assert.equal(calls, 0);
+    const r = safe(await collector(cfg, p, deps).run());
+    assert.equal(r.state, "blocked-before-start"); assert.deepEqual(r.reasons, ["auth-permission-rejected"]); assert.equal(r.spawnAttempts, 0);
+    assert.deepEqual(counts, { io: 0, spawn: 0 });
   }
 });
 for (const kind of ["sha", "uid", "inode", "mode", "special-mode", "setuid-mode", "sticky-mode", "size", "mtime", "ctime", "hardlink", "link-inode", "link-target", "link-mtime", "parent-inode", "parent-mode", "git", "obsidian", "excluded"])
@@ -267,8 +290,14 @@ for (const kind of ["artifact", "entry", "revoke", "cancel"]) localTest("AD post
 localTest("AD captured inert config survives caller mutation and getters/proxies never run", async t => {
   const { cfg } = await setup(t), p = permit(cfg), s = structuredClone(schema), c = createAuthDiagnosticCollector(s, cfg, p);
   cfg.artifact.path = "/synthetic-private"; s.$id = "wrong"; assert.equal(safe(await c.run()).state, "observation-complete");
+});
+test("AD inert collector configuration rejects getters/proxies before any effects", { timeout: 20000 }, () => {
+  const cfg = declarationConfiguration(), { counts, deps } = forbiddenEffects();
+  assert.equal(typeof collector(cfg, permit(cfg), deps).run, "function");
   let traps = 0; const g = { get artifact() { traps++; throw Error("private"); } }, proxy = new Proxy({}, { ownKeys() { traps++; throw Error("private"); } });
-  assert.throws(() => collector(g, {})); assert.throws(() => collector(proxy, {})); assert.equal(traps, 0);
+  assert.throws(() => collector(g, {}, deps), /^Error: Invalid auth diagnostic configuration$/);
+  assert.throws(() => collector(proxy, {}, deps), /^Error: Invalid auth diagnostic configuration$/);
+  assert.equal(traps, 0); assert.deepEqual(counts, { io: 0, spawn: 0 });
 });
 for (const kind of ["before", "during", "revoke"]) localTest("AD abort/revoke " + kind + " never publishes fields", async t => {
   const { cfg } = await setup(t, 8), p = permit(cfg), a = new AbortController(); if (kind === "before") a.abort();
@@ -313,13 +342,15 @@ for (const missing of ["exit", "close", "stdout-close", "stderr-close", "pid"]) 
   const snapshot = structuredClone(r); child.stdout.emit("data", Buffer.from("synthetic-private")); child.emit("exit", 0); child.emit("close");
   child.stdout.emit("close"); child.stderr.emit("close"); child.emit("spawn"); assert.deepEqual(r, snapshot);
 });
-localTest("AD configuration is closed with noncoercing budgets and no expanded recipe/env/prompt", async t => {
-  const { cfg } = await setup(t, 0, VALIDATION_TIMING);
+test("AD configuration is closed with noncoercing budgets and no expanded recipe/env/prompt", { timeout: 20000 }, () => {
+  const cfg = declarationConfiguration(), { counts, deps } = forbiddenEffects();
+  assert.equal(typeof collector(cfg, permit(cfg), deps).run, "function");
   for (const mutate of [c => { c.argv = ["--print"]; }, c => { c.prompt = "private"; }, c => { c.env = {}; }, c => { c.recipe = "anything"; }, c => { c.limits.processTimeoutMs = 15001; },
     c => { c.limits.totalTimeoutMs = 90001; }, c => { c.limits.maxOutputBytes = 32769; }, c => { c.limits.maxErrorBytes = 32769; }, c => { c.artifact.size = 536870913; },
     c => { c.limits.processTimeoutMs = "800"; }, c => { c.limits.graceMs = 1000; }, c => { c.limits.processTimeoutMs = 2600; }, c => { c.excludedRoots = []; }]) {
-    const c = structuredClone(cfg); mutate(c); assert.throws(() => collector(c, {}), /^Error: Invalid auth diagnostic configuration$/);
+    const c = structuredClone(cfg); mutate(c); assert.throws(() => collector(c, {}, deps), /^Error: Invalid auth diagnostic configuration$/);
   }
+  assert.deepEqual(counts, { io: 0, spawn: 0 });
 });
 localTest("AD report schema is closed and cannot turn observation into readiness", async t => {
   const { cfg } = await setup(t), r = safe(await collector(cfg, permit(cfg)).run()), ajv = new Ajv2020({ strict: true }); ajv.addSchema(schema);
@@ -475,16 +506,17 @@ function boundedReviewReads(f) {
     assert.equal(length, Math.min(65536, f.cfg.artifact.size - position, 536870912 - position));
   }
 }
-localTest("AD review regression rejects all run arguments before IO and consumes valid permission", async () => {
+test("AD review regression rejects all run arguments before IO and consumes valid permission", { timeout: 20000 }, async () => {
   let traps = 0;
   const inputs = [undefined, "--print", { prompt: "synthetic-private" }, { get prompt() { traps++; throw Error("private"); } },
     new Proxy({}, { ownKeys() { traps++; throw Error("private"); }, get() { traps++; throw Error("private"); } })];
   for (const input of inputs) {
-    const f = reviewBoundaryFixture(), p = permit(f.cfg), c = collector(f.cfg, p, f.deps), r = safe(await c.run(input));
+    const cfg = declarationConfiguration(), { counts, deps } = forbiddenEffects(), p = permit(cfg), c = collector(cfg, p, deps), r = safe(await c.run(input));
     assert.equal(r.state, "blocked-before-start"); assert.deepEqual(r.reasons, ["auth-input-forbidden"]);
-    assert.equal(f.counts.lstat, 0); assert.equal(f.counts.opens, 0); assert.equal(f.counts.mkdtemp, 0); assert.equal(f.counts.spawn, 0);
+    assert.deepEqual(counts, { io: 0, spawn: 0 });
     assert.equal(safe(await c.run()).spawnAttempts, 0);
-    assert.deepEqual(safe(await collector(f.cfg, p, f.deps).run()).reasons, ["auth-permission-rejected"]);
+    assert.deepEqual(safe(await collector(cfg, p, deps).run()).reasons, ["auth-permission-rejected"]);
+    assert.deepEqual(counts, { io: 0, spawn: 0 });
   }
   assert.equal(traps, 0);
 });

@@ -11,15 +11,21 @@ import { recordMemorySync } from "../src/sync-record.js";
 import { hashBytes, syncWriteLockPath, SYNC_LEDGER } from "../src/sync-files.js";
 import { APPLY_LIMITS, parseProposal } from "../src/sync-proposal.js";
 import { collectMemoryNotes, validateNoteText, validateVirtualMemory } from "../src/sync-markdown.js";
+import { fileSymlinkSkipReason } from "../testing/symlink-capability.js";
 
 const NOTE = "03-IMPLEMENTACION/Contrato.md", SECOND = "03-IMPLEMENTACION/Operación.md", MERGE = "b".repeat(40), HEAD = "a".repeat(40);
 const DATE = "2026-10-01T14:00:00Z";
 const posixPermissions = { skip: process.platform === "win32" ? "Windows no conserva modos POSIX como 0640." : false };
-const posixSymlinks = { skip: process.platform === "win32" ? "Crear symlinks en Windows exige privilegios o Developer Mode." : false };
+const fileSymlinks = { skip: fileSymlinkSkipReason() };
 function git(dir, ...args) { return execFileSync("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }); }
 function fixture(t, options = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "project-memory-apply-")));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const owner = fs.lstatSync(root);
+  t.after(() => {
+    const current = fs.lstatSync(root, { throwIfNoEntry: false });
+    if (current?.isDirectory() && !current.isSymbolicLink() && current.dev === owner.dev && current.ino === owner.ino)
+      fs.rmSync(root, { recursive: true });
+  });
   const vault = path.join(root, "memory"), source = path.join(root, "source");
   for (const dir of [source, path.join(vault, "00-INICIO"), path.join(vault, "03-IMPLEMENTACION")]) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(source, "source.txt"), "Fuente inalterada.\n");
@@ -177,12 +183,16 @@ test("apply no revela stderr del proveedor", async (t) => {
 for (const invalid of ["../other.md", "/tmp/a.md", "03-IMPLEMENTACION/*.md", SYNC_LEDGER, "07-AGENTES/skills/avisens/SKILL.md", "03-IMPLEMENTACION/.config.md"]) {
   test(`apply excluye ruta ${invalid}`, async (t) => { const f = fixture(t); f.proposal.notes[0].path = invalid; f.save(); await blocked(f); });
 }
-test("apply rechaza symlinks de nota, propuesta y padres", posixSymlinks, async (t) => {
+test("apply rechaza symlinks de nota, propuesta y padres", async (t) => {
   for (const kind of ["note", "proposal", "parent"]) {
-    const f = fixture(t), destination = kind === "note" ? path.join(f.vault, NOTE) : kind === "proposal" ? f.proposalPath : path.join(f.vault, "03-IMPLEMENTACION");
-    fs.renameSync(destination, destination + ".real"); fs.symlinkSync(destination + ".real", destination);
-    // snapshot traverses only physical directories and leaves foreign links intact.
-    await blocked(f);
+    await t.test(kind, kind === "parent" ? {} : fileSymlinks, async (child) => {
+      const f = fixture(child), destination = kind === "note" ? path.join(f.vault, NOTE) : kind === "proposal" ? f.proposalPath : path.join(f.vault, "03-IMPLEMENTACION");
+      fs.renameSync(destination, destination + ".real");
+      fs.symlinkSync(destination + ".real", destination, kind === "parent" ? (process.platform === "win32" ? "junction" : "dir") : "file");
+      // snapshot traverses only physical directories and leaves foreign links intact.
+      try { await blocked(f); }
+      finally { fs.unlinkSync(destination); }
+    });
   }
 });
 for (const content of ["# Sin cambio de línea", "# Nota\n\ntexto  \n", "# Nota\n\n{{pendiente}}\n", "# Nota\n\u0000\n", "# Nota\n\ud800\n", "# Nota\n\nAPI_KEY=abcdefghi123456\n"]) {
@@ -354,10 +364,14 @@ test("apply detecta una nota ignorada añadida durante GitHub", async (t) => {
   options.onQuery = () => { if (!changed) { changed = true; fs.writeFileSync(path.join(f.vault, "03-IMPLEMENTACION/Extra.md"), "# Extra\n"); } };
   await assert.rejects(f.preview(), (e) => e.code === "concurrent-change");
 });
-test("apply no interpreta glob de Git ni acepta nota regular con índice simbólico", posixSymlinks, async (t) => {
-  const f = fixture(t), full = path.join(f.vault, NOTE), original = fs.readFileSync(full);
-  fs.unlinkSync(full); fs.symlinkSync(path.join(f.vault, SECOND), full); f.commit(NOTE);
-  fs.unlinkSync(full); fs.writeFileSync(full, original); f.proposal.memoryHead = git(f.vault, "rev-parse", "HEAD").trim(); f.save();
+test("apply no interpreta glob de Git ni acepta nota regular con índice simbólico", async (t) => {
+  const f = fixture(t);
+  // The attack is a 120000 Git entry with a regular worktree file; no OS link is needed.
+  const blob = execFileSync("git", ["-C", f.vault, "hash-object", "-w", "--stdin"], { input: path.join(f.vault, SECOND), encoding: "utf8" }).trim();
+  git(f.vault, "update-index", "--add", "--cacheinfo", `120000,${blob},${NOTE}`);
+  git(f.vault, "commit", "-m", "fixture symbolic index");
+  assert.match(git(f.vault, "ls-files", "--stage", "--", NOTE), /^120000 /u);
+  f.proposal.memoryHead = git(f.vault, "rev-parse", "HEAD").trim(); f.save();
   await blocked(f, "untracked-file");
 });
 test("apply bloquea skip-worktree sin modificar el staging", async (t) => {

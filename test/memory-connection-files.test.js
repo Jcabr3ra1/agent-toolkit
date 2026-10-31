@@ -15,7 +15,9 @@ import {
   MEMORY_CONNECTION_OPEN_FLAGS as FLAGS
 } from "../src/memory-connection-files.js";
 
-const posixTest = (name, fn) => test(name, { skip: !["darwin", "linux"].includes(process.platform) || !process.getuid }, fn);
+const posixSkip = !["darwin", "linux"].includes(process.platform) || !process.getuid || constants.O_NOFOLLOW === undefined
+  ? "Requires production POSIX uid/mode and O_NOFOLLOW filesystem attestation (darwin/linux)." : false;
+const posixTest = (name, fn) => test(name, { skip: posixSkip }, fn);
 const source = '[mcp_servers.demo-memory]\ncommand="node"\nargs=[]\nenabled=false\n';
 const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const error = (code) => Object.assign(Error("private-error-marker"), { code });

@@ -7,6 +7,9 @@ export const SYNC_LEDGER = "00-INICIO/Registro de sincronización.md";
 export const syncWriteLockPath = (vault) => path.join(vault, "00-INICIO/.project-memory-sync-record.lock");
 export const hashBytes = (value) => createHash("sha256").update(value).digest("hex");
 // Git paths always use '/', while path.relative returns native separators.
+// path.relative applies native casing rules: Windows is case-insensitive;
+// POSIX remains case-sensitive. Callers canonicalize filesystem aliases first.
+export const sameNativePath = (left, right) => path.relative(left, right) === '';
 export const relativeGitPath = (root, file) => path.relative(root, file).split(path.sep).join("/");
 // Only textual worktree comparisons tolerate Git's LF/CRLF conversion. Hashes,
 // snapshots and comparisons between HEAD and the index remain byte-exact.
@@ -67,7 +70,7 @@ export function syncGit(vault, args) {
 }
 export const gitText = (vault, args) => decodeUtf8(syncGit(vault, args));
 export function syncGitState(vault, ignored = []) {
-  if (fs.realpathSync(gitText(vault, ["rev-parse", "--show-toplevel"]).trim()) !== vault) rejectFile("git-root", "La bóveda debe tener su propio repositorio Git.");
+  if (!sameNativePath(fs.realpathSync(gitText(vault, ["rev-parse", "--show-toplevel"]).trim()), vault)) rejectFile("git-root", "La bóveda debe tener su propio repositorio Git.");
   const head = gitText(vault, ["rev-parse", "HEAD"]).trim();
   const branch = gitText(vault, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
   const changes = [], entries = gitText(vault, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]).split("\0");

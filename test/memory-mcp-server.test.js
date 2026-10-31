@@ -107,8 +107,21 @@ test("RG occupied, cancellation and late result cannot revive a session", async 
   await f.gateway.close(); assert.equal(f.log.closes, 1);
 });
 test("RG active request timeout leaves no retries", async t => {
-  const f = await fake(t, { call: () => new Promise(() => {}) }, { timeoutMs: 20 });
-  await assert.rejects(f.gateway.call("read_text_file", { path: f.note }), matches("RG_TIMEOUT"));
+  // Freeze the deadline while asynchronous path/scope validation runs. Advance
+  // only after the backend read starts, regardless of filesystem/suite load.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let enter;
+  const entered = new Promise(resolve => { enter = resolve; });
+  const f = await fake(t, { call: () => { enter(); return new Promise(() => {}); } }, { timeoutMs: 20 });
+  const pending = f.gateway.call("read_text_file", { path: f.note });
+  const rejected = assert.rejects(pending, matches("RG_TIMEOUT"));
+  await entered;
+  assert.equal(f.log.calls.filter(c => c.name === "read_text_file").length, 1);
+  t.mock.timers.tick(19); await Promise.resolve();
+  assert.equal(f.gateway.closed, false); assert.equal(f.log.closes, 0);
+  t.mock.timers.tick(1); await rejected;
+  assert.equal(f.gateway.closed, true);
+  await assert.rejects(f.gateway.call("read_text_file", { path: f.note }), matches("RG_SESSION_CLOSED"));
   assert.equal(f.log.calls.filter(c => c.name === "read_text_file").length, 1);
   assert.equal(f.log.starts, 1); assert.equal(f.log.closes, 1);
 });

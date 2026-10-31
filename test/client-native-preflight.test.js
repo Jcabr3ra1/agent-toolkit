@@ -1,3 +1,4 @@
+import { supported } from "../testing/client-posix.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -91,8 +92,70 @@ for (const d of [
   { loggedIn: true, authMethod: "claude.ai", subscriptionType: 3 }, '{"loggedIn":true,"loggedIn":false}'
 ]) test("PF extractor rejects contradictory/invalid access", () => assert.throws(() => extract(d)));
 
-const supported = process.platform === "darwin" && process.arch === "arm64";
-const localTest = (name, fn) => test(name, { skip: !supported, timeout: 20000 }, fn);
+const localTest = (name, fn) => test(name, { skip: supported ? false : "Requires the POSIX native-access fixture with uid, modes and no-follow checks.", timeout: 20000 }, fn);
+function inertAccessConfiguration() {
+  const workspaceParent = path.resolve("synthetic-access-boundary");
+  return { candidate: { entryPath: path.join(workspaceParent, "entry"), artifactPath: path.join(workspaceParent, "artifact"),
+    expectedSha256: "a".repeat(64), expectedUid: 1000, expectedMode: 0o755, expectedSize: 1,
+    expectedDev: 1, expectedIno: 2, expectedLinkIno: 3 }, workspaceParent,
+    limits: { timeoutMs: 1500, totalTimeoutMs: 6000, graceMs: 150, confirmationMs: 300, maxOutputBytes: 32768, maxErrorBytes: 32768 } };
+}
+
+async function metadataFixture(t) {
+  const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-metadata-test-")));
+  const owned = await fs.lstat(root), target = path.join(root, "target"), link = path.join(root, "link");
+  t.after(async () => {
+    const current = await fs.lstat(root).catch(() => null);
+    if (current?.isDirectory() && !current.isSymbolicLink() && current.dev === owned.dev && current.ino === owned.ino) {
+      // Remove the alias itself before cleaning its owned physical target.
+      if ((await fs.lstat(link).catch(() => null))?.isSymbolicLink()) await fs.unlink(link);
+      await fs.rm(root, { recursive: true });
+    }
+  });
+  await fs.mkdir(target);
+  const artifactPath = path.join(target, "metadata-file");
+  await fs.writeFile(artifactPath, "synthetic-private: metadata inspection must not read this\n");
+  // Both aliases must be rejected at lstat, before traversing their target.
+  await fs.symlink(target, link, process.platform === "win32" ? "junction" : "dir");
+  return { root, artifactPath, link };
+}
+
+async function withoutMetadataReads(run) {
+  const names = ["readFile", "open", "readdir", "stat", "realpath", "readlink"], saved = names.map(name => fs[name]);
+  const reads = [];
+  for (const name of names) fs[name] = () => { reads.push(name); throw Error("Metadata inspection must use lstat only"); };
+  try { return await run(); }
+  finally { names.forEach((name, index) => { fs[name] = saved[index]; }); assert.deepEqual(reads, []); }
+}
+
+test("PF access configuration and candidate schema reject before any effect", () => {
+  const cfg = inertAccessConfiguration(), effects = [];
+  const deny = name => () => { effects.push(name); throw Error("Unexpected effect"); };
+  const deps = { spawn: deny("spawn"), kill: deny("kill"),
+    io: Object.fromEntries(Object.keys(fs).filter(name => typeof fs[name] === "function").map(name => [name, deny("io." + name)])) };
+  for (const mutate of [q => { q.candidate.artifactPath = "relative"; }, q => { q.command = "auth status"; },
+    q => { q.candidate.expectedSha256 = "invalid"; }, q => { q.limits.timeoutMs = "1500"; },
+    q => { q.limits.graceMs = q.limits.timeoutMs; }]) {
+    const changed = structuredClone(cfg); mutate(changed);
+    assert.throws(() => createNativeAccessCollector(schema, candidateSchema, changed, {}, deps), { message: "Invalid access configuration" });
+  }
+  assert.throws(() => createNativeAccessCollector(schema, { ...candidateSchema, $id: "other" }, cfg, {}, deps), { message: "Invalid candidate schema" });
+  assert.deepEqual(effects, []);
+});
+
+test("PF access permits reject active declarations without invoking their hooks", () => {
+  const cfg = inertAccessConfiguration(), d = input(nativeAccessScope(cfg)); let hooks = 0;
+  const getter = value => Object.defineProperty(structuredClone(value), "extra", {
+    enumerable: true, get() { hooks++; throw Error("do not execute"); }
+  });
+  const proxy = new Proxy({}, { getPrototypeOf() { hooks++; throw Error("do not execute"); }, ownKeys() { hooks++; throw Error("do not execute"); } });
+  assert.throws(() => createNativeAccessPermit(getter(cfg), d), { code: "non-json-metadata" });
+  assert.throws(() => createNativeAccessPermit(cfg, getter(d)), { code: "non-json-metadata" });
+  assert.throws(() => createNativeAccessPermit(proxy, d), { code: "non-json-metadata" });
+  assert.throws(() => createNativeAccessPermit(cfg, proxy), { code: "preflight-invalid-input" });
+  assert.throws(() => createNativeAccessPermit(cfg, '{"scope":1,"scope":2}'), { code: "duplicate-json-key" });
+  assert.equal(hooks, 0);
+});
 async function setup(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-preflight-test-"))); await fs.chmod(root, 0o700); const owned = await fs.lstat(root);
   t.after(async () => { const s = await fs.lstat(root).catch(() => null); if (s?.dev === owned.dev && s?.ino === owned.ino && s.isDirectory() && !s.isSymbolicLink()) await fs.rm(root, { recursive: true }); });
@@ -103,7 +166,7 @@ async function setup(t) {
   return { cfg, d: input(nativeAccessScope(cfg), new Date().toISOString().replace(/\.\d{3}Z$/, "Z")) };
 }
 function collector(cfg, d, deps = {}, permit = createNativeAccessPermit(cfg, d)) {
-  return createNativeAccessCollector(schema, candidateSchema, cfg, permit, { ...deps, spawn: deps.spawn ?? ((_exec, a, o) => spawn(process.execPath, [fixture, deps.mode ?? "success", ...a], o)) });
+  return createNativeAccessCollector(schema, candidateSchema, cfg, permit, { ...deps, syntheticFixture: true, spawn: deps.spawn ?? ((_exec, a, o) => spawn(process.execPath, [fixture, deps.mode ?? "success", ...a], o)) });
 }
 localTest("PF native guard does not reserve workspace or spawn on unknown controls", async t => {
   const { cfg, d } = await setup(t); d.projection.safeSource = false; d.projection.fields = []; let n = 0;
@@ -129,11 +192,13 @@ localTest("PF fake/cross-phase/serialized/revoked/binding mismatch permits block
     const r = await collector(cfg, d, {}, p).run(d); assert.equal(r.report.spawnAttempts, 0);
   }
 });
-localTest("PF metadata is lstat only and never exports paths/values", async t => {
-  const { cfg } = await setup(t); let calls = 0;
-  const r = await inspectPreflightMetadata([{ id: "artifact", path: cfg.candidate.artifactPath }, { id: "link", path: cfg.candidate.entryPath }, { id: "missing", path: path.join(cfg.workspaceParent, "missing") }], { lstat: async p => { calls++; return fs.lstat(p); } });
-  assert.deepEqual(r.map(v => v.kind), ["file", "unsafe", "missing"]); assert.ok(calls > 0); assert.doesNotMatch(JSON.stringify(r), /agent-preflight-test|synthetic-candidate/);
-  await assert.rejects(inspectPreflightMetadata(Array.from({ length: 17 }, (_, i) => ({ id: "id-" + i, path: cfg.workspaceParent }))));
+test("PF metadata is lstat only and never exports paths/values", async t => {
+  const f = await metadataFixture(t), calls = [];
+  const r = await withoutMetadataReads(() => inspectPreflightMetadata([{ id: "artifact", path: f.artifactPath }, { id: "link", path: f.link }, { id: "missing", path: path.join(f.root, "missing") }], { lstat: async p => { calls.push(p); return fs.lstat(p); } }));
+  assert.deepEqual(r, [{ id: "artifact", kind: "file" }, { id: "link", kind: "unsafe" }, { id: "missing", kind: "missing" }]);
+  assert.ok(calls.includes(f.artifactPath)); assert.equal(calls.filter(p => p === f.link).length, 1);
+  assert.doesNotMatch(JSON.stringify(r), /agent-metadata-test|metadata-file|synthetic-private/);
+  await assert.rejects(inspectPreflightMetadata(Array.from({ length: 17 }, (_, i) => ({ id: "id-" + i, path: f.root }))));
   await assert.rejects(inspectPreflightMetadata([{ id: "x", path: "relative" }]));
 });
 localTest("PF candidate change blocks before native access", async t => {
@@ -176,12 +241,14 @@ localTest("PF unconfirmed group cannot report access success", async t => {
   // Success fixture exits by itself; denied observation leaves no hanging child.
   assert.equal(r.report.state, "indeterminate"); assert.equal(r.report.terminationConfirmed, false); assert.equal(r.auth, null);
 });
-localTest("PF metadata errors and symlinks stay unknown/unsafe, no file reads", async t => {
-  const { cfg } = await setup(t);
-  const r = await inspectPreflightMetadata([{ id: "private", path: cfg.candidate.artifactPath }], { lstat: async () => { const e = Error("synthetic-private-error"); e.code = "EACCES"; throw e; } });
+test("PF metadata errors and symlinks stay unknown/unsafe, no file reads", async t => {
+  const f = await metadataFixture(t), calls = [];
+  const r = await withoutMetadataReads(() => inspectPreflightMetadata([{ id: "private", path: f.artifactPath }], { lstat: async () => { const e = Error("synthetic-private-error"); e.code = "EACCES"; throw e; } }));
   assert.deepEqual(r, [{ id: "private", kind: "unknown" }]);
-  const linkDir = path.join(cfg.workspaceParent, "linkdir"); await fs.symlink(cfg.workspaceParent, linkDir);
-  const s = await inspectPreflightMetadata([{ id: "via-link", path: path.join(linkDir, "synthetic-candidate") }]); assert.equal(s[0].kind, "unsafe");
+  const s = await withoutMetadataReads(() => inspectPreflightMetadata([{ id: "via-link", path: path.join(f.link, "metadata-file") }], { lstat: async p => { calls.push(p); return fs.lstat(p); } }));
+  assert.deepEqual(s, [{ id: "via-link", kind: "unsafe" }]);
+  assert.equal(calls.at(-1), f.link); assert.ok(!calls.includes(path.join(f.link, "metadata-file")));
+  assert.doesNotMatch(JSON.stringify([r, s]), /agent-metadata-test|metadata-file|synthetic-private/);
 });
 localTest("PF no network calls from the controller on admitted synthetic query", async t => {
   const { cfg, d } = await setup(t); let calls = 0;

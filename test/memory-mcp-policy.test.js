@@ -7,6 +7,9 @@ import { loadMemoryPolicy, validateMemoryCall, recheckMemoryRoot, recheckMemoryE
   checkMemoryResult, MEMORY_MCP_LIMITS as LIMIT, MEMORY_READ_TOOLS } from "../src/memory-mcp-policy.js";
 import { memoryFixture } from "../test-support/memory-mcp-fixture.js";
 import { READ_TOOLS } from "../src/connect.js";
+import { fileSymlinkSkipReason } from "../testing/symlink-capability.js";
+
+const fileSymlinkSkip = fileSymlinkSkipReason();
 
 const code = expected => error => { assert.equal(error.code, expected); return true; };
 test("RG read catalogue agrees with legacy without changing connect", () => assert.deepEqual(MEMORY_READ_TOOLS, READ_TOOLS));
@@ -18,7 +21,7 @@ test("RG manifest resolves vault against manifest, never cwd", async t => {
   if (process.platform !== 'win32') assert.equal((await fs.lstat(f.manifestPath)).mode & 0o7777, 0o600);
 });
 for (const kind of ["malformed", "duplicate-key", "unknown-field", "write-mode", "credential", "wide-root", "home-root", "overlap", "linked-manifest", "linked-root", "writable-root", "writable-manifest", "hardlinked-manifest", "oversize"])
-  test("RG manifest rejects " + kind, { skip: process.platform === 'win32' && ['linked-manifest','writable-root','writable-manifest'].includes(kind) ? 'POSIX file symlinks and mode permissions' : false }, async t => {
+  test("RG manifest rejects " + kind, { skip: kind === 'linked-manifest' ? fileSymlinkSkip : process.platform === 'win32' && ['writable-root','writable-manifest'].includes(kind) ? 'POSIX mode permissions' : false }, async t => {
     const f = await memoryFixture(t); let target = f.manifestPath;
     if (kind === "malformed") await fs.writeFile(target, "{");
     if (kind === "duplicate-key") await fs.writeFile(target, '{"project":{},"project":{}}');
@@ -48,7 +51,7 @@ test("RG source alias is checked physically for overlap", async t => {
   await assert.rejects(loadMemoryPolicy(f.manifestPath), code("RG_ROOT_DENIED"));
 });
 for (const kind of ["outside", "sibling", "traversal", "relative", "control", "symlink", "symlink-parent", "hardlink", "directory", "fifo", "credential", "git", "obsidian", "writable", "unreadable"])
-  test("RG rejects unsafe read " + kind + " before content IO", { skip: process.platform === 'win32' && ['symlink','fifo','writable','unreadable'].includes(kind) ? 'POSIX file symlinks, FIFO and mode permissions' : false }, async t => {
+  test("RG rejects unsafe read " + kind + " before content IO", { skip: kind === 'symlink' ? fileSymlinkSkip : process.platform === 'win32' && ['fifo','writable','unreadable'].includes(kind) ? 'POSIX FIFO and mode permissions' : false }, async t => {
     const f = await memoryFixture(t), policy = await loadMemoryPolicy(f.manifestPath);
     let file = f.note, opens = 0;
     if (kind === "outside") file = path.join(f.source, "outside.md");

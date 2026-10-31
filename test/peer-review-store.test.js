@@ -6,6 +6,20 @@ import path from "node:path";
 import { after, test } from "node:test";
 import { createPeerReviewStore, PEER_LIMITS } from "../src/peer-review-store.js";
 
+function diagnoseLockErrors(t) {
+  const mkdir = fs.mkdir;
+  t.mock.method(fs, "mkdir", function (...args) {
+    const pending = mkdir.apply(this, args);
+    pending.catch(error => {
+      if (typeof args[0] !== "string" || !args[0].endsWith(".json.lock") || error.code === "EEXIST") return;
+      const code = /^(?:E[A-Z0-9_]+|ERR_[A-Z0-9_]+)$/.test(error.code ?? "") ? error.code : "UNCLASSIFIED";
+      // Only an error code, never a private path, raw message or credential.
+      t.diagnostic(`Unexpected native lock mkdir error: ${code}`);
+    });
+    return pending;
+  });
+}
+
 const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-toolkit-peers-")));
 after(() => fs.rm(root, { recursive: true, force: true }));
 
@@ -240,7 +254,7 @@ test("input, report and history limits are bounded in bytes and same-agent revie
   assert.equal((await f.store.getCollaboration(f.bound)).reviews[0].review, null);
 });
 
-test("special storage files fail promptly instead of blocking reads", { skip: process.platform === "win32" }, async () => {
+test("special storage files fail promptly instead of blocking reads", { skip: process.platform === "win32" ? "Requires a POSIX FIFO created by mkfifo; Windows named pipes have different semantics." : false }, async () => {
   const f = await fixture();
   const record = path.join(f.storage, f.task.id + ".json");
   await fs.unlink(record);
@@ -368,7 +382,8 @@ test("usage survives restart, deduplicates and keeps unknown counters distinct f
   assert.equal(report.savingsVerified, false);
 });
 
-test("concurrent identical usage records count once and historical tasks have no fabricated usage", async () => {
+test("concurrent identical usage records count once and historical tasks have no fabricated usage", async t => {
+  diagnoseLockErrors(t);
   const f = await fixture();
   assert.equal(typeof f.store.consumption, "function");
   const empty = await f.store.consumption({ projectRoot: f.projectRoot });
@@ -381,15 +396,28 @@ test("concurrent identical usage records count once and historical tasks have no
   assert.equal((await other.consumption({ projectRoot: f.projectRoot })).summary.calls, 1);
 });
 
-test('closure snapshot holds the transaction lock and never cancels a concurrently dispatched review', async () => {
+test('closure snapshot holds the transaction lock and never cancels a concurrently dispatched review', {timeout:10000}, async t => {
+  diagnoseLockErrors(t);
   const f=await fixture(), other=createPeerReviewStore({root:f.storage});
   const preview=await f.prepare();
   assert.equal(typeof f.store.closeWithSnapshot,'function');
+  const lock=path.join(f.storage,f.task.id+'.json.lock'), mkdir=fs.mkdir.bind(fs);
+  let entered;
+  const contended=new Promise(resolve=>{entered=resolve;});
+  t.mock.method(fs,'mkdir',async(name,...args)=>{
+    try {return await mkdir(name,...args);}
+    catch(error){
+      if(name===lock && error.code==='EEXIST') entered();
+      throw error;
+    }
+  });
   let attempt, settled=false, snapshot;
   await f.store.closeWithSnapshot({...f.bound,saveSnapshot:async task=>{
     snapshot=task;
     attempt=other.dispatchReview(preview,{previewId:'b'.repeat(32)}).then(value=>({value}),error=>({error})).then(value=>{settled=true;return value;});
-    await new Promise(resolve=>setTimeout(resolve,45));
+    // Observe real lock contention, rather than assuming the contender ran in 45 ms.
+    await contended;
+    assert.equal((await fs.lstat(lock)).isDirectory(),true);
     assert.equal(settled,false,'concurrent mutation waits for snapshot and close');
   }});
   assert.equal((await attempt).error.code,'peer-closed');

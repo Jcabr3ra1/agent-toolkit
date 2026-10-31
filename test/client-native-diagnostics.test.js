@@ -1,3 +1,4 @@
+import { supported } from "../testing/client-posix.js";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -15,8 +16,31 @@ import { createSupervisedPermit } from "../src/client-supervised-permit.js";
 const schema = JSON.parse(await fs.readFile(new URL("../schemas/agent-client-native-diagnostics.schema.json", import.meta.url), "utf8"));
 const options = schema.$defs.observation.properties.optionsPresent.items.enum;
 const program = fileURLToPath(new URL("../testing/native-diagnostics/fixture.cjs", import.meta.url));
-const supported = process.platform === "darwin" && process.arch === "arm64";
-const localTest = (name, fn) => test(name, { skip: !supported, timeout: 20000 }, fn);
+const localTest = (name, fn) => test(name, { skip: supported ? false : "Requires a POSIX synthetic client fixture with ownership and process-group isolation; this is not Windows native-client admission.", timeout: 20000 }, fn);
+// Declarations only: these paths and pins do not name an installed executable.
+function inertConfiguration() {
+  const workspaceParent = path.resolve("synthetic-diagnostic-boundary");
+  return { candidate: { entryPath: path.join(workspaceParent, "entry"), artifactPath: path.join(workspaceParent, "artifact"),
+    expectedSha256: "a".repeat(64), expectedUid: 1000, expectedMode: 0o755, expectedSize: 1,
+    expectedDev: 1, expectedIno: 2, expectedLinkIno: 3 }, workspaceParent,
+    limits: { maxStarts: 2, processTimeoutMs: 1500, totalTimeoutMs: 6000, graceMs: 150,
+      confirmationMs: 300, maxStdoutBytes: 131072, maxStderrBytes: 32768 } };
+}
+function deniedEffects() {
+  const calls = [];
+  const deny = name => () => { calls.push(name); throw Error("Unexpected boundary effect: " + name); };
+  return { calls, dependencies: { monotonic: () => 0, spawn: deny("spawn"), kill: deny("kill"),
+    io: Object.fromEntries(Object.keys(fs).filter(name => typeof fs[name] === "function").map(name => [name, deny("io." + name)])) } };
+}
+function blockedBeforeEffects(result, reason, effects) {
+  const r = checked(result);
+  assert.equal(r.report.state, "blocked");
+  assert.deepEqual(r.report.reasons, [reason]);
+  assert.equal(r.report.spawnAttempts, 0); assert.equal(r.report.startsObserved, 0);
+  assert.equal(r.report.nativeExecuted, false); assert.deepEqual(r.report.operations, []);
+  assert.deepEqual(r.observation, { declaredVersion: null, optionsPresent: [] });
+  assert.deepEqual(effects.calls, []);
+}
 async function setup(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-diagnostic-test-")));
   await fs.chmod(root, 0o700); const owned = await fs.lstat(root);
@@ -35,7 +59,7 @@ async function setup(t) {
       confirmationMs: 300, maxStdoutBytes: 131072, maxStderrBytes: 32768 } };
 }
 const make = (cfg, deps = {}, permit = createDiagnosticPermit(cfg)) => createNativeDiagnostics(schema, cfg, permit, {
-  ...deps, spawn: deps.spawn ?? ((_exe, args, opts) => spawn(process.execPath, [program, deps.mode ?? "success", ...args], opts))
+  ...deps, syntheticFixture: true, spawn: deps.spawn ?? ((_exe, args, opts) => spawn(process.execPath, [program, deps.mode ?? "success", ...args], opts))
 });
 function checked(r) {
   const p = r.report;
@@ -120,13 +144,17 @@ localTest("S3.1 artifact, entry and parent adversaries are rejected", async t =>
     const r = checked(await make(cfg, { spawn: () => { n++; throw Error("no"); } }).run()); assert.equal(r.report.state, "blocked"); assert.equal(n, 0);
   }
 });
-localTest("S3.1 fake/serialized/S2/revoked/binding-mismatched permits cannot run", async t => {
-  const cfg = await setup(t); let n = 0; const deny = { spawn: () => { n++; throw Error("do not run"); } };
+test("S3.1 fake/serialized/S2/revoked/binding-mismatched permits cannot run", async () => {
+  const cfg = inertConfiguration(), effects = deniedEffects();
   const revoked = createDiagnosticPermit(cfg); revokeDiagnosticPermit(revoked);
   const foreign = createDiagnosticPermit({ ...cfg, workspaceParent: cfg.workspaceParent + "-other" });
-  for (const h of [null, {}, JSON.parse(JSON.stringify(createDiagnosticPermit(cfg))), revoked, foreign, createSupervisedPermit("x", async () => {}, async () => {})]) {
-    assert.equal(checked(await make(cfg, deny, h).run()).report.state, "blocked");
-  } assert.equal(n, 0);
+  let hooks = 0;
+  const proxy = new Proxy({}, { get() { hooks++; throw Error("no hook"); }, getPrototypeOf() { hooks++; throw Error("no hook"); } });
+  for (const h of [null, {}, JSON.parse(JSON.stringify(createDiagnosticPermit(cfg))), revoked, foreign, proxy,
+    createSupervisedPermit("x", async () => { hooks++; }, async () => { hooks++; })]) {
+    blockedBeforeEffects(await make(cfg, effects.dependencies, h).run(), "diagnostic-permit-unavailable", effects);
+  }
+  assert.equal(hooks, 0);
 });
 localTest("S3.1 one permit shared by two instances starts at most one two-step lot", async t => {
   const cfg = await setup(t), permit = createDiagnosticPermit(cfg);
@@ -134,12 +162,11 @@ localTest("S3.1 one permit shared by two instances starts at most one two-step l
   assert.equal(both.filter(r => r.report.state === "completed").length, 1);
   assert.equal(both.reduce((n, r) => n + r.report.spawnAttempts, 0), 2);
 });
-localTest("S3.1 no request JSON, arbitrary recipe or prompt accepted", async t => {
-  const cfg = await setup(t); let n = 0;
+test("S3.1 no request JSON, arbitrary recipe or prompt accepted", async () => {
+  const cfg = inertConfiguration(), effects = deniedEffects();
   for (const input of [{ prompt: "x" }, { command: "auth status" }, "--help", undefined]) {
-    const r = checked(await make(cfg, { spawn: () => { n++; throw Error("no"); } }).run(input)); assert.equal(r.report.state, "blocked");
-    assert.ok(r.report.reasons.includes("diagnostic-input-forbidden"));
-  } assert.equal(n, 0);
+    blockedBeforeEffects(await make(cfg, effects.dependencies).run(input), "diagnostic-input-forbidden", effects);
+  }
 });
 localTest("S3.1 cancel before process consumes permit without starting", async t => {
   const cfg = await setup(t), abort = new AbortController(); abort.abort(); const permit = createDiagnosticPermit(cfg);
@@ -166,19 +193,22 @@ localTest("S3.1 controller makes no network calls and fixture inherits no keys",
   try { assert.equal(checked(await make(cfg, { mode: "environment" }).run()).report.state, "completed"); assert.equal(calls, 0); }
   finally { [http.request, http.get, https.request, https.get, net.connect, net.createConnection, globalThis.fetch] = saved; }
 });
-localTest("S3.1 configuration/schema invalidity never starts a candidate", async t => {
-  const cfg = await setup(t);
+test("S3.1 configuration/schema invalidity never starts a candidate", () => {
+  const cfg = inertConfiguration(), effects = deniedEffects(); let hooks = 0;
   for (const mutate of [q => { q.candidate.artifactPath = "relative"; }, q => { q.command = "claude"; },
-    q => { q.limits.maxStarts = 3; }, q => { q.limits.processTimeoutMs = "15000"; }, q => { q.limits.graceMs = q.limits.processTimeoutMs; },
-    q => Object.defineProperty(q, "extra", { enumerable: true, get() { throw Error("do not call"); } })]) {
-    const q = structuredClone(cfg); mutate(q); assert.throws(() => make(q));
+    q => { q.limits.maxStarts = 3; }, q => { q.limits.processTimeoutMs = "15000"; }, q => { q.limits.graceMs = q.limits.processTimeoutMs; }]) {
+    const q = structuredClone(cfg); mutate(q);
+    assert.throws(() => make(q, effects.dependencies, {}), { message: "Invalid diagnostic configuration" });
   }
-  assert.throws(() => createNativeDiagnostics({ ...schema, $id: "other" }, cfg, {}));
+  const getter = Object.defineProperty(structuredClone(cfg), "extra", { enumerable: true, get() { hooks++; throw Error("do not call"); } });
+  assert.throws(() => make(getter, effects.dependencies, {}), { code: "non-json-metadata" });
+  assert.throws(() => createNativeDiagnostics({ ...schema, $id: "other" }, cfg, {}, effects.dependencies), { message: "Unsupported diagnostic schema" });
+  assert.equal(hooks, 0); assert.deepEqual(effects.calls, []);
 });
-localTest("S3.1 malformed input consumes its approved lot, not a retry", async t => {
-  const cfg = await setup(t), permit = createDiagnosticPermit(cfg);
-  assert.equal((await make(cfg, {}, permit).run({ prompt: "forbidden" })).report.spawnAttempts, 0);
-  assert.equal((await make(cfg, {}, permit).run()).report.state, "blocked");
+test("S3.1 malformed input consumes its approved lot, not a retry", async () => {
+  const cfg = inertConfiguration(), permit = createDiagnosticPermit(cfg), effects = deniedEffects();
+  blockedBeforeEffects(await make(cfg, effects.dependencies, permit).run({ prompt: "forbidden" }), "diagnostic-input-forbidden", effects);
+  blockedBeforeEffects(await make(cfg, effects.dependencies, permit).run(), "diagnostic-permit-unavailable", effects);
 });
 localTest("S3.1 exact stdout bytes accepted and one fewer blocks", async t => {
   const version = Buffer.byteLength("0.0.0-demo (Claude Code)\n");

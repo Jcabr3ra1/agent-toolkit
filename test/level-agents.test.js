@@ -6,6 +6,7 @@ import { after, test } from "node:test";
 import { getStaticTOMLValue, parseTOML } from "toml-eslint-parser";
 import { levelAgentPlan, levelAgentsTable, writeLevelAgents } from "../src/level-agents.js";
 import { runPeerInboxCli } from "../src/peer-inbox-cli.js";
+import { fileSymlinkSkipReason } from "../testing/symlink-capability.js";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "level-agents-"));
 after(() => fs.rm(root, { recursive: true, force: true }));
@@ -107,7 +108,7 @@ test("a file that appears after planning or a directory in its place are kept", 
 });
 
 test("file links are preserved and force moves only the link", {
-  skip: process.platform === "win32" ? "File symlinks require Windows Developer Mode or elevation; directory junctions are covered separately." : false
+  skip: fileSymlinkSkipReason()
 }, async () => {
   const codexHome = await home();
   await fs.mkdir(path.join(codexHome, "agents"));

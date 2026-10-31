@@ -10,6 +10,9 @@ import net from "node:net";
 import { createSelectiveConfigParser, SELECTORS } from "../src/client-selective-config.js";
 import { createSelectiveFileReader, createSelectiveReadPermit, revokeSelectiveReadPermit } from "../src/client-selective-files.js";
 import { createNativeAccessPermit } from "../src/client-native-access.js";
+import { fileSymlinkSkipReason } from "../testing/symlink-capability.js";
+
+const fileSymlinkSkip = fileSymlinkSkipReason();
 
 const schema = JSON.parse(await fs.readFile(new URL("../schemas/agent-client-selective-config.schema.json", import.meta.url), "utf8"));
 const limits = () => ({ maxBytes: 1048576, blockBytes: 4096, maxDepth: 32, maxNodes: 20000, maxKeyBytes: 256, maxKeys: 4096 });
@@ -121,7 +124,8 @@ async function setup(t, first = '{"hooks":{},"disableAllHooks":true,"apiKeyHelpe
 }
 const reader = (cfg, deps = {}, p = createSelectiveReadPermit(cfg)) => createSelectiveFileReader(schema, cfg, p, deps);
 const localTest = (name, fn) => test(name, { timeout: 10000,
-  skip: process.platform === 'win32' && /stops on (symlink|writable)|read-only public mode/u.test(name) ? 'POSIX file symlinks or mode bits require POSIX permissions' : false }, fn);
+  skip: /stops on symlink/u.test(name) ? fileSymlinkSkip
+    : process.platform === 'win32' && /stops on writable|read-only public mode/u.test(name) ? 'POSIX mode bits require POSIX permissions' : false }, fn);
 localTest("SC wrapper reads two files incrementally, no writes or whole-file functions", async t => {
   const cfg = await setup(t); let reads = 0, writes = 0;
   const read = reader(cfg, { io: { readFile: async () => { throw Error("whole read"); }, writeFile: async () => { writes++; throw Error("no write"); }, open: async (...a) => {

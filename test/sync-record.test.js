@@ -10,6 +10,7 @@ import { runCli } from "../src/cli.js";
 import { appendLedgerRecord, parseWritableLedger } from "../src/sync-ledger.js";
 import { recordMemorySync, recordErrorReport, LEDGER_PATH, RECORD_LIMITS } from "../src/sync-record.js";
 import { readReviewedPullRequests } from "../src/sync.js";
+import { fileSymlinkSkipReason } from "../testing/symlink-capability.js";
 
 const DATE = "2026-10-01T14:00:00Z";
 const HEAD = "a".repeat(40), MERGE = "b".repeat(40);
@@ -18,7 +19,7 @@ const HEADER = "| Cambio | Estado | Fecha | Resultado | Commit de memoria |";
 const LEGACY = "| PR | Estado | Fecha de revisión | Resultado | Commit de memoria |";
 const SEPARATOR = "| --- | --- | --- | --- | --- |";
 const posixPermissions = { skip: process.platform === "win32" ? "Windows no conserva modos POSIX como 0640." : false };
-const posixSymlinks = { skip: process.platform === "win32" ? "Crear symlinks en Windows exige privilegios o Developer Mode." : false };
+const fileSymlinks = { skip: fileSymlinkSkipReason() };
 const defaultRow = (number = 42, result = "Sin cambios documentales") =>
   `| [#${number}](https://github.com/owner/project/pull/${number}) | Revisado | 2026-10-01 | ${result} | — |`;
 
@@ -29,7 +30,12 @@ function git(dir, ...args) {
 
 function fixture(t, options = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "project-memory-record-")));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const owner = fs.lstatSync(root);
+  t.after(() => {
+    const current = fs.lstatSync(root, { throwIfNoEntry: false });
+    if (current?.isDirectory() && !current.isSymbolicLink() && current.dev === owner.dev && current.ino === owner.ino)
+      fs.rmSync(root, { recursive: true });
+  });
   const vault = path.join(root, "memory"), source = path.join(root, "source");
   for (const dir of [vault, source, path.join(vault, "00-INICIO"), path.join(vault, "03-IMPLEMENTACION"), path.join(root, "fake-home")]) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(root, "fake-home", "settings.json"), "{\"unchanged\":true}\n");
@@ -244,13 +250,16 @@ test("se revisa también el contenido staged, no solo la nota actual", async (t)
   assert.deepEqual(snapshot(f.root), before);
 });
 
-for (const where of ["ledger", "note", "parent", "vault", "manifest"]) test(`rechaza symlink en ${where}`, posixSymlinks, async (t) => {
+for (const where of ["ledger", "note", "parent", "vault", "manifest"]) test(`rechaza symlink en ${where}`, ["parent", "vault"].includes(where) ? {} : fileSymlinks, async (t) => {
   const f = fixture(t);
   const file = where === "ledger" ? f.ledgerPath : where === "note" ? f.notePath : where === "manifest" ? f.manifestPath
     : where === "vault" ? f.vault : path.dirname(f.notePath);
-  const moved = path.join(f.root, `moved-${where}`); fs.renameSync(file, moved); fs.symlinkSync(moved, file);
-  const before = snapshot(f.root); await assert.rejects(f.record({ ...(where === "note" || where === "parent" ? updated() : {}), apply: true }));
-  assert.deepEqual(snapshot(f.root), before);
+  const moved = path.join(f.root, `moved-${where}`); fs.renameSync(file, moved);
+  fs.symlinkSync(moved, file, ["parent", "vault"].includes(where) ? (process.platform === "win32" ? "junction" : "dir") : "file");
+  try {
+    const before = snapshot(f.root); await assert.rejects(f.record({ ...(where === "note" || where === "parent" ? updated() : {}), apply: true }));
+    assert.deepEqual(snapshot(f.root), before);
+  } finally { fs.unlinkSync(file); }
 });
 
 for (const [name, rows] of [
@@ -453,10 +462,13 @@ for (const flag of ["--assume-unchanged", "--skip-worktree"]) test(`no confía e
   assert.deepEqual(snapshot(f.root), before); assert.equal(f.calls.length, 0);
 });
 
-test("un índice con nota simbólica no se aprueba por tener un archivo regular en disco", posixSymlinks, async (t) => {
+test("un índice con nota simbólica no se aprueba por tener un archivo regular en disco", async (t) => {
   const f = fixture(t), name = "03-IMPLEMENTACION/Nueva.md", file = path.join(f.vault, name);
-  fs.symlinkSync(f.ledgerPath, file); git(f.vault, "add", "--", name);
-  fs.unlinkSync(file); fs.writeFileSync(file, "# Nueva\n");
+  // Stage a real Git symlink entry independently of filesystem symlink privileges.
+  const blob = execFileSync("git", ["-C", f.vault, "hash-object", "-w", "--stdin"], { input: f.ledgerPath, encoding: "utf8" }).trim();
+  git(f.vault, "update-index", "--add", "--cacheinfo", `120000,${blob},${name}`);
+  assert.match(git(f.vault, "ls-files", "--stage", "--", name), /^120000 /u);
+  fs.writeFileSync(file, "# Nueva\n");
   const before = snapshot(f.root);
   await assert.rejects(f.record({ ...updated([name]), apply: true }), (e) => ["staged-type", "foreign-changes"].includes(e.code));
   assert.deepEqual(snapshot(f.root), before);
@@ -547,4 +559,11 @@ test("CLI usa JSON, códigos, aplicación explícita y opciones no contradictori
     assert.equal(await runCli([...base, ...extra], { out: (s) => out.push(s), err: () => {} }, f.context), 0);
     assert.equal(JSON.parse(out[0]).status, status);
   }
+});
+
+test('record accepts the same Windows vault with different path casing', {skip: process.platform !== 'win32'}, async t => {
+ const f=fixture(t);
+ const diagnoseMemory=async()=>({...await f.context.diagnoseMemory(),vaultPath:f.vault.toUpperCase()});
+ const result=await f.record({}, {diagnoseMemory});
+ assert.equal(result.status,'preview');
 });

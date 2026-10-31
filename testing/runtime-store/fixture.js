@@ -34,7 +34,7 @@ export function fixture() {
     historyEvidence: { status: "reconciled", history: selection.request.history, checkedAt: NOW, evidenceRef: "demo-ledger" },
     limits: { maxTurns: 1, timeoutSeconds: 60, maxOutputBytes: 8192, maxLineBytes: 1024, maxEvents: 100, maxStderrBytes: 1024 }
   };
-  const report = plan(p); const installation = { installationId: "demo-installation", client, platform: "darwin", artifactSha256: "a".repeat(64), controlRevision: "r01" };
+  const report = plan(p); const installation = { installationId: "demo-installation", client, platform: process.platform, artifactSha256: "a".repeat(64), controlRevision: "r01" };
   const ledger = { schemaVersion: "1.0.0", projectId: selection.request.projectId, taskId: selection.request.taskId, revision: 0,
     status: "reconciled", importEvidenceRef: "demo-import", importedHistory: structuredClone(selection.request.history), importedMainStartsUsed: 0,
     history: structuredClone(selection.request.history), mainStartsUsed: 0, limits: { maxMainStarts: 1, maxModelCalls: 2, maxDurationSeconds: 900 }, attempts: [] };
@@ -48,7 +48,7 @@ export function fixture() {
   };
   return { schemaVersion: "1.0.0", now: NOW, planningInput: p, plan: report, expectedInstallation: installation, evidence, ledger };
 }
-export const config = root => ({ root, forbiddenRoots: [REPO], evaluation: { platform: "darwin", nodeVersion: process.version, filesystem: "local", synchronized: false, evidenceRef: "demo-local-evaluation" } });
+export const config = root => ({ root, forbiddenRoots: [REPO], evaluation: { platform: process.platform, nodeVersion: process.version, filesystem: "local", synchronized: false, evidenceRef: "demo-local-evaluation" } });
 export const identity = ledger => ({ projectId: ledger.projectId, taskId: ledger.taskId });
 export const authorization = (root, id) => ({ ...temporal(), status: "approved", revoked: false, referenceId: "demo-store-approval", source: "operator-attestation", identity: id,
   rootSha256: hash(root), operations: ["initialize", "read", "apply"] });

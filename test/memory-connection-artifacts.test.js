@@ -15,12 +15,26 @@ import {
   MEMORY_CONNECTION_ARTIFACT_OPEN_FLAGS as FLAGS
 } from "../src/memory-connection-artifacts.js";
 
-const localTest = (name, fn) => test(name, { skip: !["darwin", "linux"].includes(process.platform) || !process.getuid }, fn);
+const posixSkip = !["darwin", "linux"].includes(process.platform) || !process.getuid || constants.O_NOFOLLOW === undefined
+  ? "Requires production POSIX uid/mode and O_NOFOLLOW filesystem attestation (darwin/linux)." : false;
+const localTest = (name, fn) => test(name, { skip: posixSkip }, fn);
 const keys = ["nodeSha256", "binSha256", "manifestSha256", "packageJsonSha256", "packageLockSha256"];
 const hash = b => createHash("sha256").update(b).digest("hex");
 const changedStat = (s, fields) => Object.assign(Object.create(s), fields);
 const failure = code => Object.assign(Error("private-error-marker /foreign/private-path"), { code });
 const rebuild = (f, change) => ({ ...f.input, descriptor: createMemoryConnectionDescriptor({ ...f.input.descriptor.identity, ...change }) });
+
+// Input validation runs before platform/security inspection. These declarations
+// name no real files and must never need the POSIX ownership fixture below.
+function inputFixture() {
+  const root = "/fictitious/artifact-contract", toolkit = root + "/toolkit", vault = root + "/vault";
+  const paths = [root + "/runtime/node", toolkit + "/bin/project-memory-mcp.js", vault + "/project-memory.json", toolkit + "/package.json", toolkit + "/package-lock.json"];
+  const descriptor = createMemoryConnectionDescriptor({
+    agent: "codex", mcpName: "demo-memory", skillName: "demo-skill", nodePath: paths[0], toolkitRoot: toolkit,
+    manifestPath: paths[2], vaultPath: vault, sourcePath: root + "/source", homeDirectory: root + "/home"
+  });
+  return { root, toolkit, vault, paths, input: { descriptor, expectedHashes: Object.fromEntries(keys.map(key => [key, "a".repeat(64)])) } };
+}
 
 async function fixture(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-toolkit-a1e-test-")));
@@ -117,8 +131,8 @@ localTest("A1e exact five paths preflight before open, readonly flags and simula
   for (const p of f.paths) for (let i = 1, parts = p.slice(1).split("/"); i <= parts.length; i++) allowed.add("/" + parts.slice(0, i).join("/"));
   assert.ok(s.calls.lstat.every(p => allowed.has(p))); assert.ok(s.calls.read.every(r => f.paths.includes(r.path)));
 });
-localTest("A1e inert closed inputs, hooks and pins are rejected before IO", async t => {
-  const f = await fixture(t); let ioCalls = 0, hooks = 0;
+test("A1e inert closed inputs, hooks and pins are rejected before IO", async () => {
+  const f = inputFixture(); let ioCalls = 0, hooks = 0;
   const forbidden = () => { ioCalls++; throw failure("EACCES"); };
   const bad = [null, undefined, [], {}, { descriptor: f.input.descriptor }, { ...f.input, extra: 1 },
     { ...f.input, descriptor: { ...f.input.descriptor, facts: { authorizationGranted: true } } },
@@ -139,8 +153,8 @@ localTest("A1e inert closed inputs, hooks and pins are rejected before IO", asyn
   assert.equal(ioCalls, 0); assert.equal(hooks, 0);
 });
 for (const change of ["overlap", "outside-manifest", "duplicate", "ancestor", "components", "derived-length"]) {
-  localTest("A1e invalid path layout before IO: " + change, async t => {
-    const f = await fixture(t); let delta;
+  test("A1e invalid path layout before IO: " + change, async () => {
+    const f = inputFixture(); let delta;
     if (change === "overlap") delta = { toolkitRoot: f.vault + "/toolkit" };
     if (change === "outside-manifest") delta = { manifestPath: f.root + "/manifest.json" };
     if (change === "duplicate") delta = { nodePath: f.paths[3] };
@@ -150,7 +164,11 @@ for (const change of ["overlap", "outside-manifest", "duplicate", "ancestor", "c
     const input = change === "derived-length"
       ? { ...f.input, descriptor: { ...f.input.descriptor, identity: { ...f.input.descriptor.identity, ...delta } } }
       : rebuild(f, delta);
-    const s = spy(), r = await inspect(input, { io: s.io }); assert.equal(r.state, "invalid"); assert.equal(s.calls.lstat.length, 0);
+    let ioCalls = 0;
+    const forbidden = () => { ioCalls++; throw failure("EACCES"); };
+    const r = await inspect(input, { io: { lstat: forbidden, open: forbidden } });
+    assert.equal(r.state, "invalid"); assert.deepEqual(r.reasons, ["MC_ARTIFACT_INPUT"]);
+    assert.equal(r.bytesRead, 0); assert.equal(ioCalls, 0);
   });
 }
 for (let role = 0; role < keys.length; role++) {

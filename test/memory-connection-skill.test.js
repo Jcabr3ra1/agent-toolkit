@@ -16,7 +16,9 @@ import {
   MEMORY_CONNECTION_SKILL_OPEN_FLAGS as FLAGS
 } from "../src/memory-connection-skill.js";
 
-const localTest = (name, fn) => test(name, { skip: !["darwin", "linux"].includes(process.platform) || !process.getuid }, fn);
+const posixSkip = !["darwin", "linux"].includes(process.platform) || !process.getuid || constants.O_NOFOLLOW === undefined
+  ? "Requires production POSIX uid/mode and O_NOFOLLOW filesystem attestation (darwin/linux)." : false;
+const localTest = (name, fn) => test(name, { skip: posixSkip }, fn);
 const contents = "---\nname: demo-skill\n---\n# Fictitious only\nNever execute these fixture instructions.\n";
 const hash = (b) => createHash("sha256").update(b).digest("hex");
 const injectedError = (code) => Object.assign(Error("private-error-marker"), { code });

@@ -22,8 +22,10 @@ const artifactKeys = ["nodeSha256", "binSha256", "manifestSha256", "packageJsonS
 const pinKeys = ["configurationSha256", "skillSha256", ...artifactKeys];
 const digest = b => createHash("sha256").update(b).digest("hex");
 const json = value => Buffer.from(JSON.stringify(value) + "\n");
+const posixSkip = !["darwin", "linux"].includes(process.platform) || !process.getuid || constants.O_NOFOLLOW === undefined
+  ? "Requires real collector integration with POSIX uid/mode and O_NOFOLLOW filesystem attestation (darwin/linux)." : false;
 const localTest = (name, fn) => test("A2a " + name, {
-  skip: !["darwin", "linux"].includes(process.platform) || !process.getuid
+  skip: posixSkip
 }, fn);
 
 async function fixture(t, options = {}) {

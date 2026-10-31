@@ -174,7 +174,7 @@ test("connect reconoce el enlace y MCP canónicos aunque cambie el caso en Windo
   const source = fs.realpathSync(path.join(fixture.memory, "07-AGENTES/skills/demo-project"));
   const target = path.join(fixture.home, ".agents/skills/demo-project");
   fs.mkdirSync(path.dirname(target), { recursive: true });
-  const linkSource = process.platform === "win32" ? source.toUpperCase() : path.relative(path.dirname(target), source);
+  const linkSource = process.platform === "win32" ? source.toUpperCase() : path.relative(fs.realpathSync(path.dirname(target)), source);
   fs.symlinkSync(linkSource, target, directoryLinkType);
   const before = fs.readlinkSync(target);
   const vault = fs.realpathSync(fixture.memory);

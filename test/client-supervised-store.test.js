@@ -1,3 +1,4 @@
+import { supported } from "../testing/client-posix.js";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -12,8 +13,7 @@ import { schema, store, request, fakeComplete, report, setup, taskDirectory } fr
 import { REASON_CODES } from "../src/client-supervised-codes.js";
 
 const contract = createSupervisedContract(schema);
-const supported = process.platform === "darwin" && process.arch === "arm64";
-const localTest = (name, fn) => test(name, { skip: !supported, timeout: 15000 }, fn);
+const localTest = (name, fn) => test(name, { skip: supported ? false : "Requires the POSIX attested store with uid/modes, no-follow opens and directory fsync.", timeout: 15000 }, fn);
 const eventFiles = ["0000.json", "0001.json", "0002.json", "0003.json"];
 const worker = fileURLToPath(new URL("../testing/supervised/store-worker.js", import.meta.url));
 async function runWorker(root, mode) {

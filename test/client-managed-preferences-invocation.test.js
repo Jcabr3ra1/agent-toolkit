@@ -1,3 +1,4 @@
+import { compiler, sdkArguments, supported } from "../testing/client-posix.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -15,9 +16,21 @@ const preferencesSchema = JSON.parse(await fs.readFile(new URL("../schemas/agent
 const fixture = fileURLToPath(new URL("../testing/managed-preferences/invocation-fixture.c", import.meta.url));
 const helper = fileURLToPath(new URL("../src/native/managed-preferences.c", import.meta.url));
 const backend = fileURLToPath(new URL("../testing/managed-preferences/backend.c", import.meta.url));
-const compiler = "/Library/Developer/CommandLineTools/usr/bin/clang", sdk = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk";
-const localTest = (name, fn) => test(name, { skip: process.platform !== "darwin", timeout: 20000 }, fn);
+const localTest = (name, fn) => test(name, { skip: supported ? false : "Requires the POSIX synthetic compiler/transport fixture and ownership checks; no Windows collector adapter exists.", timeout: 20000 }, fn);
 const mono = () => Number(process.hrtime.bigint() / 1000000n);
+function declarationConfiguration() {
+  // Fictitious inert stat pins for pre-host validation, never installation evidence.
+  const root = path.resolve("synthetic-invocation-declaration"), uid = 1000;
+  return { expectedSource: "synthetic",
+    artifact: { path: path.join(root, "artifact"), dev: 1, ino: 3, uid, mode: 0o500, size: 1, mtimeMs: 1, ctimeMs: 1, sha256: "a".repeat(64) },
+    workspaceParent: { path: path.join(root, "workspaces"), dev: 1, ino: 2, uid, mode: 0o700 },
+    limits: { totalTimeoutMs: 1500, graceMs: 150, confirmationMs: 250, maxOutputBytes: 32768, maxErrorBytes: 32768, permitLifetimeMs: 60000 } };
+}
+function forbiddenEffects() {
+  const counts = { io: 0, spawn: 0 };
+  const io = Object.fromEntries(Object.keys(fs).map(key => [key, () => { counts.io++; throw Error("unexpected IO"); }]));
+  return { counts, deps: { io, spawn() { counts.spawn++; throw Error("unexpected spawn"); } } };
+}
 function safe(r) {
   assert.equal(r.scope, "managed-preferences-helper-only"); assert.equal(r.decision, "no-client-start");
   for (const k of ["nativeClientStarted", "inferenceRequested", "runtimeReady", "verifiedAdmission", "effectiveIsolationVerified", "externalBillingVerified", "preferencesQueriedVerified"]) assert.equal(r[k], false);
@@ -30,7 +43,7 @@ async function setup(t, mode = 0, useHelper = false) {
   const owned = await fs.lstat(root);
   t.after(async () => { const s = await fs.lstat(root).catch(() => null); if (s?.isDirectory() && !s.isSymbolicLink() && s.dev === owned.dev && s.ino === owned.ino) await fs.rm(root, { recursive: true }); });
   const artifact = path.join(root, "synthetic-artifact"), parent = path.join(root, "owned-workspaces"); await fs.mkdir(parent, { mode: 0o700 });
-  const args = ["-std=c11", "-Wall", "-Wextra", "-Werror", "-isysroot", sdk];
+  const args = ["-std=c11", "-Wall", "-Wextra", "-Werror", ...sdkArguments];
   if (useHelper) args.push("-DN1_SYNTHETIC_BACKEND", `-DN1_SCENARIO=${mode}`, helper, backend);
   else args.push(`-DN1_TRANSPORT_MODE=${mode}`, fixture);
   args.push("-o", artifact);
@@ -67,19 +80,20 @@ for (const mode of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) localTest(`NI transport 
   else if (r.terminationConfirmed) assert.deepEqual(await fs.readdir(parent), []);
   if (mode === 10) assert.ok(r.reasons.includes("helper-descendants-unconfirmed"));
 });
-for (const kind of ["missing", "fake", "serialized", "revoked", "mismatch", "proxy", "expired"]) localTest("NI permission " + kind + " blocks before IO or workspace/spawn", async t => {
-  const { cfg, parent } = await setup(t); let token;
+for (const kind of ["missing", "fake", "serialized", "revoked", "mismatch", "proxy", "expired"]) test("NI permission " + kind + " blocks before IO or workspace/spawn", { timeout: 20000 }, async () => {
+  const cfg = declarationConfiguration(), { counts, deps } = forbiddenEffects();
+  assert.equal(typeof collector(cfg, createManagedPreferencesInvocationPermit(cfg), deps).run, "function");
+  let token;
   if (["revoked", "mismatch", "serialized", "expired"].includes(kind)) token = createManagedPreferencesInvocationPermit(cfg);
   if (kind === "fake") token = {};
   if (kind === "serialized") token = JSON.parse(JSON.stringify(token));
   if (kind === "revoked") revokeManagedPreferencesInvocationPermit(token);
   if (kind === "mismatch") cfg.limits.totalTimeoutMs++;
   let traps = 0; if (kind === "proxy") token = new Proxy({}, { getPrototypeOf() { traps++; throw Error("private"); } });
-  let ioCalls = 0, spawnCalls = 0;
-  const deps = { io: { lstat() { ioCalls++; throw Error("private"); } }, spawn() { spawnCalls++; throw Error("private"); } };
   if (kind === "expired") deps.monotonic = () => mono() + 100000;
   const r = safe(await collector(cfg, token, deps).run()); assert.equal(r.state, "blocked"); assert.equal(r.spawnAttempts, 0);
-  assert.equal(ioCalls, 0); assert.equal(spawnCalls, 0); assert.equal(traps, 0); assert.deepEqual(await fs.readdir(parent), []);
+  assert.deepEqual(r.reasons, ["helper-permission-rejected"]);
+  assert.deepEqual(counts, { io: 0, spawn: 0 }); assert.equal(traps, 0);
 });
 localTest("NI shared permit across two instances is consumed once", async t => {
   const { cfg } = await setup(t), p = createManagedPreferencesInvocationPermit(cfg);
@@ -111,7 +125,10 @@ localTest("NI post-run artifact change discards output, not a claim that the rac
 });
 localTest("NI source mismatch cannot be elevated to a native preference observation", async t => {
   const { cfg } = await setup(t); cfg.expectedSource = "core-foundation-claim";
-  const r = safe(await collector(cfg, createManagedPreferencesInvocationPermit(cfg)).run()); assert.equal(r.state, "failed"); assert.equal(r.projection, null);
+  const r = safe(await collector(cfg, createManagedPreferencesInvocationPermit(cfg)).run()); assert.equal(r.state, process.platform === "linux" ? "blocked" : "failed"); assert.equal(r.projection, null);
+  if (process.platform === "linux") {
+    assert.equal(r.spawnAttempts, 0); assert.equal(r.helperStarted, false); assert.equal(r.artifactMatchedBefore, false);
+  }
 });
 localTest("NI configuration and decoder schema are captured before caller mutations", async t => {
   const { cfg } = await setup(t), p = createManagedPreferencesInvocationPermit(cfg), s = structuredClone(preferencesSchema);
@@ -153,11 +170,13 @@ localTest("NI report schema is closed and does not grant any AI client admission
   const ajv = new Ajv2020({ strict: true }); ajv.addSchema(preferencesSchema); ajv.addSchema(schema);
   const valid = ajv.compile({ $ref: `${INVOCATION_SCHEMA_ID}#/$defs/report` }); assert.equal(valid(r), true); r.nativeClientStarted = true; assert.equal(valid(r), false);
 });
-localTest("NI API rejects config extras, coercion and expanded budgets before IO", async t => {
-  const { cfg } = await setup(t);
+test("NI API rejects config extras, coercion and expanded budgets before IO", { timeout: 20000 }, () => {
+  const cfg = declarationConfiguration(), { counts, deps } = forbiddenEffects();
+  assert.equal(typeof collector(cfg, createManagedPreferencesInvocationPermit(cfg), deps).run, "function");
   for (const mutate of [c => { c.argv = []; }, c => { c.env = { API_KEY: "synthetic-private" }; }, c => { c.limits.totalTimeoutMs = "1500"; }, c => { c.limits.totalTimeoutMs = 15001; }, c => { c.limits.maxOutputBytes = 32769; }, c => { c.limits.graceMs = 1000; c.limits.confirmationMs = 1000; }]) {
-    const c = structuredClone(cfg); mutate(c); assert.throws(() => collector(c, {}), /^Error: Invalid managed-preferences invocation configuration$/);
+    const c = structuredClone(cfg); mutate(c); assert.throws(() => collector(c, {}, deps), /^Error: Invalid managed-preferences invocation configuration$/);
   }
+  assert.deepEqual(counts, { io: 0, spawn: 0 });
 });
 
 function boundaryConfiguration(size = 1) {
@@ -199,19 +218,17 @@ function boundaryFiles(cfg, { grow = false, truncate = false, maxChunk = 65536 }
   };
   return { seen, dependencies: { io, spawn() { seen.spawns++; throw Error("Never start a helper in boundary tests"); } } };
 }
-localTest("NI regression rejects every explicit run argument before IO and consumes its permit", async () => {
+test("NI regression rejects every explicit run argument before IO and consumes its permit", { timeout: 20000 }, async () => {
   let traps = 0;
   const hostile = new Proxy({}, { get() { traps++; throw Error("synthetic-private"); }, ownKeys() { traps++; throw Error("synthetic-private"); } });
   for (const input of [{ dryRun: true }, "synthetic-private-request", null, undefined, hostile]) {
-    const cfg = boundaryConfiguration(), permit = createManagedPreferencesInvocationPermit(cfg);
-    let ioCalls = 0, spawns = 0;
-    const deps = { io: { async lstat() { ioCalls++; throw Error("Unexpected IO"); } }, spawn() { spawns++; throw Error("Unexpected spawn"); } };
+    const cfg = declarationConfiguration(), permit = createManagedPreferencesInvocationPermit(cfg), { counts, deps } = forbiddenEffects();
     const runner = collector(cfg, permit, deps), r = safe(await runner.run(input));
-    assert.equal(r.state, "blocked"); assert.ok(r.reasons.includes("helper-input-forbidden"));
-    assert.equal(ioCalls, 0); assert.equal(spawns, 0); assert.equal(traps, 0);
-    assert.ok(safe(await collector(cfg, permit, deps).run()).reasons.includes("helper-permission-rejected"));
-    assert.ok(safe(await runner.run()).reasons.includes("helper-local-check-failed"));
-    assert.equal(ioCalls, 0); assert.equal(spawns, 0);
+    assert.equal(r.state, "blocked"); assert.deepEqual(r.reasons, ["helper-input-forbidden"]);
+    assert.deepEqual(counts, { io: 0, spawn: 0 }); assert.equal(traps, 0);
+    assert.deepEqual(safe(await collector(cfg, permit, deps).run()).reasons, ["helper-permission-rejected"]);
+    assert.deepEqual(safe(await runner.run()).reasons, ["helper-local-check-failed"]);
+    assert.deepEqual(counts, { io: 0, spawn: 0 });
   }
 });
 localTest("NI regression growth at the 8 MiB cap never reads the added byte", async () => {

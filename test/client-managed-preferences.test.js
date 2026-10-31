@@ -1,3 +1,4 @@
+import { compiler, sdkArguments, supported } from "../testing/client-posix.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -154,10 +155,8 @@ test("NP decoder/accumulator have no IO, spawn, network, current clock or random
 
 const nativeSource = fileURLToPath(new URL("../src/native/managed-preferences.c", import.meta.url));
 const fakeBackend = fileURLToPath(new URL("../testing/managed-preferences/backend.c", import.meta.url));
-const compiler = "/Library/Developer/CommandLineTools/usr/bin/clang";
-const sdk = "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk";
-const supported = process.platform === "darwin";
-const nativeTest = (name, fn) => test(name, { skip: !supported, timeout: 20000 }, fn);
+const nativeTest = (name, fn) => test(name, { skip: !supported ? "This compiler/transport fixture requires POSIX; Windows has no Core Foundation backend." : false, timeout: 20000 }, fn);
+const syntheticTest = (name, fn) => test(name, { skip: supported ? false : "Requires the POSIX C compiler/transport fixture; it does not emulate Windows or grant native-client admission.", timeout: 20000 }, fn);
 async function temp(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-preferences-test-"))); await fs.chmod(root, 0o700); const owned = await fs.lstat(root);
   t.after(async () => { const s = await fs.lstat(root).catch(() => null); if (s?.isDirectory() && !s.isSymbolicLink() && s.dev === owned.dev && s.ino === owned.ino) await fs.rm(root, { recursive: true }); });
@@ -172,20 +171,36 @@ async function execute(file, args, cwd, maxBuffer = 32768) {
 }
 async function compile(root, scenario) {
   const artifact = path.join(root, scenario === null ? "production-not-executed" : `synthetic-${scenario}`);
-  const args = ["-std=c11", "-Wall", "-Wextra", "-Werror", "-isysroot", sdk, nativeSource];
+  const args = ["-std=c11", "-Wall", "-Wextra", "-Werror", ...sdkArguments, nativeSource];
   if (scenario === null) args.push("-framework", "CoreFoundation");
   else args.push("-DN1_SYNTHETIC_BACKEND", `-DN1_SCENARIO=${scenario}`, fakeBackend);
   args.push("-o", artifact);
   const r = await execute(compiler, args, root); assert.equal(r.code, 0, r.stderr.toString("utf8")); return artifact;
 }
-nativeTest("NP production Core Foundation binding compiles/links, binary is never executed", async t => {
-  const root = await temp(t), artifact = await compile(root, null);
+nativeTest("NP production backend links Core Foundation on macOS and rejects non-Apple targets", async t => {
+  const root = await temp(t);
+  if (process.platform !== 'darwin') {
+    const artifact = path.join(root, 'unsupported-native-backend');
+    const r = await execute(compiler, ['-std=c11', nativeSource, '-o', artifact], root);
+    assert.notEqual(r.code, 0);
+    assert.match(r.stderr.toString('utf8'), /Core Foundation backend requires macOS/);
+    await assert.rejects(fs.lstat(artifact), {code:'ENOENT'});
+    return;
+  }
+  const artifact = await compile(root, null);
   const symbols = await execute("/usr/bin/nm", ["-u", artifact], root); assert.equal(symbols.code, 0);
   const s = symbols.stdout.toString("utf8"); assert.match(s, /CFPreferencesCopyAppValue/); assert.match(s, /CFPreferencesAppValueIsForced/); assert.match(s, /CFRelease/);
   assert.doesNotMatch(s, /CFPreferences(?:Set|Synchronize|CopyMultiple|CopyKeyList)/);
   // Deliberately no execute(artifact): compilation is not permission to query preferences.
 });
-for (const scenario of [0, 1, 4, 5, 6, 8]) nativeTest(`NP compiled synthetic backend ${scenario}, six keys with ownership/order enforced`, async t => {
+syntheticTest("NP production backend rejects a non-Apple target instead of substituting synthetic preferences", async t => {
+  const root = await temp(t), artifact = path.join(root, "unsupported-production");
+  const r = await execute(compiler, ["-std=c11", ...sdkArguments, "-U__APPLE__", nativeSource, "-o", artifact], root);
+  assert.notEqual(r.code, 0);
+  assert.match(r.stderr.toString("utf8"), /Core Foundation backend requires macOS/);
+  await assert.rejects(fs.lstat(artifact), { code: "ENOENT" });
+});
+for (const scenario of [0, 1, 4, 5, 6, 8]) syntheticTest(`NP compiled synthetic backend ${scenario}, six keys with ownership/order enforced`, async t => {
   const root = await temp(t), artifact = await compile(root, scenario), symbols = await execute("/usr/bin/nm", ["-u", artifact], root);
   assert.equal(symbols.code, 0); assert.doesNotMatch(symbols.stdout.toString("utf8"), /CFPreferences|CFGetTypeID|CFRelease/);
   const r = await execute(artifact, [], root); assert.equal(r.code, 0); assert.equal(r.stderr.length, 0); assert.doesNotMatch(r.stdout.toString("utf8"), /synthetic-private/);
@@ -197,12 +212,12 @@ for (const scenario of [0, 1, 4, 5, 6, 8]) nativeTest(`NP compiled synthetic bac
   if (scenario === 6) assert.ok(projection.fields.every(f => f.type === "number"));
   if (scenario === 8) assert.equal(projection.fields[1].type, "not-found-by-api");
 });
-for (const scenario of [2, 3, 7, 9, 10, 11, 12]) nativeTest(`NP compiled synthetic failure ${scenario} emits no partial fields or values`, async t => {
+for (const scenario of [2, 3, 7, 9, 10, 11, 12]) syntheticTest(`NP compiled synthetic failure ${scenario} emits no partial fields or values`, async t => {
   const root = await temp(t), artifact = await compile(root, scenario), r = await execute(artifact, [], root);
   assert.equal(r.code, 1); assert.equal(r.stderr.length, 0); assert.doesNotMatch(r.stdout.toString("utf8"), /fields|synthetic-private/);
   const projection = safe(read(r.stdout, r.code)); assert.equal(projection.state, "helper-failed");
 });
-nativeTest("NP helper rejects arguments before any synthetic getter or raw argument output", async t => {
+syntheticTest("NP helper rejects arguments before any synthetic getter or raw argument output", async t => {
   const root = await temp(t), artifact = await compile(root, 0), r = await execute(artifact, ["synthetic-private-command"], root);
   assert.equal(r.code, 1); const p = safe(read(r.stdout, r.code)); assert.deepEqual(p.reasons, ["preferences-arguments-rejected"]);
   assert.doesNotMatch(r.stdout.toString("utf8"), /synthetic-private/);

@@ -1,3 +1,4 @@
+import { supportsLocalPosix } from "./client-local-platform.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -24,7 +25,7 @@ export async function superviseFixture(handle, request, { signal, beganAt, check
   let cwd, owned, capability, spawnReturned = false;
   try {
     request = copyInertJson(request); l = request.limits;
-    if (process.platform !== "darwin" || !FIXTURES.includes(request.fixtureId)) throw Error("fixture-not-admitted");
+    if (!supportsLocalPosix(process.platform) || !FIXTURES.includes(request.fixtureId)) throw Error("fixture-not-admitted");
     const input = copyBytes(request.inputText, l.maxInputBytes);
     if (signal?.aborted) { r.reasons = ["fixture-canceled-before-start"]; r.terminationConfirmed = true; return r; }
     cwd = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-fixture-work-")));

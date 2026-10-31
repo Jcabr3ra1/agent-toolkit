@@ -1,3 +1,4 @@
+import { supportsAuthHost } from "./client-local-platform.js";
 import fs from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
@@ -123,7 +124,7 @@ export function createAuthDiagnosticCollector(schema, configuration, authorizati
       permission.used = true; claimed = true;
       if (args.length) { add("auth-input-forbidden"); return r; }
       if (!reviewed(cfg)) { add("auth-startup-not-reviewed"); return r; }
-      if (process.platform !== "darwin" || cfg.artifact.uid !== process.getuid() || cfg.workspaceParent.uid !== process.getuid()) throw Error("identity");
+      if (!supportsAuthHost(process.platform, cfg.source) || cfg.artifact.uid !== process.getuid() || cfg.workspaceParent.uid !== process.getuid()) throw Error("identity");
       if (dependencies.signal?.aborted) { r.state = "canceled"; add("auth-canceled"); return r; }
       const home = process.env.HOME;
       if (!physicalName(home) || cfg.workspaceParent.path === home || /(CloudStorage|Mobile Documents|Dropbox|OneDrive|iCloud|Obsidian)/i.test(cfg.workspaceParent.path) ||

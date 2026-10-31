@@ -25,7 +25,7 @@ function snapshot(root) {
   const walk = dir => {
     const directory = fs.lstatSync(dir);
     assert.ok(directory.isDirectory() && !directory.isSymbolicLink());
-    result[path.relative(root, dir) + "/"] = {
+    result[path.relative(root, dir).split(path.sep).join("/") + "/"] = {
       type: "directory", hash: null, mode: directory.mode, uid: directory.uid,
       ino: directory.ino, mtimeMs: directory.mtimeMs
     };
@@ -33,7 +33,7 @@ function snapshot(root) {
       const full = path.join(dir, entry.name), stat = fs.lstatSync(full);
       assert.equal(stat.isSymbolicLink(), false, "unexpected fixture link");
       if (entry.isDirectory()) walk(full);
-      else result[path.relative(root, full)] = {
+      else result[path.relative(root, full).split(path.sep).join("/")] = {
         type: "file", hash: hash(fs.readFileSync(full)), mode: stat.mode, uid: stat.uid,
         ino: stat.ino, mtimeMs: stat.mtimeMs
       };
@@ -59,8 +59,8 @@ function installGuards(root, counts) {
         ["fetch", "push", "clone", "pull", "ls-remote"].some(word => args.includes(word))) {
       counts.deniedProcess++; throw Error("unexpected process in R1.2");
     }
-    const env = { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: os.homedir(), TMPDIR: root,
-      LANG: "C", LC_ALL: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null",
+    const env = { ...(process.platform === "win32" ? {SystemRoot: process.env.SystemRoot, TEMP: root, TMP: root} : {}), PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: os.homedir(), TMPDIR: root,
+      LANG: "C", LC_ALL: "C", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: process.platform === "win32" ? "NUL" : "/dev/null",
       GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" };
     counts.git++; return originalExec(command, args, { ...options, env });
   });
@@ -87,15 +87,16 @@ function removeOwnedFixture(root, expected) {
   assert.equal(path.dirname(root), fs.realpathSync(os.tmpdir()));
   assert.ok(path.basename(root).startsWith("agent-toolkit-r12-test-"));
   for (const key of ["dev", "ino", "uid", "mode"]) assert.equal(current[key], expected[key]);
-  assert.equal(current.uid, process.getuid());
-  assert.equal(current.mode & 0o7777, 0o700);
+  if (process.platform !== 'win32') {
+    assert.equal(current.uid, process.getuid());
+    assert.equal(current.mode & 0o7777, 0o700);
+  }
   fs.rmSync(root, { recursive: true });
   assert.equal(fs.existsSync(root), false);
 }
 
 test("R1.2 integrates a canonical fictitious memory and seven fail-closed cases", {
-  timeout: 60000,
-  skip: process.platform === "win32" ? "POSIX fixture; Windows not validated" : false
+  timeout: 60000
 }, async t => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "agent-toolkit-r12-test-")));
   fs.chmodSync(root, 0o700);
@@ -149,6 +150,11 @@ test("R1.2 integrates a canonical fictitious memory and seven fail-closed cases"
     manifest.automation.enabled = true; manifest.automation.schedule = "Fictitious test only; no scheduler";
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
     configureGit(vault);
+    // Canonical integration fixture is LF regardless of the developer checkout.
+    // Dedicated sync suites cover CRLF worktrees and byte-exact Git pins.
+    for (const [name, item] of Object.entries(snapshot(vault))) if (item.type === 'file' && name.endsWith('.md')) {
+      const file = path.join(vault, name); fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replaceAll('\r\n', '\n'));
+    }
     git(vault, "add", "--", ...Object.entries(snapshot(vault))
       .filter(([p, item]) => item.type === "file" && !p.startsWith(".git/")).map(([p]) => p));
     git(vault, "commit", "-m", "fixture: memoria");
@@ -201,7 +207,7 @@ test("R1.2 integrates a canonical fictitious memory and seven fail-closed cases"
       reviewBranch: inspected.branch, pr: inspected.pullRequest.number, mergeCommit: inspected.pullRequest.mergeCommit,
       memoryHead: git(vault, "rev-parse", "HEAD"), manifestSha256: hash(fs.readFileSync(manifestPath)),
       notes: [{ path: NOTE, beforeSha256: hash(Buffer.from(originalNote)),
-        content: originalNote + "\n## Contexto ficticio aprobado\n\nConvención de interfaz revisada para el PR de prueba.\n",
+        content: originalNote + "\n## Contexto ficticio aprobado\n\nConvención de interfaz revisada para el PR de prueba.\n".replaceAll("\n", originalNote.includes("\r\n") ? "\r\n" : "\n"),
         sourcePaths: inspected.files.map(file => file.path) }] };
     const saveProposal = () => fs.writeFileSync(proposalPath, JSON.stringify(proposal, null, 2) + "\n", { mode: 0o600 });
     saveProposal(); const input = { targetPath: vault, proposalPath };
@@ -223,7 +229,7 @@ test("R1.2 integrates a canonical fictitious memory and seven fail-closed cases"
     await blocked("wrong-approved-pin", () => applyMemorySync({ ...input, apply: true, reviewed: true, expect: "0".repeat(64) }, context), "approval-mismatch");
     const reviewedHead = proposal.memoryHead; proposal.memoryHead = "0".repeat(40); saveProposal();
     await blocked("wrong-memory-base", () => applyMemorySync(input, context), "memory-version"); proposal.memoryHead = reviewedHead; saveProposal();
-    fs.writeFileSync(path.join(vault, NOTE), originalNote + "\nContenido concurrente ficticio.\n");
+    fs.writeFileSync(path.join(vault, NOTE), originalNote + "\nContenido concurrente ficticio.\n".replaceAll("\n", originalNote.includes("\r\n") ? "\r\n" : "\n"));
     await blocked("different-note-content", () => applyMemorySync(input, context), "note-conflict");
     fs.writeFileSync(path.join(vault, NOTE), originalNote);
     const foreign = path.join(vault, "foreign.txt");
