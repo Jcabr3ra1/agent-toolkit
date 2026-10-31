@@ -1,3 +1,4 @@
+import { supported } from "../testing/client-posix.js";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -14,11 +15,11 @@ import { hash } from "../src/client-runtime-core.js";
 import { claimFixturePermit, createFixturePermit, revokeFixturePermit } from "../src/client-runtime-fixture-permit.js";
 import { createFixtureProtocol } from "../src/client-runtime-fixture-protocol.js";
 import { superviseFixture, FIXTURES } from "../src/client-runtime-supervisor.js";
+import { createFixtureCoordinator } from "../src/client-runtime-coordinator.js";
 import { fixtureSchema, allSchemas, coordinator, request, bind, initialized, taskDirectory, limits } from "../testing/runtime-supervisor/setup.js";
-import { store, apply } from "../testing/runtime-store/fixture.js";
+import { store, apply, config, NOW } from "../testing/runtime-store/fixture.js";
 
-const supported = process.platform === "darwin";
-const localTest = (name, fn) => test(name, { skip: !supported, timeout: 20000 }, fn);
+const localTest = (name, fn) => test(name, { skip: supported ? false : "Requires POSIX uid/modes and process-group termination for the runtime integration fixture.", timeout: 20000 }, fn);
 async function setup(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-fixture-test-")));
   await fs.chmod(root, 0o700); const owned = await fs.lstat(root);
@@ -95,24 +96,64 @@ for (const mode of ["success", "split-utf8", "environment"]) localTest(`C2-07/08
   assert.deepEqual(await fs.readdir(taskDirectory(root)), ["ledger.json"]);
   const again = check(await coordinator(root)(q)); assert.equal(again.state, "not-started"); assert.equal(again.fixtureExecuted, false);
 });
-for (const [name, change] of [
-  ["ruta arbitraria", q => { q.script = "/do-not-run"; }], ["cliente real", q => { q.fixtureId = "codex"; }],
-  ["shell", q => { q.command = "do-not-run"; }], ["tipo coercible", q => { q.limits.timeoutMs = "3000"; }],
-  ["permiso denegado", q => { q.authorization.status = "denied"; }], ["permiso revocado", q => { q.authorization.revoked = true; }],
-  ["permiso expirado", q => { q.authorization.expiresAt = q.authorization.checkedAt; }], ["otra fixture", q => { q.authorization.fixtureId = "silent"; }],
-  ["otro intento", q => { q.authorization.attemptId = "other"; }], ["otra identidad", q => { q.authorization.identity.taskId = "other"; }],
-  ["otra raíz", q => { q.authorization.rootSha256 = "c".repeat(64); }], ["otros límites", q => { q.authorization.limitsSha256 = "c".repeat(64); }],
-  ["sin conciliación", q => { q.authorization.reconciliationApproved = false; }], ["sin reserva", q => { q.reservation.operation = "read"; delete q.reservation.transition; }],
-  ["gracia fuera del plazo", q => { q.limits.timeoutMs = 3000; q.limits.graceMs = 1000; q.limits.confirmationMs = 2000; bind(q); }],
-  ["input bytes", q => { q.limits.maxInputBytes = 1; bind(q); }], ["unicode inválido", q => { q.inputText = "\ud800"; }],
-  ["getter", q => Object.defineProperty(q, "secret", { enumerable: true, get() { throw Error("must not call"); } })],
-  ["proxy", q => { q.authorization = new Proxy(q.authorization, { ownKeys() { throw Error("must not call"); } }); }],
-  ["cycle", q => { q.extra = q; }]
-]) localTest(`C2-07/12: ${name} no reserva ni inicia`, async t => {
-  const root = await setup(t); const before = await fs.readFile(path.join(taskDirectory(root), "ledger.json")); let spawns = 0;
-  const q = request(root); change(q); const r = check(await coordinator(root, { supervisor: { spawn: () => { spawns++; throw Error("must not spawn"); } } })(q));
-  assert.equal(r.state, "not-started"); assert.equal(spawns, 0);
-  assert.deepEqual(await fs.readFile(path.join(taskDirectory(root), "ledger.json")), before);
+const invalidRequests = [
+  ["ruta arbitraria", q => { q.script = "/do-not-run"; }, "fixture-invalid-request"], ["cliente real", q => { q.fixtureId = "codex"; }, "fixture-invalid-request"],
+  ["shell", q => { q.command = "do-not-run"; }, "fixture-invalid-request"], ["tipo coercible", q => { q.limits.timeoutMs = "3000"; }, "fixture-invalid-request"],
+  ["permiso denegado", q => { q.authorization.status = "denied"; }, "fixture-not-authorized"], ["permiso revocado", q => { q.authorization.revoked = true; }, "fixture-not-authorized"],
+  ["permiso expirado", q => { q.authorization.expiresAt = q.authorization.checkedAt; }, "fixture-not-authorized"], ["otra fixture", q => { q.authorization.fixtureId = "silent"; }, "fixture-not-authorized"],
+  ["otro intento", q => { q.authorization.attemptId = "other"; }, "fixture-not-authorized"], ["otra identidad", q => { q.authorization.identity = { ...q.authorization.identity, taskId: "other" }; }, "fixture-not-authorized"],
+  ["otra raíz", q => { q.authorization.rootSha256 = "c".repeat(64); }, "fixture-not-authorized"], ["otros límites", q => { q.authorization.limitsSha256 = "c".repeat(64); }, "fixture-not-authorized"],
+  ["sin conciliación", q => { q.authorization.reconciliationApproved = false; }, "fixture-not-authorized"], ["sin reserva", q => { q.reservation.operation = "read"; delete q.reservation.transition; }, "fixture-reservation-required"],
+  ["gracia fuera del plazo", q => { q.limits.timeoutMs = 3000; q.limits.graceMs = 1000; q.limits.confirmationMs = 2000; bind(q); }, "fixture-incompatible-limits"],
+  ["input bytes", q => { q.limits.maxInputBytes = 1; bind(q); }, "byte-limit"], ["unicode inválido", q => { q.inputText = "\ud800"; }, "invalid-unicode"],
+  ["getter", (q, hook) => Object.defineProperty(q, "secret", { enumerable: true, get: hook }), "non-json-metadata"],
+  ["proxy", (q, hook) => { q.authorization = new Proxy(q.authorization, { ownKeys: hook, getPrototypeOf: hook, get: hook }); }, "non-json-metadata"],
+  ["cycle", q => { q.extra = q; }, "non-json-metadata"]
+];
+function validationHarness() {
+  const root = path.resolve(os.tmpdir(), "fixture-coordinator-validation-only"), cfg = config(root);
+  // Inert deployment declaration for validation only, never native admission.
+  cfg.evaluation.platform = "linux";
+  const counts = { io: 0, spawn: 0 };
+  const io = Object.fromEntries(Object.keys(fs).map(key => [key, () => { counts.io++; throw Error("unexpected IO"); }]));
+  const run = createFixtureCoordinator(...allSchemas, cfg, { store: { clock: () => Date.parse(NOW), io },
+    supervisor: { spawn() { counts.spawn++; throw Error("unexpected spawn"); } } });
+  assert.equal(typeof run, "function");
+  const ajv = new Ajv2020({ strict: true, allErrors: true }); ajv.addFormat("date-time", () => true); allSchemas.forEach(s => ajv.addSchema(s));
+  const validate = ajv.compile({ $ref: `${fixtureSchema.$id}#/$defs/request` });
+  assert.equal(validate(request(root)), true, JSON.stringify(validate.errors));
+  return { root, counts, run };
+}
+function checkUnstarted(r, reason) {
+  check(r); assert.equal(r.state, "not-started"); assert.equal(r.fixtureExecuted, false);
+  assert.equal(r.storage, null); assert.equal(r.process, null); assert.deepEqual(r.reasons, [reason]);
+}
+for (const [name, change, reason] of invalidRequests) test(`C2-07/12: ${name} no reserva ni inicia`, { timeout: 20000 }, async () => {
+  const { root, counts, run } = validationHarness(); let hooks = 0;
+  const q = request(root); change(q, () => { hooks++; throw Error("must not call"); });
+  checkUnstarted(await run(q), reason); assert.deepEqual(counts, { io: 0, spawn: 0 }); assert.equal(hooks, 0);
+});
+localTest("C2-07/12: entradas rechazadas conservan el ledger real y sus recursos", async t => {
+  const root = await setup(t), file = path.join(taskDirectory(root), "ledger.json"), before = await fs.readFile(file); let spawns = 0;
+  const run = coordinator(root, { supervisor: { spawn() { spawns++; throw Error("must not spawn"); } } });
+  for (const [name, change, reason] of invalidRequests) {
+    let hooks = 0; const q = request(root); change(q, () => { hooks++; throw Error("must not call"); });
+    checkUnstarted(await run(q), reason); assert.equal(hooks, 0, name); assert.equal(spawns, 0, name);
+    assert.deepEqual(await fs.readFile(file), before, name);
+    assert.deepEqual(await fs.readdir(taskDirectory(root)), ["ledger.json"], name);
+  }
+  // Preserve the original shared-identity adversary too: request() aliases these
+  // identities, so this changes the reservation identity and reaches the store
+  // boundary. The store authorization keeps its own copy of the original
+  // identity, so the store refuses it as unauthorized before inspecting the
+  // transition.
+  const sharedIdentity = request(root); sharedIdentity.authorization.identity.taskId = "other";
+  assert.equal(sharedIdentity.reservation.identity.taskId, "other");
+  assert.notEqual(sharedIdentity.reservation.authorization.identity.taskId, "other");
+  const r = check(await run(sharedIdentity));
+  assert.equal(r.state, "not-started"); assert.equal(r.fixtureExecuted, false); assert.equal(r.process, null); assert.equal(spawns, 0);
+  assert.equal(r.storage.state, "blocked"); assert.deepEqual(r.reasons, ["store-not-authorized"]);
+  assert.deepEqual(await fs.readFile(file), before);
   assert.deepEqual(await fs.readdir(taskDirectory(root)), ["ledger.json"]);
 });
 for (const [mode, cause] of [
@@ -142,6 +183,11 @@ localTest("C2-08: cancelación humana conserva un único inicio y cero IA", asyn
 localTest("C2-08: cancelación antes de reservar no toca el ledger", async t => {
   const root = await setup(t); const abort = new AbortController(); abort.abort();
   const r = check(await coordinator(root)(request(root), { signal: abort.signal })); assert.equal(r.process, null); assert.equal((await ledger(root)).revision, 0);
+});
+test("C2-08: cancelación antes de reservar no invoca almacenamiento ni procesos", { timeout: 20000 }, async () => {
+  const { root, counts, run } = validationHarness(), abort = new AbortController(); abort.abort();
+  checkUnstarted(await run(request(root), { signal: abort.signal }), "fixture-canceled-before-reservation");
+  assert.deepEqual(counts, { io: 0, spawn: 0 });
 });
 for (const mode of ["parent-child", "child-after-parent"]) localTest(`C2-10: ${mode}, no confunde exit del padre con cierre del grupo`, async t => {
   const root = await setup(t); const q = request(root, mode); q.limits.timeoutMs = 2500; bind(q);
@@ -285,7 +331,7 @@ localTest("C2-12: APIs instrumentadas no intentan red y spawn solo usa programa 
   const failNetwork = () => { network++; throw Error("must not network"); };
   for (const [object, key] of [[http, "request"], [https, "request"], [net, "connect"], [net, "createConnection"], [globalThis, "fetch"]]) t.mock.method(object, key, failNetwork);
   const r = check(await coordinator(root, { supervisor: { spawn: (exe, args, opts) => {
-    starts++; assert.equal(exe, process.execPath); assert.match(args[0], /testing\/runtime-supervisor\/fixture\.cjs$/);
+    starts++; assert.equal(exe, process.execPath); assert.match(args[0], /src[\\/]runtime-fixtures[\\/]runtime-supervisor[\\/]fixture\.cjs$/);
     assert.deepEqual(args.slice(1), ["success"]); assert.deepEqual(Object.keys(opts.env).sort(), ["LANG", "LC_ALL"]); return spawn(exe, args, opts);
   } } })(request(root)));
   assert.equal(r.state, "completed"); assert.equal(network, 0); assert.equal(starts, 1);

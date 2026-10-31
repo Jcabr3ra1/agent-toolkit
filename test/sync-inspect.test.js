@@ -193,7 +193,8 @@ test("estructura declarada resuelve números distintos y no entra en Skills ni s
   fs.writeFileSync(path.join(f.root, "12-FRONTEND", "UI.md"), "# UI\n");
   fs.mkdirSync(path.join(f.root, "12-FRONTEND", "skills"));
   fs.writeFileSync(path.join(f.root, "12-FRONTEND", "skills", "SKILL.md"), "NO LEER\n");
-  fs.symlinkSync(path.join(f.root, "03-IMPLEMENTACION", "Implementación.md"), path.join(f.root, "12-FRONTEND", "Enlace.md"));
+  // File symlinks require Windows privileges; a junction exercises the same reparse-point exclusion.
+  fs.symlinkSync(path.join(f.root, '03-IMPLEMENTACION', ...(process.platform === 'win32' ? [] : ['Implementación.md'])), path.join(f.root, '12-FRONTEND', 'Enlace.md'), process.platform === 'win32' ? 'junction' : 'file');
   const r = await f.inspect();
   assert.equal(r.status, "ready");
   assert.equal(r.candidateAreas[0].directory, "12-FRONTEND");
@@ -315,7 +316,7 @@ test("doctor y configuración inválidos se detienen sin revelar mensajes origin
 test("las notas y carpetas simbólicas no se usan como candidatas", async (t) => {
   const f = fixture(t, { declared: true, dirs: ["03-IMPLEMENTACION", "12-FRONTEND"] });
   fs.rmdirSync(path.join(f.root, "12-FRONTEND"));
-  fs.symlinkSync(path.join(f.root, "03-IMPLEMENTACION"), path.join(f.root, "12-FRONTEND"));
+  fs.symlinkSync(path.join(f.root, '03-IMPLEMENTACION'), path.join(f.root, '12-FRONTEND'), process.platform === 'win32' ? 'junction' : 'dir');
   const r = await f.inspect();
   assert.equal(r.candidateAreas[0].directory, "03-IMPLEMENTACION");
   assert(!JSON.stringify(r).includes("12-FRONTEND/"));

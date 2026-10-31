@@ -6,6 +6,20 @@ import path from "node:path";
 import { after, test } from "node:test";
 import { createPeerReviewStore, PEER_LIMITS } from "../src/peer-review-store.js";
 
+function diagnoseLockErrors(t) {
+  const mkdir = fs.mkdir;
+  t.mock.method(fs, "mkdir", function (...args) {
+    const pending = mkdir.apply(this, args);
+    pending.catch(error => {
+      if (typeof args[0] !== "string" || !args[0].endsWith(".json.lock") || error.code === "EEXIST") return;
+      const code = /^(?:E[A-Z0-9_]+|ERR_[A-Z0-9_]+)$/.test(error.code ?? "") ? error.code : "UNCLASSIFIED";
+      // Only an error code, never a private path, raw message or credential.
+      t.diagnostic(`Unexpected native lock mkdir error: ${code}`);
+    });
+    return pending;
+  });
+}
+
 const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-toolkit-peers-")));
 after(() => fs.rm(root, { recursive: true, force: true }));
 
@@ -123,7 +137,8 @@ test("an unsafe file replacement marks a claimed review stale without storing th
   const claim = await f.store.claimReview({ ...f.bound, reviewId: request.id, agent: "codex" });
   const file = path.join(f.projectRoot, "src/app.js");
   await fs.unlink(file);
-  await fs.symlink(path.join(f.directory, "unavailable.txt"), file);
+  await fs.symlink(process.platform === "win32" ? f.directory : path.join(f.directory, "unavailable.txt"), file,
+    process.platform === "win32" ? "junction" : "file");
   const rejected = await f.store.submitReview({ ...f.bound, reviewId: request.id, agent: "codex", claimToken: claim.claimToken, content: "UNSAFE_REPLACEMENT_REPORT" });
   assert.equal(rejected.state, "stale");
   assert.equal(rejected.saved, false);
@@ -152,8 +167,9 @@ test("path scope rejects escapes, private folders, symlinks, hard links and over
   }
   const outside = path.join(f.directory, "outside.txt");
   await fs.writeFile(outside, "PRIVATE_OUTSIDE_CONTENT");
-  await fs.symlink(outside, path.join(f.projectRoot, "link.txt"));
-  await fs.symlink(f.directory, path.join(f.projectRoot, "external"));
+  await fs.symlink(process.platform === "win32" ? f.directory : outside, path.join(f.projectRoot, "link.txt"),
+    process.platform === "win32" ? "junction" : "file");
+  await fs.symlink(f.directory, path.join(f.projectRoot, "external"), process.platform === "win32" ? "junction" : "dir");
   await fs.link(outside, path.join(f.projectRoot, "hard.txt"));
   for (const name of ["link.txt", "external/outside.txt", "hard.txt"]) await assert.rejects(f.prepare({ paths: [name] }), { code: "peer-files" });
   await fs.writeFile(path.join(f.projectRoot, "large.bin"), Buffer.alloc(PEER_LIMITS.fileBytes + 1));
@@ -180,22 +196,25 @@ test("cancellation and closing prevent late reports without pretending to stop a
   assert.deepEqual((await f.store.listCollaborations({ projectRoot: f.projectRoot })).tasks, []);
 });
 
-test("storage is private, rejects linked records, and never removes an existing lock", async () => {
+test("storage is private, rejects linked records, and never removes an existing lock", async t => {
   const f = await fixture();
   const record = path.join(f.storage, f.task.id + ".json");
-  assert.equal((await fs.stat(f.storage)).mode & 0o777, 0o700);
-  assert.equal((await fs.stat(record)).mode & 0o777, 0o600);
+  await t.test("POSIX storage modes are private", { skip: process.platform === "win32" ? "Windows does not implement POSIX permission bits." : false }, async () => {
+    assert.equal((await fs.stat(f.storage)).mode & 0o777, 0o700);
+    assert.equal((await fs.stat(record)).mode & 0o777, 0o600);
+    await fs.chmod(record, 0o644);
+    await assert.rejects(f.store.getCollaboration(f.bound), { code: "peer-storage" });
+    await fs.chmod(record, 0o600);
+  });
   const lock = record + ".lock";
   await fs.mkdir(lock);
   const impatient = createPeerReviewStore({ root: f.storage, lockTimeoutMs: 20 });
   await assert.rejects(impatient.publishContext({ ...f.bound, expectedRevision: 1, author: "claude", content: "No" }), { code: "peer-busy" });
   assert.equal((await fs.stat(lock)).isDirectory(), true);
   await fs.rmdir(lock);
-  await fs.chmod(record, 0o644);
-  await assert.rejects(f.store.getCollaboration(f.bound), { code: "peer-storage" });
-  await fs.chmod(record, 0o600);
   await fs.rename(record, record + ".backup");
-  await fs.symlink(record + ".backup", record);
+  await fs.symlink(process.platform === "win32" ? f.directory : record + ".backup", record,
+    process.platform === "win32" ? "junction" : "file");
   await assert.rejects(f.store.getCollaboration(f.bound), { code: "peer-storage" });
   await fs.unlink(record);
   await fs.link(record + ".backup", record);
@@ -235,7 +254,7 @@ test("input, report and history limits are bounded in bytes and same-agent revie
   assert.equal((await f.store.getCollaboration(f.bound)).reviews[0].review, null);
 });
 
-test("special storage files fail promptly instead of blocking reads", { skip: process.platform === "win32" }, async () => {
+test("special storage files fail promptly instead of blocking reads", { skip: process.platform === "win32" ? "Requires a POSIX FIFO created by mkfifo; Windows named pipes have different semantics." : false }, async () => {
   const f = await fixture();
   const record = path.join(f.storage, f.task.id + ".json");
   await fs.unlink(record);
@@ -363,7 +382,8 @@ test("usage survives restart, deduplicates and keeps unknown counters distinct f
   assert.equal(report.savingsVerified, false);
 });
 
-test("concurrent identical usage records count once and historical tasks have no fabricated usage", async () => {
+test("concurrent identical usage records count once and historical tasks have no fabricated usage", async t => {
+  diagnoseLockErrors(t);
   const f = await fixture();
   assert.equal(typeof f.store.consumption, "function");
   const empty = await f.store.consumption({ projectRoot: f.projectRoot });
@@ -376,15 +396,28 @@ test("concurrent identical usage records count once and historical tasks have no
   assert.equal((await other.consumption({ projectRoot: f.projectRoot })).summary.calls, 1);
 });
 
-test('closure snapshot holds the transaction lock and never cancels a concurrently dispatched review', async () => {
+test('closure snapshot holds the transaction lock and never cancels a concurrently dispatched review', {timeout:10000}, async t => {
+  diagnoseLockErrors(t);
   const f=await fixture(), other=createPeerReviewStore({root:f.storage});
   const preview=await f.prepare();
   assert.equal(typeof f.store.closeWithSnapshot,'function');
+  const lock=path.join(f.storage,f.task.id+'.json.lock'), mkdir=fs.mkdir.bind(fs);
+  let entered;
+  const contended=new Promise(resolve=>{entered=resolve;});
+  t.mock.method(fs,'mkdir',async(name,...args)=>{
+    try {return await mkdir(name,...args);}
+    catch(error){
+      if(name===lock && error.code==='EEXIST') entered();
+      throw error;
+    }
+  });
   let attempt, settled=false, snapshot;
   await f.store.closeWithSnapshot({...f.bound,saveSnapshot:async task=>{
     snapshot=task;
     attempt=other.dispatchReview(preview,{previewId:'b'.repeat(32)}).then(value=>({value}),error=>({error})).then(value=>{settled=true;return value;});
-    await new Promise(resolve=>setTimeout(resolve,45));
+    // Observe real lock contention, rather than assuming the contender ran in 45 ms.
+    await contended;
+    assert.equal((await fs.lstat(lock)).isDirectory(),true);
     assert.equal(settled,false,'concurrent mutation waits for snapshot and close');
   }});
   assert.equal((await attempt).error.code,'peer-closed');

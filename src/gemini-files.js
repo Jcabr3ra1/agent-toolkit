@@ -5,18 +5,20 @@ const TYPES = new Set(['.txt','.md','.csv','.tsv','.json','.yaml','.yml','.js','
   '.png','.jpg','.jpeg','.webp','.gif','.pdf','.wav','.mp3','.m4a','.aiff','.ogg','.flac','.mp4','.mov','.webm','.avi']);
 export async function readRegular(file, limit = 20 * 1024 * 1024) {
   const before = await fs.lstat(file);
-  if (!before.isFile() || before.isSymbolicLink() || before.size > limit) throw new Error('Archivo inválido o demasiado grande.');
-  const handle = await fs.open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.size > limit) throw new Error('Archivo inválido o demasiado grande.');
+  const handle = await fs.open(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   try {
     const opened = await handle.stat();
-    if (!opened.isFile() || opened.ino !== before.ino || opened.dev !== before.dev || opened.size !== before.size) throw new Error('El archivo cambió.');
+    if (!opened.isFile() || opened.nlink !== 1 || opened.ino !== before.ino || opened.dev !== before.dev || opened.size !== before.size) throw new Error('El archivo cambió.');
     const bytes = Buffer.alloc(opened.size); let offset = 0;
     while (offset < bytes.length) {
       const { bytesRead } = await handle.read(bytes, offset, Math.min(65536, bytes.length-offset), offset);
       if (!bytesRead) throw new Error('Lectura incompleta.'); offset += bytesRead;
     }
     const after = await handle.stat();
-    if (after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) throw new Error('El archivo cambió.');
+    const named = await fs.lstat(file);
+    if (!named.isFile() || named.isSymbolicLink() || named.nlink !== 1 || named.ino !== opened.ino || named.dev !== opened.dev ||
+        after.nlink !== 1 || after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) throw new Error('El archivo cambió.');
     return bytes;
   } finally { await handle.close(); }
 }

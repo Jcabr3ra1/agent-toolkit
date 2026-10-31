@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { parseTOML, getStaticTOMLValue } from 'toml-eslint-parser';
+import { IS_WINDOWS } from './platform.js';
 
 import packageJson from '../package.json' with { type: 'json' };
 
@@ -18,6 +19,7 @@ const clientsFor = agent => {
   return agent === 'all' ? ['codex', 'claude'] : [agent];
 };
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+const normalizedPath = value => IS_WINDOWS ? value.toLowerCase() : value;
 const stat = file => fs.lstat(file).catch(e => { if (e.code === 'ENOENT') return null; throw e; });
 async function parents(home, target, create = false) {
   let current = home;
@@ -37,8 +39,7 @@ async function linkState(source, target) {
   if (!info.isSymbolicLink()) return 'conflict';
   try {
     const [actual, expected] = await Promise.all([fs.realpath(target), fs.realpath(source)]);
-    const normalize = value => process.platform === 'win32' ? value.toLowerCase() : value;
-    return normalize(actual) === normalize(expected) ? 'installed' : 'replace';
+    return normalizedPath(actual) === normalizedPath(expected) ? 'installed' : 'replace';
   } catch (error) { if (error.code === 'ENOENT') return 'replace'; throw error; }
 }
 export async function setupToolkit({ agent = 'all', apply = false, homeDirectory = os.homedir(), toolkitRoot = TOOLKIT_ROOT,
@@ -64,7 +65,7 @@ export async function setupToolkit({ agent = 'all', apply = false, homeDirectory
         if (!current?.isSymbolicLink()) throw new Error('El destino cambió; no se reemplazan archivos ni carpetas.');
         await fs.unlink(item.target);
       }
-      try { await fs.symlink(path.resolve(item.source), item.target, process.platform === 'win32' ? 'junction' : 'dir'); }
+      try { await fs.symlink(path.resolve(item.source), item.target, IS_WINDOWS ? 'junction' : 'dir'); }
       catch (e) { if (e.code !== 'EEXIST' || await linkState(item.source, item.target) !== 'installed') throw new Error('El destino cambió; se conservan los enlaces aplicados. Repite la vista previa.'); }
       item.state = 'installed';
     }
@@ -101,8 +102,12 @@ const layer = (base, top) => {
 const readToml = async file => { const bytes = await boundedConfig(file); return bytes ? getStaticTOMLValue(parseTOML(bytes.toString('utf8'), { tomlVersion: '1.0.0' })) : null; };
 async function codexSandbox(home, codexHome, codexProfile) {
   const state = path.join(home, '.agent-toolkit'), file = path.join(codexHome, 'config.toml');
-  const command = `grep -q '^\\[sandbox_workspace_write\\]' ${quote(file)} 2>/dev/null && echo 'Ya existe la sección: añade la ruta a writable_roots a mano' || ` +
-    `printf '\\n[sandbox_workspace_write]\\nwritable_roots = [%s]\\n' ${quote(JSON.stringify(state))} >> ${quote(file)}`;
+  // A base64 payload keeps paths and JavaScript out of shell interpolation in cmd, PowerShell and POSIX shells.
+  const script = `const fs = require('node:fs'); const file = ${JSON.stringify(file)}; ` +
+    `let content = ''; try { content = fs.readFileSync(file, 'utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; } ` +
+    `if (/^\\[sandbox_workspace_write\\]/mu.test(content)) console.log('Ya existe la sección: añade la ruta a writable_roots a mano'); ` +
+    `else fs.appendFileSync(file, ${JSON.stringify(`\n[sandbox_workspace_write]\nwritable_roots = [${JSON.stringify(state)}]\n`)});`;
+  const command = `node -e "eval(Buffer.from('${Buffer.from(script).toString('base64')}','base64').toString())"`;
   const unknown = reason => ({ state: 'unknown', writableRoot: state,
     hint: `${reason}: no se puede saber si Codex deja escribir en ${state}. Si $revisar no consigue registrarse, permite esa carpeta.` });
   let config = {}, profileFiles = [];
@@ -181,7 +186,7 @@ async function inspectMcp(client, home, codexHome, root) {
   } catch { return { state: 'unreadable' }; }
 }
 export async function executable(name, environment) {
-  const extensions = process.platform === 'win32'
+  const extensions = IS_WINDOWS
     ? ['', ...(environment.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean).map(extension => extension.toLowerCase())]
     : [''];
   for (const folder of (environment.PATH ?? '').split(path.delimiter).filter(Boolean)) {

@@ -52,6 +52,43 @@ function fakeSyncForClaude(executable, args) {
   throw new Error(`Unexpected Claude preflight: ${args.join(" ")}`);
 }
 
+test("Windows runners discover native executables and retain required Windows environment", { skip: process.platform !== "win32" ? "Windows executable discovery and environment." : false }, async () => {
+  const nativeDirectory = path.join(root, "native-clients");
+  const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
+  const env = { PATH: nativeDirectory, SystemRoot: systemRoot, USERPROFILE: home, TEMP: root, TMP: root,
+    APPDATA: home, LOCALAPPDATA: home, ANTHROPIC_API_KEY: "excluded-secret", OPENAI_API_KEY: "excluded-secret" };
+  for (const [name, create, syncRun] of [["codex", createCodexCliRunner, fakeSyncForCodex], ["claude", createClaudeCodeRunner, fakeSyncForClaude]]) {
+    let selected = false;
+    const fileIo = { ...fs, realpath: async value => {
+      if (value === path.join(nativeDirectory, `${name}.exe`)) { selected = true; return process.execPath; }
+      return fs.realpath(value);
+    } };
+    const runner = create({ env, home, fileIo, runSync: (executable, args, actualEnv) => {
+      assert.equal(executable, process.execPath);
+      for (const key of ["SystemRoot", "USERPROFILE", "TEMP", "TMP", "APPDATA", "LOCALAPPDATA"]) assert.equal(actualEnv[key], env[key]);
+      assert.equal(actualEnv.ANTHROPIC_API_KEY, undefined);
+      assert.equal(actualEnv.OPENAI_API_KEY, undefined);
+      assert.ok(actualEnv.PATH.split(path.delimiter).includes(path.join(systemRoot, "System32")));
+      return syncRun(executable, args);
+    } });
+    const preview = await runner.preview({ projectRoot, task, plan: JSON.stringify(plan), model: name === "codex" ? "gpt-6.1-sol" : "sonnet", effort: "medium" });
+    assert.equal(selected, true);
+    assert.equal(preview.command.shell, false);
+    assert.equal(preview.command.executable, process.execPath);
+    await runner.cleanup();
+  }
+});
+
+test("POSIX runners reject writable project permission bits", { skip: process.platform === "win32" ? "Windows does not implement POSIX permission bits." : false }, async () => {
+  const writableRoot = path.join(root, "writable-project");
+  await fs.mkdir(writableRoot, { mode: 0o700 });
+  await fs.chmod(writableRoot, 0o777);
+  for (const [name, create] of [["codex", createCodexCliRunner], ["claude", createClaudeCodeRunner]]) {
+    const runner = create({ home, codexPath: process.execPath, claudePath: process.execPath });
+    await assert.rejects(runner.preview({ projectRoot: writableRoot, task, plan: JSON.stringify(plan), model: name === "codex" ? "gpt-6.1-sol" : "sonnet", effort: "medium" }), { code: `${name}-project-root-invalid` });
+  }
+});
+
 test("Codex preview shows the exact read-only CLI call and its chosen model and effort", async () => {
   let invocations = 0;
   const runner = createCodexCliRunner({

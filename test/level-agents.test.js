@@ -6,6 +6,7 @@ import { after, test } from "node:test";
 import { getStaticTOMLValue, parseTOML } from "toml-eslint-parser";
 import { levelAgentPlan, levelAgentsTable, writeLevelAgents } from "../src/level-agents.js";
 import { runPeerInboxCli } from "../src/peer-inbox-cli.js";
+import { fileSymlinkSkipReason } from "../testing/symlink-capability.js";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "level-agents-"));
 after(() => fs.rm(root, { recursive: true, force: true }));
@@ -87,37 +88,48 @@ test("force repeated keeps every previous version", async () => {
   assert.deepEqual((await Promise.all(kept.map(name => fs.readFile(path.join(codexHome, "agents", name), "utf8")))).sort(), ["dos\n", "uno\n"]);
 });
 
-test("a file that appears after planning, a link or a directory in its place are kept", async () => {
+test("a file that appears after planning or a directory in its place are kept", async () => {
   const codexHome = await home();
   const plan = await levelAgentPlan({ codexHome });
   await fs.mkdir(path.join(codexHome, "agents"));
   await fs.writeFile(agent(codexHome, "ligero"), "apareció a la vez\n");
-  await fs.writeFile(path.join(codexHome, "destino.toml"), "intacto\n");
-  await fs.symlink(path.join(codexHome, "destino.toml"), agent(codexHome, "normal"));
   await fs.mkdir(agent(codexHome, "exigente"));
   await fs.writeFile(path.join(agent(codexHome, "exigente"), "dentro"), "x");
   await writeLevelAgents(plan);
   assert.equal(await fs.readFile(agent(codexHome, "ligero"), "utf8"), "apareció a la vez\n");
   assert.equal(plan.files[0].state, "distinto");
-  assert.equal(await fs.readFile(path.join(codexHome, "destino.toml"), "utf8"), "intacto\n");
-  assert.equal((await fs.lstat(agent(codexHome, "normal"))).isSymbolicLink(), true);
   assert.equal(await fs.readFile(path.join(agent(codexHome, "exigente"), "dentro"), "utf8"), "x");
-  assert.equal(states(await levelAgentPlan({ codexHome })).normal, "distinto");
   assert.equal(states(await levelAgentPlan({ codexHome })).exigente, "distinto");
 
-  // With force, the link and the directory move aside whole; nothing is followed or removed.
+  // With force, the directory moves aside whole; nothing is followed or removed.
+  const forced = await levelAgentPlan({ codexHome });
+  await writeLevelAgents(forced, { force: true });
+  assert.equal(await fs.readFile(path.join(forced.files[2].anterior, "dentro"), "utf8"), "x");
+});
+
+test("file links are preserved and force moves only the link", {
+  skip: fileSymlinkSkipReason()
+}, async () => {
+  const codexHome = await home();
+  await fs.mkdir(path.join(codexHome, "agents"));
+  const source = path.join(codexHome, "destino.toml");
+  await fs.writeFile(source, "intacto\n");
+  await fs.symlink(source, agent(codexHome, "normal"));
+  const plan = await levelAgentPlan({ codexHome });
+  await writeLevelAgents(plan);
+  assert.equal(states(plan).normal, "distinto");
+  assert.equal((await fs.lstat(agent(codexHome, "normal"))).isSymbolicLink(), true);
   const forced = await levelAgentPlan({ codexHome });
   await writeLevelAgents(forced, { force: true });
   assert.equal((await fs.lstat(forced.files[1].anterior)).isSymbolicLink(), true);
-  assert.equal(await fs.readFile(path.join(forced.files[2].anterior, "dentro"), "utf8"), "x");
-  assert.equal(await fs.readFile(path.join(codexHome, "destino.toml"), "utf8"), "intacto\n");
+  assert.equal(await fs.readFile(source, "utf8"), "intacto\n");
 });
 
 test("a linked agents directory stops writing", async () => {
   const codexHome = await home();
   const elsewhere = path.join(codexHome, "otro");
   await fs.mkdir(elsewhere);
-  await fs.symlink(elsewhere, path.join(codexHome, "agents"));
+  await fs.symlink(elsewhere, path.join(codexHome, "agents"), process.platform === "win32" ? "junction" : "dir");
   await assert.rejects(writeLevelAgents(await levelAgentPlan({ codexHome })), { code: "level-agents", message: /no un enlace/u });
   assert.deepEqual(await fs.readdir(elsewhere), []);
 });

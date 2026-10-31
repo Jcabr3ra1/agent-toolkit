@@ -25,25 +25,24 @@ after(() => fs.rmSync(root, { recursive: true, force: true }));
 
 // Match the real CLI dependency so a malformed invocation cannot save a proposal.
 const claudeStreamJsonGuard = `
-print_mode=0
-stream_json=0
-verbose=0
-next_format=0
-for arg in "$@"; do
-  if [ "$next_format" = 1 ]; then
-    if [ "$arg" = 'stream-json' ]; then stream_json=1; fi
-    next_format=0
-    continue
-  fi
-  if [ "$arg" = '--print' ]; then print_mode=1; fi
-  if [ "$arg" = '--verbose' ]; then verbose=1; fi
-  if [ "$arg" = '--output-format' ]; then next_format=1; fi
-done
-if [ "$print_mode" = 1 ] && [ "$stream_json" = 1 ] && [ "$verbose" = 0 ]; then
-  printf '%s\\n' 'Error: When using --print, --output-format=stream-json requires --verbose' >&2
-  exit 1
-fi
+if (args.includes('--print') && args[args.indexOf('--output-format') + 1] === 'stream-json' && !args.includes('--verbose')) {
+  console.error('Error: When using --print, --output-format=stream-json requires --verbose');
+  process.exit(1);
+}
 `;
+
+function writeCliFixture(directory, name, body) {
+  const packageName = name === "codex" ? "@openai/codex" : "@anthropic-ai/claude-code";
+  const packageRoot = path.join(directory, "node_modules", packageName);
+  fs.mkdirSync(packageRoot, { recursive: true });
+  fs.writeFileSync(path.join(packageRoot, "package.json"), JSON.stringify({ name: packageName, bin: { [name]: "cli.cjs" } }));
+  const script = path.join(packageRoot, "cli.cjs");
+  const source = `const fs = require('node:fs');\nconst args = process.argv.slice(2);\n${body}`;
+  fs.writeFileSync(script, source);
+  if (process.platform === "win32") fs.writeFileSync(path.join(directory, `${name}.cmd`), "@exit /b 99\r\n");
+  else fs.writeFileSync(path.join(directory, name), `#!${process.execPath}\n${source}`, { mode: 0o700 });
+  return script;
+}
 
 async function waitForExecution(client, taskId, executionId) {
   let afterSequence = 0;
@@ -155,46 +154,31 @@ test("local stdio MCP exposes opt-in implementation and final-review stages", as
     acceptance: ["La tarjeta funciona en móvil."],
     checks: ["npm test"]
   };
-  const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
-  const codexFixture = path.join(cliDirectory, "codex");
-  fs.writeFileSync(codexFixture, `#!/bin/sh
-if [ "$1" = "--version" ]; then printf '%s\\n' 'codex-cli 0.163.0'; exit 0; fi
-if [ "$1" = "login" ] && [ "$2" = "status" ]; then printf '%s\\n' 'Logged in using ChatGPT' >&2; exit 0; fi
-if [ "$1" = "exec" ]; then
-  printf '%s\\n' invoked >> ${quote(codexRuns)}
-  output=''
-  next=0
-  for arg in "$@"; do
-    if [ "$next" = 1 ]; then output="$arg"; next=0; continue; fi
-    if [ "$arg" = '--output-last-message' ]; then next=1; fi
-  done
-  cat >/dev/null
-  printf '%s\\n' ${quote(JSON.stringify(planned))} > "$output"
-  exit 0
-fi
-exit 1
-`, { mode: 0o700 });
-  const claudeFixture = path.join(cliDirectory, "claude");
-  fs.writeFileSync(claudeFixture, `#!/bin/sh
-if [ "$1" = "--version" ]; then printf '%s\\n' '2.1.300'; exit 0; fi
-if [ "$1" = "auth" ] && [ "$2" = "status" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}'; exit 0; fi
+  writeCliFixture(cliDirectory, "codex", `
+if (args[0] === '--version') { console.log('codex-cli 0.163.0'); process.exit(0); }
+if (args[0] === 'login' && args[1] === 'status') { console.error('Logged in using ChatGPT'); process.exit(0); }
+if (args[0] !== 'exec') process.exit(1);
+fs.readFileSync(0);
+fs.appendFileSync(${JSON.stringify(codexRuns)}, 'invoked\\n');
+fs.writeFileSync(args[args.indexOf('--output-last-message') + 1], ${JSON.stringify(JSON.stringify(planned))});
+`);
+  const claudeFixture = writeCliFixture(cliDirectory, "claude", `
+if (args[0] === '--version') { console.log('2.1.300'); process.exit(0); }
+if (args[0] === 'auth' && args[1] === 'status') { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' })); process.exit(0); }
 ${claudeStreamJsonGuard}
-printf '%s\\n' invoked >> ${quote(claudeRuns)}
-cat >/dev/null
-if [ -f ${quote(claudeFailureFlag)} ]; then
-  if [ "$(cat ${quote(claudeFailureFlag)})" = "unclassified" ]; then
-    printf '%s\\n' 'PRIVATE_UNCLASSIFIED_DIAGNOSTIC_MARKER' >&2
-    exit 1
-  fi
-  printf '%s\\n' 'Not logged in; PRIVATE_DIAGNOSTIC_MARKER' >&2
-  exit 23
-fi
-printf '%s\\n' ${quote(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: "docs/agent-team-handoffs.md" } }] } }))}
-printf '%s\\n' ${quote(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", content: "PRIVATE_SOURCE_TEXT_MUST_NOT_APPEAR" }] } }))}
-printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Propuesta de lectura: usar una grilla responsiva y conservar los datos actuales." }))}
-`, { mode: 0o700 });
+fs.appendFileSync(${JSON.stringify(claudeRuns)}, 'invoked\\n');
+fs.readFileSync(0);
+if (fs.existsSync(${JSON.stringify(claudeFailureFlag)})) {
+  const unclassified = fs.readFileSync(${JSON.stringify(claudeFailureFlag)}, 'utf8').trim() === 'unclassified';
+  console.error(unclassified ? 'PRIVATE_UNCLASSIFIED_DIAGNOSTIC_MARKER' : 'Not logged in; PRIVATE_DIAGNOSTIC_MARKER');
+  process.exit(unclassified ? 1 : 23);
+}
+console.log(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Read', input: { file_path: 'docs/agent-team-handoffs.md' } }] } }));
+console.log(JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: 'PRIVATE_SOURCE_TEXT_MUST_NOT_APPEAR' }] } }));
+console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: 'Propuesta de lectura: usar una grilla responsiva y conservar los datos actuales.' }));
+`);
 
-  const incompatibleCall = spawnSync(claudeFixture, ["--print", "--output-format", "stream-json"], {
+  const incompatibleCall = spawnSync(process.execPath, [claudeFixture, "--print", "--output-format", "stream-json"], {
     encoding: "utf8", input: "Fixture-only argument validation.", timeout: 5_000
   });
   assert.equal(incompatibleCall.status, 1);
@@ -212,7 +196,9 @@ printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_e
     command: process.execPath,
     args: [serverEntry],
     cwd: path.dirname(serverEntry),
-    env: { PATH: `${cliDirectory}${path.delimiter}/usr/bin:/bin`, HOME: os.homedir(), AGENT_TOOLKIT_WORKFLOW_DIR: workflowRoot },
+    env: { PATH: `${cliDirectory}${path.delimiter}${process.env.PATH ?? ""}`, HOME: os.homedir(),
+      ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot, USERPROFILE: os.homedir(), TEMP: os.tmpdir(), TMP: os.tmpdir() } : {}),
+      AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS: "1", AGENT_TOOLKIT_WORKFLOW_DIR: workflowRoot },
     stderr: "pipe"
   });
   const diagnostics = [];
@@ -443,51 +429,26 @@ test("opted-in stdio workflow runs approved implementation and read-only Codex r
     acceptance: ["La tarjeta conserva su contrato."],
     checks: ["npm test"]
   };
-  const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
-  const codexFixture = path.join(cliDirectory, "codex");
-  fs.writeFileSync(codexFixture, `#!/bin/sh
-if [ "$1" = "--version" ]; then printf '%s\\n' 'codex-cli 0.163.0'; exit 0; fi
-if [ "$1" = "login" ] && [ "$2" = "status" ]; then printf '%s\\n' 'Logged in using ChatGPT' >&2; exit 0; fi
-if [ "$1" = "exec" ]; then
-  output=''
-  next=0
-  plan=0
-  for arg in "$@"; do
-    if [ "$next" = 1 ]; then output="$arg"; next=0; continue; fi
-    if [ "$arg" = '--output-last-message' ]; then next=1; fi
-    if [ "$arg" = '--output-schema' ]; then plan=1; fi
-  done
-  cat >/dev/null
-  if [ "$plan" = 1 ]; then
-    printf '%s\\n' ${quote(JSON.stringify(planned))} > "$output"
-    printf '%s\\n' plan >> ${quote(codexRuns)}
-  else
-    printf '%s\\n' 'No encuentro hallazgos; no ejecuté pruebas.' > "$output"
-    printf '%s\\n' review >> ${quote(codexRuns)}
-  fi
-  exit 0
-fi
-exit 1
-`, { mode: 0o700 });
-  const claudeFixture = path.join(cliDirectory, "claude");
-  fs.writeFileSync(claudeFixture, `#!/bin/sh
-if [ "$1" = "--version" ]; then printf '%s\\n' '2.1.300'; exit 0; fi
-if [ "$1" = "auth" ] && [ "$2" = "status" ]; then printf '%s\\n' '{"loggedIn":true,"authMethod":"claude.ai","apiProvider":"firstParty"}'; exit 0; fi
+  writeCliFixture(cliDirectory, "codex", `
+if (args[0] === '--version') { console.log('codex-cli 0.163.0'); process.exit(0); }
+if (args[0] === 'login' && args[1] === 'status') { console.error('Logged in using ChatGPT'); process.exit(0); }
+if (args[0] !== 'exec') process.exit(1);
+fs.readFileSync(0);
+const plan = args.includes('--output-schema');
+fs.writeFileSync(args[args.indexOf('--output-last-message') + 1], plan ? ${JSON.stringify(JSON.stringify(planned))} : 'No encuentro hallazgos; no ejecuté pruebas.');
+fs.appendFileSync(${JSON.stringify(codexRuns)}, plan ? 'plan\\n' : 'review\\n');
+`);
+  writeCliFixture(cliDirectory, "claude", `
+if (args[0] === '--version') { console.log('2.1.300'); process.exit(0); }
+if (args[0] === 'auth' && args[1] === 'status') { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty' })); process.exit(0); }
 ${claudeStreamJsonGuard}
-implementation=0
-for arg in "$@"; do if [ "$arg" = 'acceptEdits' ]; then implementation=1; fi; done
-cat >/dev/null
-if [ "$implementation" = 1 ]; then
-  printf '%s\\n' 'export const dashboardCard = "improved";' > ${quote(implementationPath)}
-  printf '%s\\n' ${quote(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Edit", input: { file_path: "src/dashboard-card.js" } }] } }))}
-  printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Actualicé src/dashboard-card.js; no ejecuté pruebas." }))}
-  printf '%s\\n' implementation >> ${quote(claudeRuns)}
-else
-  printf '%s\\n' ${quote(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Read", input: { file_path: "src/dashboard-card.js" } }] } }))}
-  printf '%s\\n' ${quote(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "Propuesta: conservar el contrato y mejorar el contenido de la tarjeta." }))}
-  printf '%s\\n' proposal >> ${quote(claudeRuns)}
-fi
-`, { mode: 0o700 });
+fs.readFileSync(0);
+const implementation = args.includes('acceptEdits');
+if (implementation) fs.writeFileSync(${JSON.stringify(implementationPath)}, 'export const dashboardCard = "improved";\\n');
+console.log(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', name: implementation ? 'Edit' : 'Read', input: { file_path: 'src/dashboard-card.js' } }] } }));
+console.log(JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: implementation ? 'Actualicé src/dashboard-card.js; no ejecuté pruebas.' : 'Propuesta: conservar el contrato y mejorar el contenido de la tarjeta.' }));
+fs.appendFileSync(${JSON.stringify(claudeRuns)}, implementation ? 'implementation\\n' : 'proposal\\n');
+`);
 
   const approvalPrompts = [];
   const client = new Client({ name: "agent-toolkit-complete-test", version: "1.0.0" }, { capabilities: { elicitation: {} } });
@@ -500,9 +461,11 @@ fi
     args: [serverEntry],
     cwd: path.dirname(serverEntry),
     env: {
-      PATH: `${cliDirectory}${path.delimiter}/usr/bin:/bin`,
+      PATH: `${cliDirectory}${path.delimiter}${process.env.PATH ?? ""}`,
+      ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot, USERPROFILE: os.homedir(), TEMP: os.tmpdir(), TMP: os.tmpdir() } : {}),
       HOME: os.homedir(),
       USER: "agent-toolkit-test",
+      AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS: "1",
       AGENT_TOOLKIT_WORKFLOW_DIR: workflowRoot
     },
     stderr: "pipe"

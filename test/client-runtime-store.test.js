@@ -1,3 +1,4 @@
+import { supported } from "../testing/client-posix.js";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -15,8 +16,11 @@ import { createClientRuntimeStore } from "../src/client-runtime-store.js";
 import { createStoreFiles } from "../src/client-runtime-store-files.js";
 import { schemas, fixture, config, store, initialize, snapshot, apply, directory, NOW, REPO } from "../testing/runtime-store/fixture.js";
 
-const supported = process.platform === "darwin";
-const localTest = (name, fn) => test(name, { skip: !supported, timeout: 20000 }, fn);
+const localTest = (name, fn) => test(name, { skip: supported ? false : "requires POSIX ownership, private modes and durable directory operations", timeout: 20000 }, fn);
+function deploymentConfig(root) {
+  // Inert POSIX deployment input for constructor/pre-platform validation only.
+  const cfg = config(root); cfg.evaluation.platform = "linux"; return cfg;
+}
 async function setup(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-runtime-store-")));
   await fs.chmod(root, 0o700); const owned = await fs.lstat(root);
@@ -77,20 +81,34 @@ localTest("C2-02: importación necesita referencia coincidente y conciliación",
   q.importReferenceId = q.ledger.importEvidenceRef; q.ledger.status = "reconciliation-required";
   check(await store(root)(q), "blocked", "store-import-not-reconciled"); assert.deepEqual(await fs.readdir(root), []);
 });
-for (const [label, alter] of [
-  ["getter", q => Object.defineProperty(q, "extra", { enumerable: true, get() { throw Error("getter called"); } })],
-  ["proxy", q => { q.ledger = new Proxy(q.ledger, { ownKeys() { throw Error("proxy called"); } }); }],
-  ["cycle", q => { q.extra = q; }], ["campo extra", q => { q.secret = "private-never-echo"; }],
-  ["coerción", q => { q.ledger.revision = "0"; }], ["JSON inseguro", q => Object.defineProperty(q, "__proto__", { value: {}, enumerable: true })]
-]) localTest(`C2-02/12: entrada ${label} no ejecuta ni filtra`, async t => {
-  const root = await setup(t); const q = initialize(root); alter(q); const r = check(await store(root)(q), "blocked");
-  assert.equal(JSON.stringify(r).includes("private-never-echo"), false); assert.deepEqual(await fs.readdir(root), []);
+for (const [label, alter, reason] of [
+  ["getter", (q, hook) => Object.defineProperty(q, "extra", { enumerable: true, get: hook }), "non-json-metadata"],
+  ["proxy", (q, hook) => { q.ledger = new Proxy(q.ledger, { ownKeys: hook, getPrototypeOf: hook, get: hook }); }, "non-json-metadata"],
+  ["cycle", q => { q.extra = q; }, "non-json-metadata"],
+  ["campo extra", q => { q.secret = "private-never-echo"; }, "store-invalid-request"],
+  ["coerción", q => { q.ledger.revision = "0"; }, "store-invalid-request"],
+  ["JSON inseguro", q => Object.defineProperty(q, "__proto__", { value: {}, enumerable: true }), "unsafe-json-key"]
+]) test(`C2-02/12: entrada ${label} no ejecuta ni filtra`, { timeout: 20000 }, async () => {
+  const root = path.join(os.tmpdir(), "agent-runtime-store-invalid-input-only");
+  let ioCalls = 0, hooks = 0;
+  const io = Object.fromEntries(Object.keys(fs).map(key => [key, () => { ioCalls++; throw Error("unexpected IO"); }]));
+  const run = store(root, { io }, deploymentConfig(root));
+  const q = initialize(root); alter(q, () => { hooks++; throw Error("private-never-echo"); });
+  const r = check(await run(q), "blocked", reason);
+  assert.deepEqual(r.reasons, [reason]);
+  assert.equal(JSON.stringify(r).includes("private-never-echo"), false);
+  assert.equal(ioCalls, 0); assert.equal(hooks, 0);
 });
-localTest("C2-02: schema local equivocado y configuración arbitraria fallan sin IO", async t => {
-  const root = await setup(t); const bad = structuredClone(schemas); bad[4].$id = "https://other.invalid/schema";
-  assert.throws(() => createClientRuntimeStore(...bad, config(root)), /Unsupported/);
-  assert.throws(() => store(root, {}, { ...config(root), command: "private-never-echo" }), /Invalid/);
-  assert.deepEqual(await fs.readdir(root), []);
+test("C2-02: schema local equivocado y configuración arbitraria fallan sin IO", { timeout: 20000 }, () => {
+  const cfg = deploymentConfig(path.join(os.tmpdir(), "agent-runtime-store-constructor-only"));
+  let ioCalls = 0;
+  const io = Object.fromEntries(Object.keys(fs).map(key => [key, () => { ioCalls++; throw Error("unexpected IO"); }]));
+  const construct = (localSchemas = schemas, configuration = cfg) => createClientRuntimeStore(...localSchemas, configuration, { io });
+  assert.equal(typeof construct(), "function");
+  const bad = structuredClone(schemas); bad[4].$id = "https://other.invalid/schema";
+  assert.throws(() => construct(bad), /Unsupported local runtime schema/);
+  assert.throws(() => construct(schemas, { ...cfg, command: "private-never-echo" }), /Invalid local runtime configuration/);
+  assert.equal(ioCalls, 0);
 });
 for (const [label, change] of [
   ["duplicado", b => b.toString().replace('"storageVersion":"1.0.0"', '"storageVersion":"1.0.0","storageVersion":"1.0.0"')],
@@ -289,13 +307,24 @@ localTest("C2-03: configuración de versión no evaluada bloquea antes de IO", a
   const root = await setup(t); const cfg = config(root); cfg.evaluation.nodeVersion = "v0.0.0";
   check(await store(root, {}, cfg)(initialize(root)), "blocked", "store-platform-not-evaluated"); assert.deepEqual(await fs.readdir(root), []);
 });
-localTest("C2-02: esquema de informe rechaza correlaciones contradictorias", async t => {
-  const { root, run } = await initialized(t); const good = await run(snapshot(root));
+function checkReportCorrelations(good) {
   const ajv = new Ajv2020({ strict: true }); ajv.addFormat("date-time", { type: "string", validate: () => true }); schemas.forEach(s => ajv.addSchema(s));
-  const validate = ajv.compile({ $ref: schemas[4].$id + "#/$defs/report" }); assert.equal(validate(good), true);
+  const validate = ajv.compile({ $ref: schemas[4].$id + "#/$defs/report" }); assert.equal(validate(good), true, JSON.stringify(validate.errors));
   for (const update of [{ writeObservation: "replaced" }, { cleanup: "intervention-required" }, { snapshot: null }, { state: "blocked" }, { identity: null }]) {
     assert.equal(validate({ ...good, ...update }), false);
   }
+}
+test("C2-02: esquema de informe valida correlaciones sin almacenamiento", { timeout: 20000 }, () => {
+  const ledger = fixture().ledger;
+  checkReportCorrelations({
+    schemaVersion: "1.0.0", engineVersion: "1.0.0", scope: "cooperative-local-data-only", state: "unchanged",
+    executed: false, nativeExecuted: false, runtimeReady: false, verifiedAdmission: false,
+    writeObservation: "unchanged", durability: "unconfirmed", cleanup: "complete",
+    identity: { projectId: ledger.projectId, taskId: ledger.taskId }, snapshot: ledger, snapshotSha256: hash(ledger), reasons: ["store-snapshot-read"]
+  });
+});
+localTest("C2-02: esquema de informe rechaza correlaciones contradictorias", async t => {
+  const { root, run } = await initialized(t); checkReportCorrelations(await run(snapshot(root)));
 });
 
 async function writer(t, root, request, pauseAt) {

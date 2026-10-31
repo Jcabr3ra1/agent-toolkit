@@ -1,4 +1,5 @@
 import path from "node:path";
+import { supportsLocalPosix } from "./client-local-platform.js";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import Ajv2020 from "ajv/dist/2020.js";
@@ -73,7 +74,7 @@ export function createClientRuntimeStore(base, preference, adapter, runtime, loc
     }
     try {
       const d = copyInertJson(input); if (!check.request(d)) fail("store-invalid-request"); r.identity = d.identity;
-      if (process.platform !== "darwin" || cfg.evaluation.platform !== process.platform || cfg.evaluation.nodeVersion !== process.version ||
+      if (!supportsLocalPosix(process.platform) || cfg.evaluation.platform !== process.platform || cfg.evaluation.nodeVersion !== process.version ||
         !constants.O_NOFOLLOW || !constants.O_DIRECTORY) fail("store-platform-not-evaluated");
       let time = now(); await roots(); permission(d, time);
       if (d.operation === "initialize") {

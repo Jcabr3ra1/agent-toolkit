@@ -6,6 +6,21 @@ import path from "node:path";
 export const SYNC_LEDGER = "00-INICIO/Registro de sincronización.md";
 export const syncWriteLockPath = (vault) => path.join(vault, "00-INICIO/.project-memory-sync-record.lock");
 export const hashBytes = (value) => createHash("sha256").update(value).digest("hex");
+// Git paths always use '/', while path.relative returns native separators.
+// path.relative applies native casing rules: Windows is case-insensitive;
+// POSIX remains case-sensitive. Callers canonicalize filesystem aliases first.
+export const sameNativePath = (left, right) => path.relative(left, right) === '';
+// Windows may expose the same directory through 8.3 short names (for example
+// RUNNER~1 in %TEMP%) that fs.realpathSync keeps, while Git reports the long
+// name. The native realpath asks the OS for the final path (short names,
+// junctions, casing), so both sides are canonicalized the same way before the
+// exact comparison. A subdirectory of the repository is still a different path.
+export const sameGitRoot = (reported, vault) => sameNativePath(fs.realpathSync.native(reported), fs.realpathSync.native(vault));
+export const relativeGitPath = (root, file) => path.relative(root, file).split(path.sep).join("/");
+// Only textual worktree comparisons tolerate Git's LF/CRLF conversion. Hashes,
+// snapshots and comparisons between HEAD and the index remain byte-exact.
+export const normalizeSyncText = (text) => text.replaceAll("\r\n", "\n");
+export const sameSyncText = (left, right) => normalizeSyncText(left) === normalizeSyncText(right);
 export class SyncFileError extends Error {
   constructor(code, message, status = "conflict") { super(message); this.code = code; this.status = status; }
 }
@@ -61,7 +76,7 @@ export function syncGit(vault, args) {
 }
 export const gitText = (vault, args) => decodeUtf8(syncGit(vault, args));
 export function syncGitState(vault, ignored = []) {
-  if (fs.realpathSync(gitText(vault, ["rev-parse", "--show-toplevel"]).trim()) !== vault) rejectFile("git-root", "La bóveda debe tener su propio repositorio Git.");
+  if (!sameGitRoot(gitText(vault, ["rev-parse", "--show-toplevel"]).trim(), vault)) rejectFile("git-root", "La bóveda debe tener su propio repositorio Git.");
   const head = gitText(vault, ["rev-parse", "HEAD"]).trim();
   const branch = gitText(vault, ["rev-parse", "--abbrev-ref", "HEAD"]).trim();
   const changes = [], entries = gitText(vault, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]).split("\0");

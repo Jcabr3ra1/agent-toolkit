@@ -6,10 +6,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { spawn as nativeSpawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createTaskPreparer, taskRelativePath, TASK_LIMITS } from "./task-prepare.js";
-import { parseTaskDocument, readTaskInputs, TaskInputError } from "./task-prepare-files.js";
+import { parseTaskDocument, readTaskInputs, TaskInputError, taskLstat, taskHandleStat } from "./task-prepare-files.js";
 import { createTaskVerifier } from "./task-verify.js";
 import { verifyLocal } from "./task-verify-files.js";
 import { containsSensitiveData, isCredentialPath } from "./sensitive-data.js";
+import { IS_WINDOWS, warnPlatformPermissions, toGitPath, isPortableAbsolutePath } from "./platform.js";
+import { resolveCliInvocation } from "./cli-executable.js";
 
 export const EXTERNAL_VERIFIER_LIMITS = Object.freeze({
   fileBytes: 65536, totalBytes: 196608, promptBytes: 524288, answerBytes: 262144,
@@ -55,18 +57,22 @@ const CAPABILITY_FEATURES = new Set([
 ]);
 const REQUIRED_FEATURES = ["shell_tool", "multi_agent", "plugins", "hooks", "apps"];
 const ENV_KEYS = ["HOME", "CODEX_HOME", "TMPDIR", "LANG", "LC_ALL"];
-const signature = s => JSON.stringify([s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs]);
-const dirSignature = s => JSON.stringify([s.dev, s.ino, s.uid, s.gid, s.mode]);
+const signature = s => JSON.stringify([s.dev, s.ino, s.uid, s.gid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs, s.mtimeNs, s.ctimeNs], (_key, value) => typeof value === "bigint" ? String(value) : value);
+const dirSignature = s => JSON.stringify([s.dev, s.ino, s.uid, s.gid, s.mode], (_key, value) => typeof value === "bigint" ? String(value) : value);
 const uid = () => process.getuid?.();
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 const reject = code => { throw Object.assign(new Error("External verifier rejected"), { code }); };
 const fileIO = dependencies => ({ ...fs, ...(dependencies.fileIo ?? dependencies.io ?? {}) });
 const safeAbsolute = value => typeof value === "string" && value.length > 0 && value.length <= 4096 &&
   value === value.trim() && path.isAbsolute(value) && path.normalize(value) === value &&
+  (!IS_WINDOWS || isPortableAbsolutePath(value)) &&
   !/[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/u.test(value);
-const forbiddenPath = value => isCredentialPath(value) || containsSensitiveData(value) ||
-  /(?:^|\/)(?:\.git|\.obsidian|\.claude|\.codex|\.gemini|\.agents|\.(?:credentials?|secrets?)(?:\.[^/]*)?)(?:\/|$)/i.test(value) ||
-  /\.keychain(?:-db)?$/i.test(value);
+const forbiddenPath = input => {
+  const value = toGitPath(input);
+  return isCredentialPath(value) || containsSensitiveData(value) ||
+    /(?:^|\/)(?:\.git|\.obsidian|\.claude|\.codex|\.gemini|\.agents|\.(?:credentials?|secrets?)(?:\.[^/]*)?)(?:\/|$)/i.test(value) ||
+    /\.keychain(?:-db)?$/i.test(value);
+};
 
 function cliOptions(args) {
   if (!Array.isArray(args) || args.some(v => typeof v !== "string")) throw Error();
@@ -97,26 +103,32 @@ function cliOptions(args) {
 
 function filteredEnv(source = process.env, codexPath) {
   const env = {};
-  for (const key of ENV_KEYS) {
+  for (const key of [...ENV_KEYS, ...(IS_WINDOWS ? ["SystemRoot", "SYSTEMROOT", "WINDIR", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"] : [])]) {
     const value = source[key];
     if (typeof value === "string" && value && !/[\x00-\x1f\x7f]/.test(value)) env[key] = value;
   }
-  const system = process.platform === "darwin" ? "/usr/bin:/bin:/usr/sbin:/sbin" : "/usr/bin:/bin";
-  const dirs = [...new Set([path.dirname(codexPath), ...system.split(":")])];
+  const system = IS_WINDOWS
+    ? [source.SystemRoot ?? source.SYSTEMROOT ?? source.WINDIR].filter(value => typeof value === "string" && path.isAbsolute(value) && !/[\x00-\x1f\x7f]/.test(value)).map(value => path.join(value, "System32"))
+    : (process.platform === "darwin" ? "/usr/bin:/bin:/usr/sbin:/sbin" : "/usr/bin:/bin").split(path.delimiter);
+  const dirs = [...new Set([path.dirname(codexPath), ...system])];
   env.PATH = dirs.join(path.delimiter);
   env.NO_COLOR = "1";
   return env;
 }
 
 async function resolveCodex(dependencies = {}) {
-  if (dependencies.codexPath) return path.resolve(dependencies.codexPath);
+  if (IS_WINDOWS) {
+    try { return await resolveCliInvocation({ name: "codex", override: dependencies.codexPath, fileIo: dependencies.fileIo ?? fs }); }
+    catch { reject("external-client-not-found"); }
+  }
+  if (dependencies.codexPath) return { executable: path.resolve(dependencies.codexPath), argsPrefix: [] };
   const io = dependencies.fileIo ?? fs, pathValue = process.env.PATH ?? "";
   for (const dir of pathValue.split(path.delimiter)) {
     if (!dir || !path.isAbsolute(dir)) continue;
     const candidate = path.join(dir, "codex");
     try {
       const resolved = await io.realpath(candidate), stat = await io.lstat(resolved);
-      if (stat.isFile() && !stat.isSymbolicLink() && !(stat.mode & 0o022) && (stat.uid === uid() || stat.uid === 0) && (stat.mode & 0o111)) return resolved;
+      if (stat.isFile() && !stat.isSymbolicLink() && !(stat.mode & 0o022) && (stat.uid === uid() || stat.uid === 0) && (stat.mode & 0o111)) return { executable: resolved, argsPrefix: [] };
     } catch {}
   }
   reject("external-client-not-found");
@@ -141,9 +153,9 @@ function localClientCommand(dependencies = {}) {
 
 async function inspectCodex(dependencies = {}) {
   if (dependencies.inspectCodex) return dependencies.inspectCodex();
-  const executable = await resolveCodex(dependencies), env = filteredEnv(process.env, executable), { run } = localClientCommand(dependencies);
+  const { executable, argsPrefix } = await resolveCodex(dependencies), env = filteredEnv(process.env, executable), { run } = localClientCommand(dependencies);
   const invoke = (argv, commandEnv = env) => {
-    const result = run(executable, argv, commandEnv);
+    const result = run(executable, [...argsPrefix, ...argv], commandEnv);
     if (result.error || result.status !== 0 || typeof result.stdout !== "string" || typeof result.stderr !== "string" ||
         Buffer.byteLength(result.stdout) + Buffer.byteLength(result.stderr) > 16384) reject("external-client-preflight-failed");
     return `${result.stdout}\n${result.stderr}`.trim();
@@ -166,11 +178,11 @@ async function inspectCodex(dependencies = {}) {
   const disable = [...features].filter(([key, enabled]) => enabled && CAPABILITY_FEATURES.has(key)).map(([key]) => key).sort();
   for (const required of REQUIRED_FEATURES) if (!disable.includes(required)) disable.push(required);
   disable.sort();
-  return { executable, version, authMethod: "chatgpt", account: "sesión ChatGPT autenticada en el perfil local de Codex; identidad, plan y cuota no consultados", disable };
+  return { executable, argsPrefix, version, authMethod: "chatgpt", account: "sesión ChatGPT autenticada en el perfil local de Codex; identidad, plan y cuota no consultados", disable };
 }
 
 function argvFor(info, model, effort, workspace, scratch) {
-  const argv = ["exec", "--sandbox", "read-only", "--ephemeral", "--ignore-user-config"];
+  const argv = [...(info.argsPrefix ?? []), "exec", "--sandbox", "read-only", "--ephemeral", "--ignore-user-config"];
   for (const feature of info.disable) argv.push("--disable", feature);
   argv.push("--config", 'approval_policy="never"', "--skip-git-repo-check", "--cd", workspace, "--model", model);
   if (effort) argv.push("--config", `model_reasoning_effort=${effort}`);
@@ -178,7 +190,7 @@ function argvFor(info, model, effort, workspace, scratch) {
   return argv;
 }
 
-function quoteShell(value) { return `'${value.replaceAll("'", "'\\''")}'`; }
+function quoteShell(value) { return `'${value.replaceAll("'", IS_WINDOWS ? "''" : "'\\''")}'`; }
 function nonce(bytes = 8) { return randomBytes(bytes).toString("hex"); }
 
 async function physical(io, full) {
@@ -186,16 +198,16 @@ async function physical(io, full) {
   if (!parts.length || parts.length > 80) reject("external-path-unsafe");
   let current = top, stat;
   for (const [index, part] of parts.entries()) {
-    current = path.join(current, part); stat = await io.lstat(current);
+    current = path.join(current, part); stat = await taskLstat(io, current);
     if (stat.isSymbolicLink() || index < parts.length - 1 && !stat.isDirectory()) reject("external-path-unsafe");
   }
   return stat;
 }
 
 async function verifyHandoff(io, handoff) {
-  if (!safeAbsolute(handoff) || forbiddenPath(handoff) || typeof uid() !== "number") reject("external-handoff-unsafe");
+  if (!safeAbsolute(handoff) || forbiddenPath(handoff) || (!IS_WINDOWS && typeof uid() !== "number")) reject("external-handoff-unsafe");
   const stat = await physical(io, handoff);
-  if (!stat.isDirectory() || stat.uid !== uid() || (stat.mode & 0o7777) !== 0o700) reject("external-handoff-unsafe");
+  if (!stat.isDirectory() || (!IS_WINDOWS && (stat.uid !== uid() || (stat.mode & 0o7777) !== 0o700))) reject("external-handoff-unsafe");
   return stat;
 }
 
@@ -208,7 +220,7 @@ async function validateDeliveryParent(io, handoff, delivery) {
   const full = path.resolve(handoff, delivery), relative = path.relative(handoff, full);
   if (!relative || relative.startsWith(".." + path.sep) || path.isAbsolute(relative) || forbiddenPath(full)) reject("external-delivery-path");
   const parent = path.dirname(full), stat = await physical(io, parent);
-  if (!stat.isDirectory() || stat.uid !== uid() || stat.mode & 0o7022) reject("external-delivery-parent-unsafe");
+  if (!stat.isDirectory() || (!IS_WINDOWS && (stat.uid !== uid() || stat.mode & 0o7022))) reject("external-delivery-parent-unsafe");
   try { await io.lstat(full); reject("external-delivery-exists"); }
   catch (e) { if (e?.code !== "ENOENT") throw e; }
   return full;
@@ -218,16 +230,16 @@ async function readStableFile(io, full, maxBytes, { allowEmpty = true, privateOn
   let before;
   try { before = await physical(io, full); } catch (e) { reject(e?.code === "external-path-unsafe" ? e.code : "external-file-unreadable"); }
   const safe = s => {
-    if (!s.isFile() || s.isSymbolicLink() || s.uid !== uid() || s.nlink !== 1 || (s.mode & 0o7022)) reject("external-file-unsafe");
-    if (privateOnly && (s.mode & 0o7777) !== 0o600) reject("external-file-unsafe");
+    if (!s.isFile() || s.isSymbolicLink() || s.nlink !== 1 || (!IS_WINDOWS && (s.uid !== uid() || (s.mode & 0o7022)))) reject("external-file-unsafe");
+    if (!IS_WINDOWS && privateOnly && (s.mode & 0o7777) !== 0o600) reject("external-file-unsafe");
     if ((!allowEmpty && s.size < 1) || s.size > maxBytes) reject("external-file-limit");
   };
   safe(before);
   let handle;
-  try { handle = await io.open(full, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK); }
+  try { handle = await io.open(full, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)); }
   catch { reject("external-file-unreadable"); }
   try {
-    const start = await handle.stat(); safe(start);
+    const start = await taskHandleStat(handle); safe(start);
     if (signature(start) !== signature(before)) reject("external-file-changed");
     const bytes = Buffer.alloc(before.size); let offset = 0;
     while (offset < before.size) {
@@ -235,7 +247,7 @@ async function readStableFile(io, full, maxBytes, { allowEmpty = true, privateOn
       if (!bytesRead || bytesRead < 0) reject("external-file-changed");
       offset += bytesRead;
     }
-    const after = await handle.stat(), named = await io.lstat(full);
+    const after = await taskHandleStat(handle), named = await taskLstat(io, full);
     if (signature(after) !== signature(before) || signature(named) !== signature(before)) reject("external-file-changed");
     await physical(io, full);
     return bytes;
@@ -244,12 +256,12 @@ async function readStableFile(io, full, maxBytes, { allowEmpty = true, privateOn
 
 async function writePrivate(io, full, bytes) {
   let handle;
-  try { handle = await io.open(full, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
+  try { handle = await io.open(full, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600); }
   catch { reject("external-private-write-failed"); }
   try { await handle.writeFile(bytes); await handle.sync(); }
   finally { await handle.close(); }
-  const stat = await io.lstat(full);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.uid !== uid() || stat.nlink !== 1 || (stat.mode & 0o7077)) reject("external-private-write-failed");
+  const stat = await taskLstat(io, full);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || (!IS_WINDOWS && (stat.uid !== uid() || (stat.mode & 0o7077)))) reject("external-private-write-failed");
 }
 
 async function verifyContract(data, handoff, phase, dependencies, deliveryEntry = null) {
@@ -354,7 +366,7 @@ async function preview(values, io, dependencies, showPrompt) {
       previousDeliveries: data.task.previousDeliveries, proposalRef: data.task.proposalRef, projectRules: data.task.projectRules,
       scope: { included: data.task.scope.included, excluded: data.task.scope.excluded, files: data.task.scope.files }, criteria: data.task.criteria },
     model: summary.recommended.requestedModel, effort: summary.recommended.effort,
-    client: { executable: info.executable, version: info.version, authMethod: info.authMethod, account: info.account, disable: info.disable }, argv };
+    client: { executable: info.executable, ...(info.argsPrefix?.length ? { argsPrefix: info.argsPrefix } : {}), version: info.version, authMethod: info.authMethod, account: info.account, disable: info.disable }, argv };
   const ticketBytes = Buffer.from(JSON.stringify(ticket) + "\n");
   if (ticketBytes.length > TASK_LIMITS.fileBytes) reject("external-ticket-limit");
   await writePrivate(f, ticketPath, ticketBytes);
@@ -369,7 +381,7 @@ async function preview(values, io, dependencies, showPrompt) {
     "El modo read-only impide escritura del agente; las herramientas de shell, subagentes, plugins, apps y capacidades de red/imagen disponibles se desactivan.",
     "El Toolkit no consulta identidad, plan, cuota ni llamadas internas. Ejecutar puede consumir uso de la sesión ChatGPT indicada.",
     "ARGV exacto del cliente (el prompt se envía por stdin, sin shell):", JSON.stringify([info.executable, ...argv], null, 2),
-    "Comando exacto para confirmar y ejecutar una sola vez:", runArgs.map(quoteShell).join(" "),
+    "Comando exacto para confirmar y ejecutar una sola vez:", (IS_WINDOWS ? "& " : "") + runArgs.map(quoteShell).join(" "),
     "No ejecutes ese comando hasta aprobar esta vista previa. El ticket vence en 20 minutos y no se puede reutilizar."];
   try { await io.out(lines.join("\n") + "\n"); }
   catch (e) { await f.unlink(ticketPath).catch(() => {}); throw e; }
@@ -400,6 +412,7 @@ async function readTicket(pathname, expect, confirm, dependencies) {
       ticket.effort !== null && ticket.effort !== undefined && !["low", "medium", "high", "xhigh"].includes(ticket.effort)) reject("external-ticket-invalid");
   const currentInfo = await inspectCodex(dependencies); validateInfo(currentInfo);
   if (currentInfo.executable !== ticket.client.executable || currentInfo.version !== ticket.client.version ||
+      JSON.stringify(currentInfo.argsPrefix ?? []) !== JSON.stringify(ticket.client.argsPrefix ?? []) ||
       currentInfo.authMethod !== ticket.client.authMethod || currentInfo.account !== ticket.client.account ||
       JSON.stringify(currentInfo.disable) !== JSON.stringify(ticket.client.disable)) reject("external-account-changed");
   const expectedArgv = argvFor(currentInfo, ticket.model, ticket.effort, ticket.workspace, ticket.scratch);
@@ -411,12 +424,12 @@ async function readTicket(pathname, expect, confirm, dependencies) {
 
 async function saveDelivery(io, full, bytes) {
   let handle;
-  try { handle = await io.open(full, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600); }
+  try { handle = await io.open(full, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0), 0o600); }
   catch { reject("external-delivery-write-failed"); }
   try { await handle.writeFile(bytes); await handle.sync(); }
   finally { await handle.close(); }
-  const stat = await io.lstat(full);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.uid !== uid() || stat.nlink !== 1 || (stat.mode & 0o7777) !== 0o600) reject("external-delivery-write-failed");
+  const stat = await taskLstat(io, full);
+  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1 || (!IS_WINDOWS && (stat.uid !== uid() || (stat.mode & 0o7777) !== 0o600))) reject("external-delivery-write-failed");
 }
 
 async function createWorkspace(io, full) {
@@ -425,8 +438,8 @@ async function createWorkspace(io, full) {
   try { await io.mkdir(full, { mode: 0o700 }); } catch { reject("external-workspace-unsafe"); }
   let resolved;
   try { resolved = await io.realpath(full); } catch { reject("external-workspace-unsafe"); }
-  const stat = await io.lstat(full);
-  if (resolved !== full || !stat.isDirectory() || stat.isSymbolicLink() || stat.uid !== uid() || (stat.mode & 0o7777) !== 0o700) {
+  const stat = await taskLstat(io, full);
+  if (resolved !== full || !stat.isDirectory() || stat.isSymbolicLink() || (!IS_WINDOWS && (stat.uid !== uid() || (stat.mode & 0o7777) !== 0o700))) {
     reject("external-workspace-unsafe");
   }
   return { dev: stat.dev, ino: stat.ino, uid: stat.uid, mode: stat.mode };
@@ -435,7 +448,7 @@ async function createWorkspace(io, full) {
 async function removeWorkspace(io, full, pinned) {
   if (!pinned) return;
   let stat;
-  try { stat = await io.lstat(full); } catch { reject("external-workspace-cleanup-required"); }
+  try { stat = await taskLstat(io, full); } catch { reject("external-workspace-cleanup-required"); }
   if (!stat.isDirectory() || stat.isSymbolicLink() || stat.dev !== pinned.dev || stat.ino !== pinned.ino ||
       stat.uid !== pinned.uid || stat.mode !== pinned.mode) reject("external-workspace-cleanup-required");
   try { if ((await io.readdir(full)).length) reject("external-workspace-cleanup-required"); await io.rmdir(full); }
@@ -447,11 +460,11 @@ async function invokeCodex(ticket, dependencies) {
   const env = filteredEnv(process.env, ticket.client.executable), args = ticket.argv;
   return await new Promise((resolve, rejectPromise) => {
     let child;
-    try { child = spawn(ticket.client.executable, args, { shell: false, detached: true, cwd: ticket.workspace,
+    try { child = spawn(ticket.client.executable, args, { shell: false, detached: !IS_WINDOWS, windowsHide: true, cwd: ticket.workspace,
       env, stdio: ["pipe", "pipe", "pipe"] }); }
     catch { rejectPromise(Object.assign(new Error("External process rejected"), { code: "external-client-start-failed" })); return; }
     let done = false, timedOut = false, overflow = false, interrupted = false, canceling = false;
-    let stdoutBytes = 0, stderrBytes = 0, exitCode = null, timer, killTimer, settled = false;
+    let stdoutBytes = 0, stderrBytes = 0, exitCode = null, timer, killTimer, settled = false, treeUnconfirmed = false;
     const terminate = signal => { if (!child.pid) return; try { kill(-child.pid, signal); } catch {} };
     const finish = (error = null) => {
       if (done) return; done = true; clearTimeout(timer); clearTimeout(killTimer);
@@ -462,11 +475,30 @@ async function invokeCodex(ticket, dependencies) {
     const cancel = () => {
       if (!child.pid || canceling) return;
       canceling = true;
+      if (IS_WINDOWS) {
+        const systemRoot = process.env.SystemRoot ?? process.env.SYSTEMROOT;
+        const ownChild = Number.isSafeInteger(child.pid) && child.pid > 0 && child.exitCode === null && child.signalCode === null && child.spawnfile === ticket.client.executable &&
+          JSON.stringify(child.spawnargs) === JSON.stringify([ticket.client.executable, ...args]);
+        let result;
+        if (ownChild && typeof systemRoot === "string" && path.isAbsolute(systemRoot)) {
+          try { result = (dependencies.runTaskkill ?? spawnSync)(path.join(systemRoot, "System32", "taskkill.exe"),
+            ["/PID", String(child.pid), "/T", "/F"], { shell: false, windowsHide: true, timeout: 5000, stdio: "ignore" }); }
+          catch {}
+        }
+        treeUnconfirmed = !result || result.error || result.status !== 0;
+        if (treeUnconfirmed) {
+          // The immediate child handle is ours, but that does not prove its descendants stopped.
+          try { child.kill("SIGKILL"); } catch {}
+        }
+        killTimer = setTimeout(() => finish(Object.assign(new Error("External process rejected"), { code: "external-process-tree-unconfirmed" })), EXTERNAL_VERIFIER_LIMITS.killGraceMs);
+        return;
+      }
       terminate("SIGTERM");
       killTimer = setTimeout(() => terminate("SIGKILL"), EXTERNAL_VERIFIER_LIMITS.killGraceMs);
     };
     const onInterrupt = () => { interrupted = true; cancel(); };
     const groupAlive = () => {
+      if (IS_WINDOWS) return false; // Negative-PID process groups are a POSIX mechanism.
       if (!child.pid) return false;
       try { kill(-child.pid, 0); return true; }
       catch (e) { return e?.code !== "ESRCH"; }
@@ -481,7 +513,8 @@ async function invokeCodex(ticket, dependencies) {
         if (groupAlive()) { terminate("SIGKILL"); await new Promise(resolve => setTimeout(resolve, 100)); }
         if (groupAlive()) { finish(Object.assign(new Error("External process rejected"), { code: "external-process-tree-unconfirmed" })); return; }
       }
-      if (timedOut) finish(Object.assign(new Error("External process rejected"), { code: "external-client-timeout" }));
+      if (treeUnconfirmed) finish(Object.assign(new Error("External process rejected"), { code: "external-process-tree-unconfirmed" }));
+      else if (timedOut) finish(Object.assign(new Error("External process rejected"), { code: "external-client-timeout" }));
       else if (overflow) finish(Object.assign(new Error("External process rejected"), { code: "external-client-output-limit" }));
       else if (interrupted) finish(Object.assign(new Error("External process rejected"), { code: "external-client-canceled" }));
       else finish();
@@ -537,6 +570,7 @@ async function runTicket(values, io, dependencies) {
 
 /** Local preview and one-shot, user-confirmed Codex adapter. No inference occurs during preview. */
 export async function runExternalVerifierCli(args, io, dependencies = {}) {
+  warnPlatformPermissions();
   const fail = async code => { try { await io.err(`agent-task external-verifier: ${code}\n`); } catch {} return 2; };
   let options;
   try { options = cliOptions(args); } catch { return fail("external-invalid-option"); }

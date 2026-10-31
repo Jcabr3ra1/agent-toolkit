@@ -20,7 +20,7 @@
           "type": "object", "additionalProperties": false,
           "required": ["platform", "nodeVersion", "filesystem", "synchronized", "evidenceRef"],
           "properties": {
-            "platform": { "const": "darwin" }, "nodeVersion": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+            "platform": { "enum": ["darwin", "linux"] }, "nodeVersion": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
             "filesystem": { "const": "local" }, "synchronized": { "const": false }, "evidenceRef": { "$ref": "#/$defs/id" }
           }
         }

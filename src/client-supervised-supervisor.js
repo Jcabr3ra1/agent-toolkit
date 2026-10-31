@@ -1,3 +1,4 @@
+import { supportsLocalPosix } from "./client-local-platform.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -24,7 +25,7 @@ export function createSupervisedSupervisor(schema, dependencies = {}) {
     let cwd, owned, spawnReturned = false, attempted = false;
     try {
       const d = contract.request(input), l = d.limits;
-      if (process.platform !== "darwin" || process.arch !== "arm64") fail("supervised-platform-not-admitted");
+      if (!supportsLocalPosix(process.platform)) fail("supervised-platform-not-admitted");
       if (!Number.isFinite(beganAt) || beganAt > mono()) fail("supervised-invalid-deadline");
       const budget = () => {
         if (signal?.aborted) fail("supervised-canceled-before-start");

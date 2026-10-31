@@ -92,6 +92,11 @@ También puedes ejecutar `node bin/<cli>.js` desde el clon. Para desvincularlo:
 `assets/runtime/package-lock.json` para el verificador experimental; no la edites.
 El paquete usa `UNLICENSED`; las licencias de recursos de terceros se conservan.
 
+### Seguridad en Windows
+
+En Windows se omiten las comprobaciones de propietario y modos POSIX; se usan los permisos del usuario actual.
+Define `AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS=1` para silenciar el aviso de plataforma.
+
 ## Instala las skills y comprueba tu equipo
 
 ```bash

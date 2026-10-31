@@ -1,3 +1,4 @@
+import { IS_WINDOWS, warnPlatformPermissions, toGitPath } from './platform.js';
 import fs from "node:fs/promises";
 import { constants } from "node:fs";
 import os from "node:os";
@@ -22,8 +23,8 @@ export class MemoryMcpError extends Error {
 }
 const fail = (code, fatal = false) => { throw new MemoryMcpError(code, fatal); };
 const control = /[\x00-\x1f\x7f-\x9f\u202a-\u202e\u2066-\u2069]/u;
-const forbidden = value => isCredentialPath(value) ||
-  /(?:^|\/)(?:\.git|\.obsidian|\.codex|\.claude|\.gemini|\.agents|\.secrets|\.credentials|\.npmrc|\.netrc|\.envrc)(?:\/|$)/i.test(value) || /\.(?:keychain(?:-db)?|kdbx)$/i.test(value);
+const forbidden = input => { const value = toGitPath(input); return isCredentialPath(value) ||
+  /(?:^|\/)(?:\.git|\.obsidian|\.codex|\.claude|\.gemini|\.agents|\.secrets|\.credentials|\.npmrc|\.netrc|\.envrc)(?:\/|$)/i.test(value) || /\.(?:keychain(?:-db)?|kdbx)$/i.test(value); };
 const globCase = value => value.replace(/[a-z]/g, c => `[${c}${c.toUpperCase()}]`);
 const recursiveExclusions = Object.freeze([
   ".git", ".obsidian", ".codex", ".claude", ".gemini", ".agents", ".secrets", ".credentials",
@@ -53,7 +54,7 @@ const identity = s => JSON.stringify([s.dev, s.ino, s.uid, s.mode]);
 const fileIdentity = s => JSON.stringify([s.dev, s.ino, s.uid, s.mode, s.nlink, s.size, s.mtimeMs, s.ctimeMs]);
 const inside = (root, target) => { const rel = path.relative(root, target); return rel === "" || (!path.isAbsolute(rel) && rel !== ".." && !rel.startsWith(".." + path.sep)); };
 const canonical = value => typeof value === "string" && value.length > 0 && value.length <= MEMORY_MCP_LIMITS.pathChars &&
-  value === value.trim() && !control.test(value) && path.isAbsolute(value) && path.normalize(value) === value &&
+  value === value.trim() && !control.test(value) && (!IS_WINDOWS || !value.slice(path.parse(value).root.length).includes(':') && !/^\\\\[?.]\\/u.test(value)) && path.isAbsolute(value) && path.normalize(value) === value &&
   value.split(path.sep).every(part => part !== "." && part !== "..");
 
 async function physical(io, full) {
@@ -67,14 +68,16 @@ async function physical(io, full) {
   return last;
 }
 function safe(s, uid, directory) {
-  if (s.uid !== uid || (s.mode & 0o7022) || s.isSymbolicLink() ||
+  if ((!IS_WINDOWS && (s.uid !== uid || (s.mode & 0o7022))) || s.isSymbolicLink() ||
     (directory ? !s.isDirectory() : !s.isFile() || s.nlink !== 1)) fail("RG_PATH_DENIED");
 }
 
 /** The only file content read here is the explicitly supplied manifest. */
 export async function loadMemoryPolicy(manifestPath, context = {}) {
   const io = { ...fs, ...context.io }, uid = context.uid ?? process.getuid?.();
-  if (!["darwin", "linux"].includes(context.platform ?? process.platform) || typeof uid !== "number") fail("RG_PLATFORM_UNSUPPORTED");
+  const platform = context.platform ?? process.platform;
+  if (!["darwin", "linux", "win32"].includes(platform) || platform !== "win32" && typeof uid !== "number") fail("RG_PLATFORM_UNSUPPORTED");
+  warnPlatformPermissions();
   if (!canonical(manifestPath) || forbidden(manifestPath)) fail("RG_MANIFEST_INVALID");
   let manifest;
   try {
@@ -95,7 +98,7 @@ export async function loadMemoryPolicy(manifestPath, context = {}) {
     if (!(await getManifestValidator())(manifest) || manifest.security.mcpAccess !== "read-only" || containsSensitiveData(JSON.stringify(manifest))) fail("RG_MANIFEST_INVALID");
     const root = path.resolve(path.dirname(manifestPath), manifest.memory.vaultPath);
     const source = await io.realpath(path.resolve(path.dirname(manifestPath), manifest.source.repositoryPath));
-    if (!canonical(root) || forbidden(root) || root === path.parse(root).root || root === (context.home ?? os.homedir()) ||
+    if (!canonical(root) || forbidden(root) || root === path.parse(root).root || path.relative(root, context.home ?? os.homedir()) === "" ||
       inside(root, source) || inside(source, root)) fail("RG_ROOT_DENIED");
     if (!(await io.lstat(source)).isDirectory()) fail("RG_ROOT_DENIED");
     const stat = await physical(io, root); safe(stat, uid, true);
@@ -124,7 +127,7 @@ export async function validateMemoryCall(policy, name, args, context = {}) {
     try {
       const s = await physical(io, full), directory = !fileRead && name !== "get_file_info" || s.isDirectory();
       safe(s, policy.uid, directory);
-      if (fileRead && (!s.isFile() || !(s.mode & 0o400))) fail("RG_PATH_DENIED");
+      if (fileRead && (!s.isFile() || !IS_WINDOWS && !(s.mode & 0o400))) fail("RG_PATH_DENIED");
       if (fileRead) { total += s.size; if (s.size > MEMORY_MCP_LIMITS.fileBytes || total > MEMORY_MCP_LIMITS.totalBytes) fail("RG_READ_LIMIT"); }
       snapshots.push({ path: full, signature: fileIdentity(s) });
     } catch (error) { if (error instanceof MemoryMcpError) throw error; fail("RG_PATH_DENIED"); }

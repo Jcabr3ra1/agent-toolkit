@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import Ajv2020 from "ajv/dist/2020.js";
+import { IS_WINDOWS } from "./platform.js";
+import { resolveCliInvocation } from "./cli-executable.js";
 
 const SOURCE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_SCHEMA_PATH = path.resolve(
@@ -45,7 +47,7 @@ const ADAPTERS = Object.freeze({
 
 export async function connectMemory(options, context = {}) {
   const config = loadConfig(options, context);
-  const runner = context.runCommand ?? runCommand;
+  const runner = context.runCommand ?? (IS_WINDOWS ? await windowsCommandRunner(config.agentId) : runCommand);
   const skill = inspectSkill(config);
   const connection = inspectConnection(config, runner);
   const components = [skill, ...connection.components];
@@ -200,7 +202,7 @@ function inspectSkill(config) {
       message: "El destino es un enlace simbólico roto."
     };
   }
-  if (currentSource !== config.skillSource) {
+  if (!samePath(currentSource, config.skillSource)) {
     return {
       id: "skill",
       action: "conflict",
@@ -377,7 +379,7 @@ function applySkill(skill) {
     return false;
   }
   fs.mkdirSync(path.dirname(skill.path), { recursive: true });
-  fs.symlinkSync(skill.source, skill.path, "dir");
+  fs.symlinkSync(path.resolve(skill.source), skill.path, IS_WINDOWS ? "junction" : "dir");
   return true;
 }
 
@@ -456,7 +458,7 @@ function outputMatchesFilesystemServer(output, config) {
 
 function argsMatchFilesystem(args, vaultPath) {
   const values = Array.isArray(args) ? args : splitCommandArguments(args);
-  if (values.length !== 3 || values[0] !== "-y" || values[2] !== vaultPath) {
+  if (values.length !== 3 || values[0] !== "-y" || !samePath(values[2], vaultPath)) {
     return false;
   }
   return (
@@ -469,11 +471,15 @@ function isSymbolicLinkTo(candidate, expectedSource) {
   try {
     return (
       fs.lstatSync(candidate).isSymbolicLink() &&
-      fs.realpathSync(candidate) === expectedSource
+      samePath(fs.realpathSync(candidate), fs.realpathSync(expectedSource))
     );
   } catch {
     return false;
   }
+}
+
+function samePath(left, right) {
+  return IS_WINDOWS ? path.resolve(left).toLowerCase() === path.resolve(right).toLowerCase() : left === right;
 }
 
 function splitCommandArguments(value) {
@@ -541,13 +547,23 @@ function mergeUnique(current, additions) {
 }
 
 function runCommand(command, args) {
-  const result = spawnSync(command, args, { encoding: "utf8" });
+  const result = spawnSync(command, args, { encoding: "utf8", shell: false });
   return {
     status: result.status,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? "",
     errorCode: result.error?.code
   };
+}
+
+async function windowsCommandRunner(name) {
+  let invocation;
+  try { invocation = await resolveCliInvocation({ name }); }
+  catch (error) {
+    if (error.code === "ENOENT") return () => ({ status: null, stdout: "", stderr: "", errorCode: "ENOENT" });
+    throw new ConnectionError([error instanceof Error ? error.message : String(error)]);
+  }
+  return (_command, args) => runCommand(invocation.executable, [...invocation.argsPrefix, ...args]);
 }
 
 function requireSuccess(result, message) {

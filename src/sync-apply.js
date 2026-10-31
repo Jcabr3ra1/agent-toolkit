@@ -9,7 +9,7 @@ import { containsSensitiveData } from "./sensitive-data.js";
 import { APPLY_LIMITS, parseProposal, proposalPlanId } from "./sync-proposal.js";
 import { collectMemoryNotes, noteUnifiedDiff, validateNoteText, validateVirtualMemory } from "./sync-markdown.js";
 import { SyncFileError, SYNC_LEDGER, assertOwnedArtifact, assertSameState, decodeUtf8, hashBytes,
-  memoryPath, physicalFile, readSyncFile, rejectFile, requireRegularGitFile, requireVisibleGitFiles,
+  memoryPath, normalizeSyncText, physicalFile, readSyncFile, rejectFile, relativeGitPath, requireRegularGitFile, requireVisibleGitFiles, sameSyncText,
   syncGit, syncGitState, syncWriteLockPath } from "./sync-files.js";
 
 const ACK_CODES = new Set(["text-limit", "unsafe-reference"]);
@@ -69,7 +69,7 @@ async function prepareApply(input, context) {
   const git = syncGitState(vault); requireVisibleGitFiles(vault); requireRegularGitFile(vault, SYNC_LEDGER);
   if (git.head !== proposal.memoryHead || git.branch !== manifest.memory?.repositoryBranch) rejectFile("memory-version", "HEAD o la rama de memoria no coinciden con la propuesta.");
   const ledgerHead = syncGit(vault, ["show", `HEAD:${SYNC_LEDGER}`]), ledgerIndex = syncGit(vault, ["show", `:${SYNC_LEDGER}`]);
-  if (hashBytes(ledgerHead) !== ledgerFile.hash || !ledgerHead.equals(ledgerIndex)) rejectFile("dirty-ledger", "El registro debe estar limpio en HEAD, staging y disco.");
+  if (!sameSyncText(decodeUtf8(ledgerHead), ledgerFile.text) || !ledgerHead.equals(ledgerIndex)) rejectFile("dirty-ledger", "El registro debe estar limpio en HEAD, staging y disco.");
   const catalog = collectMemoryNotes(vault), areas = manifest.memory?.layout?.profile === "declared" ? manifest.memory.layout.requiredDirectories : AREAS;
   let originalBytes = 0;
   const notes = proposal.notes.map((note) => {
@@ -81,10 +81,13 @@ async function prepareApply(input, context) {
     originalBytes += head.length;
     if (head.length > APPLY_LIMITS.note || originalBytes > APPLY_LIMITS.totalNotes) rejectFile("notes-limit", "Las versiones originales superan el límite.", "blocked");
     if (hashBytes(head) !== note.beforeSha256 || !head.equals(index)) rejectFile("note-version", "La versión original o staging de una nota no coinciden.");
-    const original = decodeUtf8(head), bytes = Buffer.from(note.content), afterHash = hashBytes(bytes);
-    validateNoteText(original); validateNoteText(note.content, original);
-    if (afterHash === note.beforeSha256) rejectFile("no-note-change", "Una nota propuesta no introduce ningún cambio.", "blocked");
-    if (file.hash !== note.beforeSha256 && file.hash !== afterHash) rejectFile("note-conflict", "Una nota contiene cambios diferentes de la propuesta.");
+    const headText = decodeUtf8(head), bytes = Buffer.from(note.content), afterHash = hashBytes(bytes);
+    validateNoteText(headText); validateNoteText(file.text);
+    // Keep the existing worktree's line endings even when Git stores LF.
+    const original = file.text.includes("\r\n") ? normalizeSyncText(headText).replaceAll("\n", "\r\n") : normalizeSyncText(headText);
+    validateNoteText(note.content, original);
+    if (sameSyncText(headText, note.content)) rejectFile("no-note-change", "Una nota propuesta no introduce ningún cambio.", "blocked");
+    if (!sameSyncText(file.text, headText) && file.hash !== afterHash) rejectFile("note-conflict", "Una nota contiene cambios diferentes de la propuesta.");
     return { ...note, file, original, bytes, afterHash, satisfied: file.hash === afterHash };
   });
   if (git.changes.some((change) => change.state !== " M" || !notes.some((n) => n.path === change.path && n.satisfied))) rejectFile("foreign-changes", "Hay staging o cambios locales ajenos a las notas satisfechas.");
@@ -159,7 +162,7 @@ function writeNotes({ vault, notes, before, capture, report }, context) {
     check();
     const fd = io.openSync(lockPath, "wx", 0o600);
     try { lock = fs.fstatSync(fd); } finally { fs.closeSync(fd); }
-    artifacts.push({ path: lockPath, stat: lock }); ignored.push(path.relative(vault, lockPath));
+    artifacts.push({ path: lockPath, stat: lock }); ignored.push(relativeGitPath(vault, lockPath));
     check();
     const pending = notes.filter((n) => !n.satisfied), temps = new Map();
     // Prepare every complete replacement before performing the first rename.
@@ -168,7 +171,7 @@ function writeNotes({ vault, notes, before, capture, report }, context) {
       const temp = path.join(path.dirname(note.file.path), `.project-memory-sync-apply-${randomUUID()}.tmp`);
       const fd = io.openSync(temp, "wx", 0o600); let stat;
       try {
-        stat = fs.fstatSync(fd); artifacts.push({ path: temp, stat }); ignored.push(path.relative(vault, temp));
+        stat = fs.fstatSync(fd); artifacts.push({ path: temp, stat }); ignored.push(relativeGitPath(vault, temp));
         io.writeFileSync(fd, note.bytes); io.fchmodSync(fd, note.file.mode); io.fsyncSync(fd);
       } finally { fs.closeSync(fd); }
       assertOwnedArtifact(temp, stat);

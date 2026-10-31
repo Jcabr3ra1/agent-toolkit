@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { IS_WINDOWS, warnPlatformPermissions } from "./platform.js";
 
 export const PEER_LIMITS = Object.freeze({ contextBytes: 8_000, reportBytes: 16_000, promptBytes: 32_000,
   paths: 64, fileBytes: 2_000_000, snapshotBytes: 8_000_000, reviews: 16, history: 16, recordBytes: 1_000_000, autoReviews: 8 });
@@ -41,18 +42,19 @@ const fail = code => { throw new PeerReviewError(code); };
 const hash = value => createHash("sha256").update(value).digest("hex");
 const text = (value, max, required = true) => typeof value === "string" && Buffer.byteLength(value) <= max &&
   (!required || Boolean(value.trim())) && !CONTROL.test(value);
-const own = stat => typeof process.getuid !== "function" || stat.uid === BigInt(process.getuid());
+const own = stat => IS_WINDOWS || typeof process.getuid !== "function" || stat.uid === BigInt(process.getuid());
 const identity = stat => ({ device: String(stat.dev), inode: String(stat.ino) });
 const sameIdentity = (a, b) => a.device === b.device && a.inode === b.inode;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 async function project(value) {
+  warnPlatformPermissions();
   if (!text(value, 4096) || !path.isAbsolute(value) || path.normalize(value) !== value) fail("project");
   try {
-    const root = await fs.realpath(value);
-    const home = await fs.realpath(os.homedir());
+    const root = path.normalize(await fs.realpath(value));
+    const home = path.normalize(await fs.realpath(os.homedir()));
     const stat = await fs.lstat(root, { bigint: true });
-    if (!stat.isDirectory() || !own(stat) || (stat.mode & 0o022n) || root === path.parse(root).root ||
+    if (!stat.isDirectory() || stat.isSymbolicLink() || !own(stat) || (!IS_WINDOWS && (stat.mode & 0o022n)) || root === path.parse(root).root ||
         root === home || [".claude", ".codex", ".ssh", ".aws"].some(name => root === path.join(home, name))) fail("project");
     return { root, ...identity(stat) };
   } catch { fail("project"); }
@@ -164,7 +166,7 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     try {
       await fs.mkdir(storageRoot, { recursive: true, mode: 0o700 });
       const stat = await fs.lstat(storageRoot, { bigint: true });
-      if (!stat.isDirectory() || stat.isSymbolicLink() || !own(stat) || (stat.mode & 0o077n)) fail("storage");
+      if (!stat.isDirectory() || stat.isSymbolicLink() || !own(stat) || (!IS_WINDOWS && (stat.mode & 0o077n))) fail("storage");
       return await fs.realpath(storageRoot);
     } catch { fail("storage"); }
   }
@@ -173,9 +175,12 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
     const name = path.join(directory, filename(id));
     let handle;
     try {
+      const named = await fs.lstat(name, { bigint: true });
+      if (!named.isFile() || named.isSymbolicLink() || named.nlink !== 1n) fail("storage");
       handle = await fs.open(name, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
       const stat = await handle.stat({ bigint: true });
-      if (!stat.isFile() || !own(stat) || stat.nlink !== 1n || (stat.mode & 0o077n) || stat.size > BigInt(PEER_LIMITS.recordBytes)) fail("storage");
+      if (!stat.isFile() || !own(stat) || stat.nlink !== 1n || (!IS_WINDOWS && (stat.mode & 0o077n)) ||
+          stat.dev !== named.dev || stat.ino !== named.ino || stat.size > BigInt(PEER_LIMITS.recordBytes)) fail("storage");
       const buffer = Buffer.alloc(Number(stat.size) + 1);
       let size = 0;
       while (size < buffer.length) {
@@ -184,6 +189,11 @@ export function createPeerReviewStore({ root, now = Date.now, lockTimeoutMs = 5_
         size += chunk.bytesRead;
       }
       if (size !== Number(stat.size)) fail("storage");
+      const after = await handle.stat({ bigint: true });
+      const current = await fs.lstat(name, { bigint: true });
+      if (!current.isFile() || current.isSymbolicLink() || current.nlink !== 1n ||
+          current.dev !== stat.dev || current.ino !== stat.ino || after.nlink !== 1n ||
+          after.size !== stat.size || after.mtimeNs !== stat.mtimeNs || after.ctimeNs !== stat.ctimeNs) fail("storage");
       const record = JSON.parse(buffer.subarray(0, size).toString("utf8"));
       if (record.schemaVersion !== 1 || record.kind !== "peer-review" || record.id !== id || !record.project?.root ||
           !Number.isInteger(record.revision) || record.revision < 1 || !record.context ||

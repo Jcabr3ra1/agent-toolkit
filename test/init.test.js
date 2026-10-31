@@ -155,11 +155,11 @@ test("rechaza identificadores de un solo carácter", (context) => {
 
 test(
   "resuelve enlaces simbólicos antes de separar fuente y memoria",
-  { skip: process.platform === "win32" },
+  {},
   (context) => {
     const fixture = createFixture(context);
     const alias = path.join(fixture.root, "source-alias");
-    fs.symlinkSync(fixture.source, alias, "dir");
+    fs.symlinkSync(fixture.source, alias, process.platform === "win32" ? "junction" : "dir");
 
     assert.throws(
       () =>

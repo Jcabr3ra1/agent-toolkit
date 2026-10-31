@@ -16,7 +16,7 @@ const BASE = { task: read("../examples/task-prepare/task.example.json"), ...Obje
 const EXTERNAL_VERIFIER = Object.fromEntries(["task", "request", "catalog", "policy"].map(n => [n, read(`../examples/external-verifier/${n}.example.json`)]));
 const schemas = ["agent-task-prepare", "agent-model-selection", "agent-model-preference"].map(n => read(`../schemas/${n}.schema.json`));
 const core = createTaskPreparer(...schemas), bin = fileURLToPath(new URL("../bin/agent-task.js", import.meta.url));
-const names = ["task", "request", "catalog", "policy"], localTest = (name, fn) => test(name, { skip: !["darwin", "linux"].includes(process.platform) }, fn);
+const names = ["task", "request", "catalog", "policy"], localTest = test;
 function capture() { const out = [], err = []; return { out, err, io: { out: t => out.push(t), err: t => err.push(t) } }; }
 async function fixture(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-task-test-"))); await fs.chmod(root, 0o700); const owner = await fs.lstat(root);
@@ -71,13 +71,13 @@ localTest("TP duplicate options, mutually exclusive formats and missing values r
 localTest("TP only four input contents read; all task references and Git/HOME paths untouched", async t => {
   const f = await fixture(t); const seen = [], c = capture();
   const code = await runTaskCli(f.argv, c.io, { fileIo: { async open(full, flags) { seen.push(full); assert.ok(Object.values(f.paths).includes(full)); return fs.open(full, flags); },
-    async lstat(full) { assert.doesNotMatch(full, /fictitious|memory\/Inicio|AGENTS\.md/); return fs.lstat(full); } } });
+    async lstat(full, options) { assert.doesNotMatch(full, /fictitious|memory\/Inicio|AGENTS\.md/); return fs.lstat(full, options); } } });
   assert.equal(code, 0); assert.deepEqual(seen, names.map(n => f.paths[n]));
 });
 localTest("TP byte hashes differ from canonical JSON hashes; each descriptor closes", async t => {
   const f = await fixture(t); let opens = 0, closes = 0;
   const result = await readTaskInputs(f.paths, f.root, { io: { async open(...args) { opens++; const h = await fs.open(...args); return {
-    stat: () => h.stat(), read: (...a) => h.read(...a), close: async () => { closes++; return h.close(); }
+    stat: (...args) => h.stat(...args), read: (...a) => h.read(...a), close: async () => { closes++; return h.close(); }
   }; } } });
   assert.equal(opens, 4); assert.equal(closes, 4);
   for (const n of names) assert.equal(result.byteHashes[n], createHash("sha256").update(await fs.readFile(f.paths[n])).digest("hex"));
@@ -87,9 +87,10 @@ localTest("TP byte hashes differ from canonical JSON hashes; each descriptor clo
 });
 for (const kind of ["symlink", "ancestor-symlink", "hardlink", "directory", "missing", "mode", "size", "duplicate", "credential-path", "foreign-owner"])
   localTest("TP unsafe input " + kind + " yields redacted error", async t => {
+    if (process.platform === "win32" && ["mode", "foreign-owner"].includes(kind)) { t.skip("Windows does not implement POSIX mode/uid permissions."); return; }
     const f = await fixture(t); let fileIo;
-    if (kind === "symlink") { await fs.rename(f.paths.task, path.join(f.root, "actual.json")); await fs.symlink(path.join(f.root, "actual.json"), f.paths.task); }
-    if (kind === "ancestor-symlink") { const link = path.join(f.root, "alias"); await fs.symlink(f.root, link); f.paths.task = path.join(link, "task.json"); }
+    if (kind === "symlink") { await fs.rename(f.paths.task, path.join(f.root, "actual.json")); await fs.symlink(process.platform === "win32" ? f.root : path.join(f.root, "actual.json"), f.paths.task, process.platform === "win32" ? "junction" : "file"); }
+    if (kind === "ancestor-symlink") { const link = path.join(f.root, "alias"); await fs.symlink(f.root, link, process.platform === "win32" ? "junction" : "dir"); f.paths.task = path.join(link, "task.json"); }
     if (kind === "hardlink") await fs.link(f.paths.task, path.join(f.root, "other.json"));
     if (kind === "directory") { await fs.unlink(f.paths.task); await fs.mkdir(f.paths.task); }
     if (kind === "missing") await fs.unlink(f.paths.task);
@@ -111,7 +112,7 @@ for (const kind of ["before-open", "after-read", "handle-stat", "close-error"]) 
   const io = { async open(p, flags) {
     if (p === f.paths.task && kind === "before-open") await fs.appendFile(p, " ");
     const h = await fs.open(p, flags); let once = false;
-    return { async stat() { const s = await h.stat(); if (p === f.paths.task && kind === "handle-stat") s.ino++; return s; },
+    return { async stat(options) { const s = await h.stat(options); if (p === f.paths.task && kind === "handle-stat") s.ino++; return s; },
       async read(...args) { const v = await h.read(...args); if (!once && p === f.paths.task && kind === "after-read") { once = true; await fs.appendFile(p, " "); } return v; },
       async close() { closed++; await h.close(); if (kind === "close-error") throw Error("private-sentinel"); }
     };
@@ -135,6 +136,26 @@ localTest("TP relative input names resolve only against explicit cwd, without HO
   assert.equal(await runTaskCli(args, c.io, { cwd: f.root }), 0); assert.match(c.out[0], /prepared-draft/);
   const paths = { ...f.paths, task: path.join(f.root, ".env") }; let calls = 0;
   await assert.rejects(readTaskInputs(paths, f.root, { io: { lstat() { calls++; throw Error(); } } }), e => e.code === "task-file-path"); assert.equal(calls, 0);
+});
+test("TP private path components are rejected before any filesystem access on native separators", async t => {
+  const f = await fixture(t);
+  for (const component of [".codex", ".git", ".env", "credentials"]) {
+    let calls = 0;
+    await assert.rejects(readTaskInputs({ ...f.paths, task: path.join(f.root, component, "task.json") }, f.root,
+      { io: { lstat() { calls++; throw Error(); }, open() { calls++; throw Error(); } } }), { code: "task-file-path" });
+    assert.equal(calls, 0);
+  }
+});
+test("TP preserves distinct file ids above Number.MAX_SAFE_INTEGER during descriptor revalidation", async t => {
+  const f = await fixture(t), firstId = 9_007_199_254_740_992n;
+  await assert.rejects(readTaskInputs(f.paths, f.root, { io: {
+    async lstat(full) { const s = await fs.lstat(full, { bigint: true }); if (full === f.paths.task) s.ino = firstId; return s; },
+    async open(full, flags) {
+      const handle = await fs.open(full, flags);
+      return { async stat() { const s = await handle.stat({ bigint: true }); if (full === f.paths.task) s.ino = firstId + 1n; return s; },
+        read: (...args) => handle.read(...args), close: () => handle.close() };
+    }
+  } }), { code: "task-file-changed" });
 });
 localTest("TP malformed/sensitive payload errors cannot expose private raw values", async t => {
   const f = await fixture(t);
@@ -163,13 +184,13 @@ localTest("TP output and schema failures redact errors without retry", async t =
 });
 localTest("TP real local bin uses only fictitious inputs and preserves memory CLI mapping/dependencies", async t => {
   const f = await fixture(t);
-  const result = await new Promise((resolve, reject) => execFile(process.execPath, [bin, ...f.argv, "--json"], { timeout: 10000 }, (e, stdout, stderr) => e ? reject(e) : resolve({ stdout, stderr })));
+  const result = await new Promise((resolve, reject) => execFile(process.execPath, [bin, ...f.argv, "--json"], { timeout: 10000, env: { ...process.env, AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS: "1" } }, (e, stdout, stderr) => e ? reject(e) : resolve({ stdout, stderr })));
   assert.equal(JSON.parse(result.stdout).state, "prepared-draft"); assert.equal(result.stderr, "");
   const pkg = read("../package.json"), lock = read("../package-lock.json"); assert.equal(pkg.bin["project-memory"], "./bin/project-memory.js"); assert.equal(pkg.bin["agent-task"], "./bin/agent-task.js");
-  assert.equal(lock.packages[""].bin["agent-task"], "bin/agent-task.js");
+  assert.equal(lock.packages[""].bin["agent-task"], "./bin/agent-task.js");
   assert.equal(pkg.bin["agent-toolkit-mcp"], "./bin/agent-toolkit-mcp.js");
   assert.equal(pkg.bin["project-memory-mcp"], "./bin/project-memory-mcp.js");
-  assert.equal(lock.packages[""].bin["project-memory-mcp"], "bin/project-memory-mcp.js");
+  assert.equal(lock.packages[""].bin["project-memory-mcp"], "./bin/project-memory-mcp.js");
   assert.deepEqual(pkg.dependencies, {
     "@modelcontextprotocol/sdk": "1.30.0",
     "@modelcontextprotocol/server": "^2.4.0",
@@ -179,12 +200,12 @@ localTest("TP real local bin uses only fictitious inputs and preserves memory CL
     "toml-eslint-parser": "1.0.3",
     zod: "^4.6.7"
   });
-  assert.equal(pkg.engines.node, "^24.0.0");
+  assert.equal(pkg.engines.node, ">=24");
   assert.deepEqual(lock.packages[""].dependencies, pkg.dependencies);
   assert.equal(lock.packages[""].engines.node, pkg.engines.node);
 });
 localTest("TP EPIPE in owned Node bin exits with redacted error rather than uncaught stack", async t => {
   const f = await fixture(t);
-  const c = spawn(process.execPath, [bin, ...f.argv], { stdio: ["ignore", "pipe", "pipe"] }); c.stdout.destroy(); let text = ""; c.stderr.on("data", b => { text += b; });
+  const c = spawn(process.execPath, [bin, ...f.argv], { env: { ...process.env, AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS: "1" }, stdio: ["ignore", "pipe", "pipe"] }); c.stdout.destroy(); let text = ""; c.stderr.on("data", b => { text += b; });
   const exit = await new Promise(resolve => c.on("close", resolve)); assert.equal(exit, 2); assert.equal(text, "agent-task: task-output-failed\n");
 });

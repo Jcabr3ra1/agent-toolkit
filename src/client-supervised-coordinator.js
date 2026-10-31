@@ -1,3 +1,4 @@
+import { supportsLocalPosix } from "./client-local-platform.js";
 import { createSupervisedStore } from "./client-supervised-store.js";
 import { createSupervisedSupervisor } from "./client-supervised-supervisor.js";
 import { createSupervisedContract, monotonicMs, errorCode, fail } from "./client-supervised-contract.js";
@@ -14,7 +15,7 @@ export function createSupervisedCoordinator(schema, configuration, dependencies 
       internalCallCeiling: null, remoteCancellationVerified: false, process: null, storage: null, elapsedMs: 0, reasons: [] };
     try {
       const d = contract.request(input);
-      if (process.platform !== "darwin" || process.arch !== "arm64") fail("supervised-platform-not-admitted");
+      if (!supportsLocalPosix(process.platform)) fail("supervised-platform-not-admitted");
       if (signal?.aborted) fail("supervised-canceled-before-reservation");
       const storage = await store.withReservation(d, async handle => {
         const p = await supervise(handle, d, { signal, beganAt });

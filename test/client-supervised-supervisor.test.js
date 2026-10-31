@@ -1,3 +1,4 @@
+import { supported } from "../testing/client-posix.js";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -12,11 +13,11 @@ import { createSupervisedProtocol } from "../src/client-supervised-protocol.js";
 import { createSupervisedSupervisor } from "../src/client-supervised-supervisor.js";
 import { createSupervisedContract, FIXTURE_IDS, hash, monotonicMs } from "../src/client-supervised-contract.js";
 import { createFixturePermit } from "../src/client-runtime-fixture-permit.js";
+import { claimSupervisedPermit } from "../src/client-supervised-permit.js";
 import { schema, store, request, setup, coordinator, limits, taskDirectory } from "../testing/supervised/setup.js";
 
 const contract = createSupervisedContract(schema);
-const supported = process.platform === "darwin" && process.arch === "arm64";
-const localTest = (name, fn) => test(name, { skip: !supported, timeout: 20000 }, fn);
+const localTest = (name, fn) => test(name, { skip: supported ? false : "requires POSIX ownership, private workspaces and process-group termination", timeout: 20000 }, fn);
 const check = r => {
   assert.equal(r.scope, "fixture-only"); assert.equal(r.nativeExecuted, false); assert.equal(r.runtimeReady, false);
   assert.equal(r.verifiedAdmission, false); assert.equal(r.actualModelCalls, null); assert.equal(r.internalCallCeiling, null);
@@ -100,15 +101,51 @@ for (const [mode, code, state] of [
 for (const h of [null, {}, createFixturePermit(async () => {}, async () => {})]) localTest("S2 runner rejects fake/C2 permission", async t => {
   const root = await setup(t); let spawns = 0;
   const r = await createSupervisedSupervisor(schema, { workspaceParent: root, spawn: () => { spawns++; throw Error("do not spawn"); } })(h, request());
-  assert.equal(spawns, 0); assert.equal(r.fixtureExecuted, false); check(r);
+  assert.equal(spawns, 0); assert.equal(r.fixtureExecuted, false); assert.deepEqual(r.reasons, ["supervised-local-error"]); check(r);
 });
-localTest("S2 coordinator validates request before any storage/spawn", async t => {
+for (const [name, handle] of [
+  ["null", () => null], ["plain object", () => ({})],
+  ["C2 handle", callback => createFixturePermit(callback, callback)]
+]) test("S2 permit boundary rejects " + name + " before callbacks/spawn", { timeout: 20000 }, async () => {
+  let callbacks = 0, spawns = 0;
+  const h = handle(async () => { callbacks++; });
+  // Exercise the capability API directly: Windows runner admission would mask it.
+  const consume = async () => {
+    const capability = await claimSupervisedPermit(h, hash(request()));
+    await capability.started();
+    spawns++;
+  };
+  await assert.rejects(consume(), { message: "Supervised permit unavailable" });
+  assert.equal(callbacks, 0); assert.equal(spawns, 0);
+});
+test("S2 coordinator validates request before any storage/spawn", { timeout: 20000 }, async t => {
   const root = await setup(t); let spawns = 0;
   const run = coordinator(root, { supervisor: { spawn: () => { spawns++; throw Error("no"); } } });
-  for (const d of [{ state: "ready-for-supervised-review" }, { ...request(), command: "claude" }, { ...request(), scope: "supervised-subscription" }, new Proxy({}, {})]) {
+  for (const [d, reason] of [
+    [{ state: "ready-for-supervised-review" }, "supervised-invalid-request"],
+    [{ ...request(), command: "claude" }, "supervised-invalid-request"],
+    [{ ...request(), scope: "supervised-subscription" }, "supervised-invalid-request"],
+    [new Proxy({}, {}), "non-json-metadata"]
+  ]) {
     const r = check(await run(d)); assert.equal(r.state, "not-started"); assert.equal(r.storage, null);
+    assert.deepEqual(r.reasons, [reason]);
   }
   assert.equal(spawns, 0); assert.deepEqual(await fs.readdir(root), []);
+});
+test("S2 runner validates request before platform admission or permission claim", { timeout: 20000 }, async () => {
+  let spawns = 0;
+  const run = createSupervisedSupervisor(schema, { spawn: () => { spawns++; throw Error("unexpected spawn"); } });
+  for (const [d, reason] of [
+    [{ state: "ready-for-supervised-review" }, "supervised-invalid-request"],
+    [{ ...request(), command: "claude" }, "supervised-invalid-request"],
+    [{ ...request(), scope: "supervised-subscription" }, "supervised-invalid-request"],
+    [new Proxy({}, {}), "non-json-metadata"]
+  ]) {
+    const r = check(await run(null, d));
+    assert.equal(r.state, "not-started"); assert.equal(r.fixtureExecuted, false);
+    assert.deepEqual(r.reasons, [reason]); assert.equal(r.metrics.spawnAttempts, 0);
+  }
+  assert.equal(spawns, 0);
 });
 localTest("S2 no native network calls while running a fixture", async t => {
   const root = await setup(t); let calls = 0;

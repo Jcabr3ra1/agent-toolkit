@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { IS_WINDOWS, warnPlatformPermissions } from "./platform.js";
+import { resolveCliInvocation } from "./cli-executable.js";
 
 const PLAN_SCHEMA = fileURLToPath(new URL("../schemas/task-workflow-plan-output.schema.json", import.meta.url));
 const MAX_PROMPT_BYTES = 48_000;
@@ -36,45 +38,33 @@ function validateEffort(value) {
 
 function filteredEnvironment(source, executable) {
   const env = {};
-  for (const key of ["HOME", "TMPDIR", "LANG", "LC_ALL", "CODEX_HOME"]) {
+  for (const key of ["HOME", "TMPDIR", "LANG", "LC_ALL", "CODEX_HOME", ...(IS_WINDOWS ? ["SystemRoot", "SYSTEMROOT", "WINDIR", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP"] : [])]) {
     const value = source[key];
     if (typeof value === "string" && value.length > 0 && !/[\u0000-\u001f\u007f]/u.test(value)) env[key] = value;
   }
-  const systemPath = process.platform === "darwin" ? "/usr/bin:/bin:/usr/sbin:/sbin" : "/usr/bin:/bin";
-  env.PATH = [...new Set([path.dirname(executable), ...systemPath.split(path.delimiter)])].join(path.delimiter);
+  const systemPaths = IS_WINDOWS
+    ? [source.SystemRoot ?? source.SYSTEMROOT ?? source.WINDIR].filter(value => typeof value === "string" && path.isAbsolute(value) && !CONTROL_PATTERN.test(value)).map(value => path.join(value, "System32"))
+    : (process.platform === "darwin" ? "/usr/bin:/bin:/usr/sbin:/sbin" : "/usr/bin:/bin").split(path.delimiter);
+  env.PATH = [...new Set([path.dirname(executable), ...systemPaths])].join(path.delimiter);
   env.NO_COLOR = "1";
   return env;
 }
 
-async function resolveExecutable(override, io) {
-  if (override) {
-    const absolute = path.resolve(override);
-    let stat;
-    try { stat = await io.stat(absolute); } catch { fail("codex-client-not-found"); }
-    if (!stat.isFile() || !(stat.mode & 0o111)) fail("codex-client-not-found");
-    return absolute;
-  }
-  for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
-    if (!directory || !path.isAbsolute(directory)) continue;
-    const candidate = path.join(directory, "codex");
-    try {
-      const real = await io.realpath(candidate);
-      const stat = await io.stat(real);
-      if (stat.isFile() && (stat.mode & 0o111) && !(stat.mode & 0o022)) return real;
-    } catch {}
-  }
-  fail("codex-client-not-found");
+async function resolveExecutable(override, io, environment) {
+  try { return await resolveCliInvocation({ name: "codex", override, environment, fileIo: io }); }
+  catch { fail("codex-client-not-found"); }
 }
 
 async function validateProjectRoot(value, io, home) {
+  warnPlatformPermissions();
   if (!safePath(value) || !value || !path.isAbsolute(value) || path.normalize(value) !== value) fail("codex-project-root-invalid");
   let real;
   let realHome;
   let stat;
-  try { real = await io.realpath(value); realHome = await io.realpath(home); stat = await io.lstat(real); } catch { fail("codex-project-root-invalid"); }
+  try { real = path.normalize(await io.realpath(value)); realHome = path.normalize(await io.realpath(home)); stat = await io.lstat(real); } catch { fail("codex-project-root-invalid"); }
   if (real === path.parse(real).root || real === realHome || real === path.join(realHome, ".codex") ||
       real === path.join(realHome, ".claude") || !stat.isDirectory() || stat.isSymbolicLink() ||
-      (typeof process.getuid === "function" && stat.uid !== process.getuid()) || (stat.mode & 0o022)) fail("codex-project-root-invalid");
+      (!IS_WINDOWS && ((typeof process.getuid === "function" && stat.uid !== process.getuid()) || (stat.mode & 0o022)))) fail("codex-project-root-invalid");
   return real;
 }
 
@@ -237,13 +227,13 @@ export function createCodexCliRunner(dependencies = {}) {
     stdio: ["ignore", "pipe", "pipe"], env
   }));
 
-  async function inspectClient(executable) {
+  async function inspectClient({ executable, argsPrefix }) {
     const env = filteredEnvironment(sourceEnv, executable);
     let versionResult;
     let authResult;
     try {
-      versionResult = runSync(executable, ["--version"], env);
-      authResult = runSync(executable, ["login", "status"], env);
+      versionResult = runSync(executable, [...argsPrefix, "--version"], env);
+      authResult = runSync(executable, [...argsPrefix, "login", "status"], env);
     } catch { fail("codex-client-preflight-failed"); }
     if (versionResult?.error || versionResult?.status !== 0 || typeof versionResult.stdout !== "string" ||
         authResult?.error || ![0, 1].includes(authResult?.status) || typeof authResult.stdout !== "string" ||
@@ -260,15 +250,16 @@ export function createCodexCliRunner(dependencies = {}) {
 
   async function createPreview({ projectRoot, model, effort, prompt, kind, claudeModels, claudeEfforts }) {
     const cwd = await validateProjectRoot(projectRoot, io, home);
-    const executable = await resolveExecutable(dependencies.codexPath, io);
-    const client = await inspectClient(executable);
+    const invocation = await resolveExecutable(dependencies.codexPath, io, sourceEnv);
+    const { executable, argsPrefix } = invocation;
+    const client = await inspectClient(invocation);
     let scratch;
     try {
       scratch = await io.mkdtemp(path.join(os.tmpdir(), `agent-toolkit-codex-${kind}-`));
       await io.chmod(scratch, 0o700);
     } catch { fail("codex-temporary-output-unavailable"); }
     const outputFile = path.join(scratch, kind === "plan" ? "plan.json" : "review.txt");
-    const args = codexArgs({ model, effort, cwd, outputFile, schema: kind === "plan" ? PLAN_SCHEMA : null });
+    const args = [...argsPrefix, ...codexArgs({ model, effort, cwd, outputFile, schema: kind === "plan" ? PLAN_SCHEMA : null })];
     return Object.freeze({
       previewId: randomBytes(16).toString("hex"),
       confirmationCode: randomBytes(4).toString("hex").toUpperCase(),
@@ -324,9 +315,11 @@ export function createCodexCliRunner(dependencies = {}) {
         typeof preview.command.cwd !== "string" || typeof preview.command.stdin !== "string" || typeof preview.command.outputFile !== "string") fail("codex-preview-invalid");
     const cwd = await validateProjectRoot(preview.command.cwd, io, home);
     if (cwd !== preview.command.cwd) fail("codex-project-root-changed");
-    const executable = await resolveExecutable(dependencies.codexPath, io);
-    if (executable !== preview.command.executable) fail("codex-client-changed");
-    const client = await inspectClient(executable);
+    const invocation = await resolveExecutable(dependencies.codexPath, io, sourceEnv);
+    const { executable, argsPrefix } = invocation;
+    if (executable !== preview.command.executable || argsPrefix.some((arg, index) => preview.command.args[index] !== arg) ||
+        (argsPrefix.length === 0 && preview.command.args[0] !== "exec")) fail("codex-client-changed");
+    const client = await inspectClient(invocation);
     if (client.auth !== "chatgpt") fail("codex-auth-changed");
     const execute = dependencies.execute ?? runBounded;
     let raw;

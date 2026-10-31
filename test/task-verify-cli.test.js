@@ -16,7 +16,7 @@ import { createTaskVerifier, VERIFY_LIMITS } from "../src/task-verify.js";
 
 const schema = JSON.parse(fsSync.readFileSync(new URL("../schemas/agent-task-verify.schema.json", import.meta.url), "utf8"));
 const verifier = createTaskVerifier(schema), bin = fileURLToPath(new URL("../bin/agent-task.js", import.meta.url));
-const localTest = (name, fn) => test(name, { skip: !["darwin", "linux"].includes(process.platform) }, fn);
+const localTest = test;
 const sha = b => createHash("sha256").update(b).digest("hex");
 const TEXT = { guide: "demo guide unchanged\n", v1: "demo readme v1\n", v2: "demo readme v2\n", fresh: "demo new note\n", old: "demo obsolete note\n", proposal: "demo proposal r01\n" };
 const ENTRIES = [
@@ -52,15 +52,15 @@ async function fixture(t, { entries = ENTRIES } = {}) {
 function spyIo(hooks = {}) {
   const log = { lstat: [], open: [], flags: [], reads: [], closes: 0 };
   const io = {
-    async lstat(p) {
+    async lstat(p, options) {
       log.lstat.push(p); const n = log.lstat.filter(x => x === p).length;
       if (hooks.lstatBefore) await hooks.lstatBefore(p, n);
-      const s = await fs.lstat(p); return (hooks.lstat && await hooks.lstat(p, s, n)) || s;
+      const s = await fs.lstat(p, options); return (hooks.lstat && await hooks.lstat(p, s, n)) || s;
     },
     async open(p, flags) {
       log.open.push(p); log.flags.push(flags); if (hooks.beforeOpen) await hooks.beforeOpen(p);
       const h = await fs.open(p, flags); let reads = 0, stats = 0;
-      return { async stat() { const s = await h.stat(); return (hooks.stat && await hooks.stat(p, s, ++stats)) || s; },
+      return { async stat(options) { const s = await h.stat(options); return (hooks.stat && await hooks.stat(p, s, ++stats)) || s; },
         async read(buffer, offset, length, position) {
           const v = await h.read(buffer, offset, length, position); log.reads.push({ path: p, requested: length, bytesRead: v.bytesRead });
           if (hooks.afterRead && reads++ === 0) await hooks.afterRead(p);
@@ -153,8 +153,9 @@ for (const kind of ["pin", "format", "duplicate-key", "invalid-contract", "colli
 });
 for (const kind of ["symlink", "hardlink", "mode", "missing", "directory", "oversize", "empty", "credential-path", "git-path", "foreign-owner"])
   localTest("TV unsafe contract " + kind + " is blocked before roots", async t => {
+    if (process.platform === "win32" && ["mode", "foreign-owner"].includes(kind)) { t.skip("Windows does not implement POSIX mode/uid permissions."); return; }
     const f = await fixture(t); let contract = f.contractPath, expect = f.pin; const hooks = {};
-    if (kind === "symlink") { contract = path.join(f.base, "alias.json"); await fs.symlink(f.contractPath, contract); }
+    if (kind === "symlink") { contract = path.join(f.base, "alias.json"); await fs.symlink(process.platform === "win32" ? f.base : f.contractPath, contract, process.platform === "win32" ? "junction" : "file"); }
     if (kind === "hardlink") await fs.link(f.contractPath, path.join(f.base, "copy.json"));
     if (kind === "mode") await fs.chmod(f.contractPath, 0o666);
     if (kind === "missing") await fs.unlink(f.contractPath);
@@ -174,14 +175,15 @@ for (const kind of ["symlink", "hardlink", "mode", "missing", "directory", "over
 for (const kind of ["same", "nested", "parent", "handoff-mode", "source-group-write", "symlink-root", "ancestor-symlink", "relative", "trailing-slash",
   "filesystem-root", "home", "git-component", "missing", "file", "foreign-owner", "same-identity"])
   localTest("TV unsafe root " + kind + " is blocked and opens no entry", async t => {
+    if (process.platform === "win32" && ["handoff-mode", "source-group-write", "foreign-owner"].includes(kind)) { t.skip("Windows does not implement POSIX mode/uid permissions."); return; }
     const f = await fixture(t); const over = {}, hooks = {}, deps = {};
     if (kind === "same") over.handoff = f.roots.source;
     if (kind === "nested") { over.handoff = path.join(f.roots.source, "private"); await fs.mkdir(over.handoff, { mode: 0o700 }); }
     if (kind === "parent") over.source = f.base;
     if (kind === "handoff-mode") await fs.chmod(f.roots.handoff, 0o750);
     if (kind === "source-group-write") await fs.chmod(f.roots.source, 0o770);
-    if (kind === "symlink-root") { over.source = path.join(f.base, "alias"); await fs.symlink(f.roots.source, over.source); }
-    if (kind === "ancestor-symlink") { const link = path.join(f.base, "link"); await fs.symlink(f.base, link); over.source = path.join(link, "source"); }
+    if (kind === "symlink-root") { over.source = path.join(f.base, "alias"); await fs.symlink(f.roots.source, over.source, process.platform === "win32" ? "junction" : "dir"); }
+    if (kind === "ancestor-symlink") { const link = path.join(f.base, "link"); await fs.symlink(f.base, link, process.platform === "win32" ? "junction" : "dir"); over.source = path.join(link, "source"); }
     if (kind === "relative") over.source = "source";
     if (kind === "trailing-slash") over.source = f.roots.source + "/";
     if (kind === "filesystem-root") over.source = "/";
@@ -190,13 +192,14 @@ for (const kind of ["same", "nested", "parent", "handoff-mode", "source-group-wr
     if (kind === "missing") over.source = path.join(f.base, "absent");
     if (kind === "file") over.source = f.contractPath;
     if (kind === "foreign-owner") hooks.lstat = (p, s) => { if (p === f.roots.source) s.uid++; return s; };
-    if (kind === "same-identity") hooks.lstat = async p => p === f.roots.handoff ? fs.lstat(f.roots.source) : undefined;
+    if (kind === "same-identity") hooks.lstat = async p => p === f.roots.handoff ? fs.lstat(f.roots.source, process.platform === "win32" ? { bigint: true } : undefined) : undefined;
     const spy = spyIo(hooks), c = capture();
     assert.equal(await runTaskCli(f.argv("before", [], over), c.io, { fileIo: spy.io, ...deps }), 2);
     assert.match(c.out[0], /^agent-task verify: blocked/); assert.match(c.out[0], /verify-root-(unsafe|unreadable|overlap)/);
     assert.ok(spy.log.open.every(p => p === f.contractPath)); assert.doesNotMatch(c.out[0] + c.err.join(""), /agent-task-verify-test/);
   });
 for (const special of [0o1000, 0o2000, 0o4000]) localTest(`TV handoff ${(0o700 | special).toString(8)} (simulated metadata) is not exactly 0700`, async t => {
+  if (process.platform === "win32") { t.skip("Windows does not implement POSIX mode permissions."); return; }
   const f = await fixture(t);
   const spy = spyIo({ lstat: (p, s) => { if (p === f.roots.handoff) s.mode = (s.mode & ~0o7777) | 0o700 | special; return s; } }), c = capture();
   assert.equal(await runTaskCli(f.argv("before", ["--json"]), c.io, { fileIo: spy.io }), 2);
@@ -204,6 +207,7 @@ for (const special of [0o1000, 0o2000, 0o4000]) localTest(`TV handoff ${(0o700 |
   assert.ok(spy.log.open.every(p => p === f.contractPath));
 });
 localTest("TV handoff with a real sticky bit (1700) is rejected when the OS keeps that bit", async t => {
+  if (process.platform === "win32") { t.skip("Windows does not implement POSIX sticky permission bits."); return; }
   const f = await fixture(t); await fs.chmod(f.roots.handoff, 0o1700);
   const kept = ((await fs.lstat(f.roots.handoff)).mode & 0o7777) === 0o1700;
   if (!kept) { t.skip("el SO no conservó 1700 con chmod; cubierto por la prueba de metadata simulada"); return; }
@@ -212,9 +216,10 @@ localTest("TV handoff with a real sticky bit (1700) is rejected when the OS keep
 });
 for (const kind of ["symlink", "symlink-dir", "hardlink", "group-write", "setuid", "directory", "fifo", "foreign-owner", "dir-group-write", "dir-is-file", "symlink-where-absent"])
   localTest("TV unsafe entry " + kind + " blocks without opening the unsafe resource", async t => {
+    if (process.platform === "win32" && ["group-write", "setuid", "foreign-owner", "dir-group-write"].includes(kind)) { t.skip("Windows does not implement POSIX mode/uid permissions."); return; }
     const f = await fixture(t); const target = f.file("source", "docs/readme.md"), hooks = {};
-    if (kind === "symlink") { await fs.rename(target, target + ".real"); await fs.symlink(target + ".real", target); }
-    if (kind === "symlink-dir") { await fs.rename(f.file("source", "docs"), f.file("source", "real-docs")); await fs.symlink(f.file("source", "real-docs"), f.file("source", "docs")); }
+    if (kind === "symlink") { await fs.rename(target, target + ".real"); await fs.symlink(process.platform === "win32" ? f.base : target + ".real", target, process.platform === "win32" ? "junction" : "file"); }
+    if (kind === "symlink-dir") { await fs.rename(f.file("source", "docs"), f.file("source", "real-docs")); await fs.symlink(f.file("source", "real-docs"), f.file("source", "docs"), process.platform === "win32" ? "junction" : "dir"); }
     if (kind === "hardlink") await fs.link(target, f.file("source", "docs/copy.md"));
     if (kind === "group-write") await fs.chmod(target, 0o620);
     if (kind === "setuid") hooks.lstat = (p, s) => { if (p === target) s.mode |= 0o4000; return s; };
@@ -223,7 +228,7 @@ for (const kind of ["symlink", "symlink-dir", "hardlink", "group-write", "setuid
     if (kind === "foreign-owner") hooks.lstat = (p, s) => { if (p === target) s.uid++; return s; };
     if (kind === "dir-group-write") await fs.chmod(f.file("source", "docs"), 0o770);
     if (kind === "dir-is-file") { await fs.mkdir(f.file("source", "notes"), { mode: 0o700 }); await fs.writeFile(f.file("source", "notes/new"), "x"); }
-    if (kind === "symlink-where-absent") { await fs.mkdir(f.file("source", "notes/new"), { recursive: true, mode: 0o700 }); await fs.symlink(f.file("source", "docs/guide.md"), f.file("source", "notes/new/note.md")); }
+    if (kind === "symlink-where-absent") { await fs.mkdir(f.file("source", "notes/new"), { recursive: true, mode: 0o700 }); await fs.symlink(process.platform === "win32" ? f.base : f.file("source", "docs/guide.md"), f.file("source", "notes/new/note.md"), process.platform === "win32" ? "junction" : "file"); }
     const spy = spyIo(hooks), c = capture(); assert.equal(await runTaskCli(f.argv("before", ["--json"]), c.io, { fileIo: spy.io }), 2);
     const r = JSON.parse(c.out[0]); assert.equal(r.state, "blocked"); assert.deepEqual(r.reasons, ["verify-entry-unsafe"]); assert.deepEqual(r.results, []);
     // Only the concrete unsafe resource of each scenario is forbidden; earlier safe entries may be read legitimately.
@@ -362,14 +367,14 @@ localTest("TV output, schema and pipe failures are redacted and never retried", 
   assert.equal(outputs, 1); assert.deepEqual(err, ["agent-task: verify-output-failed\n"]);
   const c = capture(); assert.equal(await runTaskCli(f.argv("before"), c.io, { readVerifySchema() { throw Error("private-sentinel"); } }), 2);
   assert.deepEqual(c.out, []); assert.deepEqual(c.err, ["agent-task: verify-preparation-failed\n"]);
-  const child = spawn(process.execPath, [bin, ...f.argv("before")], { stdio: ["ignore", "pipe", "pipe"] }); child.stdout.destroy();
+  const child = spawn(process.execPath, [bin, ...f.argv("before")], { env: { ...process.env, AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS: "1" }, stdio: ["ignore", "pipe", "pipe"] }); child.stdout.destroy();
   let text = ""; child.stderr.on("data", b => { text += b; });
   assert.equal(await new Promise(resolve => child.on("close", resolve)), 2); assert.equal(text, "agent-task: verify-output-failed\n");
 });
 localTest("TV local bin returns 0/1 for matched/mismatched using only fictitious fixtures", async t => {
   const f = await fixture(t);
   const runBin = args => new Promise(resolve => {
-    const c = spawn(process.execPath, [bin, ...args], { stdio: ["ignore", "pipe", "pipe"] }); let out = "", err = "";
+    const c = spawn(process.execPath, [bin, ...args], { env: { ...process.env, AGENT_TOOLKIT_QUIET_PLATFORM_WARNINGS: "1" }, stdio: ["ignore", "pipe", "pipe"] }); let out = "", err = "";
     c.stdout.on("data", b => { out += b; }); c.stderr.on("data", b => { err += b; }); c.on("close", code => resolve({ code, out, err }));
   });
   let r = await runBin(f.argv("before", ["--json"])); assert.equal(r.code, 0); assert.equal(JSON.parse(r.out).state, "matched"); assert.equal(r.err, "");
@@ -397,9 +402,18 @@ localTest("TV collector runs no commands, network or write APIs, even with scrip
 localTest("TV relative contract resolves only against the explicit cwd", async t => {
   const f = await fixture(t), c = capture(); assert.equal(await runTaskCli(f.argv("before", [], { contract: "contract.json" }), c.io, { cwd: f.base }), 0);
 });
+test("TV private contract components reject native separators before IO", async t => {
+  const f = await fixture(t);
+  for (const component of [".codex", ".git", ".env", "credentials"]) {
+    const spy = spyIo(), c = capture();
+    assert.equal(await runTaskCli(f.argv("before", ["--json"], { contract: path.join(f.base, component, "contract.json") }), c.io, { fileIo: spy.io }), 2);
+    assert.deepEqual(JSON.parse(c.out[0]).reasons, ["verify-contract-path"]);
+    assert.deepEqual(spy.log.lstat, []); assert.deepEqual(spy.log.open, []);
+  }
+});
 test("TV unsupported platform blocks before reading anything", async () => {
   let calls = 0; const deny = () => { calls++; throw Error(); };
   const r = await verifyLocal({ contract: "/fictitious/c.json", expect: "a".repeat(64), source: "/fictitious/s", handoff: "/fictitious/h", phase: "before" },
-    "/fictitious", verifier, { platform: "win32", io: { lstat: deny, open: deny } });
+    "/fictitious", verifier, { platform: "aix", io: { lstat: deny, open: deny } });
   assert.equal(r.state, "blocked"); assert.deepEqual(r.reasons, ["verify-platform-unsupported"]); assert.equal(calls, 0);
 });

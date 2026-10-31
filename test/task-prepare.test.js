@@ -239,3 +239,10 @@ test("TP closed output schema does not grant execution or counterfeit observed m
     const c = structuredClone(r); mutate(c); assert.equal(valid(c), false);
   }
 });
+
+test('TP credential roots remain forbidden with both Windows separators', () => {
+  for (const repositoryRoot of ['C:/data/credentials','C:\\data\\credentials','C:/data/.secrets','C:\\data\\.secrets']) {
+    const d = fixture(); d.task.base.repositoryRoot = repositoryRoot;
+    assert.ok(run(d).reasons.includes('task-path-invalid'), repositoryRoot);
+  }
+});

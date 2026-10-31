@@ -1,3 +1,4 @@
+import { supportsDiagnosticHost } from "./client-local-platform.js";
 import fs from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
@@ -51,6 +52,7 @@ export function extractDiagnosticMetadata(recipe, text, options) {
 
 /** No request JSON, no prompts, no model selection, no account or inference commands. */
 export function createNativeDiagnostics(schema, configuration, authorization, dependencies = {}) {
+  const platformAdmitted = supportsDiagnosticHost(process.platform, process.arch, dependencies);
   const s = copyInertJson(schema), cfg = copyInertJson(configuration);
   if (s.$id !== ID) throw Error("Unsupported diagnostic schema");
   const ajv = new Ajv2020({ strict: true, allErrors: true }); ajv.addSchema(s);
@@ -207,7 +209,7 @@ export function createNativeDiagnostics(schema, configuration, authorization, de
       if (!permit || !permit.live || permit.used || permit.binding !== hash(cfg)) fail("diagnostic-permit-unavailable");
       permit.used = true; claimed = true;
       if (args.length) fail("diagnostic-input-forbidden");
-      if (process.platform !== "darwin" || process.arch !== "arm64") fail("diagnostic-platform-not-admitted");
+      if (!platformAdmitted) fail("diagnostic-platform-not-admitted");
       if (dependencies.signal?.aborted) fail("diagnostic-canceled");
       const home = process.env.HOME;
       if (!safePath(home)) fail("diagnostic-path-unsafe");
