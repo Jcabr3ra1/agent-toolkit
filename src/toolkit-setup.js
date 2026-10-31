@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { parseTOML, getStaticTOMLValue } from 'toml-eslint-parser';
 
+import packageJson from '../package.json' with { type: 'json' };
+
+// The package declares a simple major-version floor (>=24).
+const minimumNodeMajor = Number(packageJson.engines.node.match(/^>=(\d+)$/u)[1]);
+export const isNodeSupported = version => Number(version.replace(/^v/u, '').split('.')[0]) >= minimumNodeMajor;
+
 export const TOOLKIT_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const clientsFor = agent => {
   if (!['codex', 'claude', 'all'].includes(agent)) throw new Error('El agente debe ser codex, claude o all.');
@@ -28,7 +34,12 @@ async function parents(home, target, create = false) {
 async function linkState(source, target) {
   const info = await stat(target);
   if (!info) return 'missing';
-  return info.isSymbolicLink() && await fs.readlink(target) === source ? 'installed' : 'conflict';
+  if (!info.isSymbolicLink()) return 'conflict';
+  try {
+    const [actual, expected] = await Promise.all([fs.realpath(target), fs.realpath(source)]);
+    const normalize = value => process.platform === 'win32' ? value.toLowerCase() : value;
+    return normalize(actual) === normalize(expected) ? 'installed' : 'replace';
+  } catch (error) { if (error.code === 'ENOENT') return 'replace'; throw error; }
 }
 export async function setupToolkit({ agent = 'all', apply = false, homeDirectory = os.homedir(), toolkitRoot = TOOLKIT_ROOT,
   environment = process.env, codexHome = environment.CODEX_HOME ?? path.join(homeDirectory, '.codex'), codexProfile } = {}) {
@@ -45,9 +56,15 @@ export async function setupToolkit({ agent = 'all', apply = false, homeDirectory
   }
   const conflicts = skills.filter(s => s.state === 'conflict');
   if (apply && !conflicts.length) {
-    for (const item of skills.filter(s => s.state === 'missing')) {
+    for (const item of skills.filter(s => ['missing', 'replace'].includes(s.state))) {
       await parents(home, item.target, true);
-      try { await fs.symlink(item.source, item.target, 'dir'); }
+      if (item.state === 'replace') {
+        // Never recursively remove a junction: unlink removes only the link.
+        const current = await stat(item.target);
+        if (!current?.isSymbolicLink()) throw new Error('El destino cambió; no se reemplazan archivos ni carpetas.');
+        await fs.unlink(item.target);
+      }
+      try { await fs.symlink(path.resolve(item.source), item.target, process.platform === 'win32' ? 'junction' : 'dir'); }
       catch (e) { if (e.code !== 'EEXIST' || await linkState(item.source, item.target) !== 'installed') throw new Error('El destino cambió; se conservan los enlaces aplicados. Repite la vista previa.'); }
       item.state = 'installed';
     }
@@ -163,9 +180,14 @@ async function inspectMcp(client, home, codexHome, root) {
     return { state: 'missing' };
   } catch { return { state: 'unreadable' }; }
 }
-async function executable(name, environment) {
+export async function executable(name, environment) {
+  const extensions = process.platform === 'win32'
+    ? ['', ...(environment.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean).map(extension => extension.toLowerCase())]
+    : [''];
   for (const folder of (environment.PATH ?? '').split(path.delimiter).filter(Boolean)) {
-    try { const file = path.join(folder, name); await fs.access(file, constants.X_OK); if ((await fs.stat(file)).isFile()) return true; } catch {}
+    for (const extension of extensions) {
+      try { const file = path.join(folder, name + extension); await fs.access(file, constants.X_OK); if ((await fs.stat(file)).isFile()) return true; } catch {}
+    }
   }
   return false;
 }
@@ -182,7 +204,7 @@ export async function doctorToolkit({ agent = 'all', homeDirectory = os.homedir(
   for (const name of ['@modelcontextprotocol/server', '@modelcontextprotocol/sdk', 'zod', 'ajv', 'toml-eslint-parser']) {
     try { require.resolve(name === '@modelcontextprotocol/sdk' ? name + '/client/index.js' : name); dependencies[name] = true; } catch { dependencies[name] = false; }
   }
-  return { node: { version: process.version, supported: process.versions.node.split('.')[0] === '24' }, dependencies, clients, mcp,
+  return { node: { version: process.version, supported: isNodeSupported(process.versions.node) }, dependencies, clients, mcp,
     skills: setup.skills, registrationCommands: setup.mcp.registrationCommands,
     ...(setup.codexSandbox && { codexSandbox: setup.codexSandbox }),
     gemini: { available: await executable('agy', environment), provider: 'antigravity', apiFallback: false },

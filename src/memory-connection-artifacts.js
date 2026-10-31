@@ -1,3 +1,4 @@
+import { resolvePackageLock } from './package-lock-path.js';
 import fs from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
@@ -141,6 +142,7 @@ export async function inspectMemoryConnectionArtifacts(input, dependencies = {})
     nativeIO = dependencies.io === undefined;
     const io = dependencies.io ?? fs, uid = process.getuid?.();
     if (!["darwin", "linux"].includes(process.platform) || !Number.isSafeInteger(uid) || constants.O_NOFOLLOW === undefined) reject("MC_ARTIFACT_PLATFORM");
+    data.entries.find(entry => entry.key === 'packageLockSha256').full = await resolvePackageLock(data.descriptor.identity.toolkitRoot, io);
     const items = [];
     for (const entry of data.entries) items.push(await snapshot(io, entry, data.roots, uid));
     rejectAliases(items, data.roots);

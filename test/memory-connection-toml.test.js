@@ -292,7 +292,8 @@ test("MC TOML pure invocation performs no filesystem, network, process or cwd di
 test("MC TOML adoption versions, lock integrity and runtime declaration", () => {
   const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url)));
   const lock = JSON.parse(fs.readFileSync(new URL("../package-lock.json", import.meta.url)));
-  assert.equal(pkg.engines.node, "^24.0.0");
+  assert.equal(pkg.engines.node, ">=24");
+  assert.equal(lock.packages[""].engines.node, pkg.engines.node);
   for (const [name, version, integrity] of [
     ["toml-eslint-parser", "1.0.3", "sha512-A5F0cM6+mDleacLIEUkmfpkBbnHJFV1d2rprHU2MXNk7mlxHq2zGojA+SRvQD1RoMo9gqjZPWEaKG4v1BQ48lw=="],
     ["eslint-visitor-keys", "5.0.1", "sha512-tD40eHxA35h0PEIZNeIjkHoDR4YjjJp34biM0mDvplBe//mB+IHCqHDGV7pxF+7MklTvighcCPPZC7ynWyjdTA=="]

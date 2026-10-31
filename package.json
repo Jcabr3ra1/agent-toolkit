@@ -1,7 +1,6 @@
 {
-  "name": "agent-toolkit",
+  "name": "@jcabr3ra1/agent-toolkit",
   "version": "0.1.0",
-  "private": true,
   "description": "Herramientas reutilizables para memorias de proyecto y agentes locales.",
   "type": "module",
   "bin": {
@@ -14,10 +13,11 @@
     "agent-toolkit": "./bin/agent-toolkit.js"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "prepack": "node scripts/prepare-package.js"
   },
   "engines": {
-    "node": "^24.0.0"
+    "node": ">=24"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.30.0",
@@ -30,5 +30,28 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.4.0"
-  }
+  },
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jcabr3ra1/agent-toolkit.git"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "skills/",
+    "agents/",
+    "plugins/",
+    "schemas/",
+    "templates/",
+    ".claude-plugin/",
+    ".claude/skills/",
+    ".agents/skills/",
+    "assets/brand/",
+    "assets/runtime/",
+    "scripts/prepare-package.js"
+  ]
 }
